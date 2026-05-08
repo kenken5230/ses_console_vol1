@@ -1,0 +1,844 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+  // Next.jsから import は可能だが、App Router配下に生成物を置く構成になる。
+  // 将来気になる場合は "../generated/prisma" または "../lib/generated/prisma" への移動を検討する。
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// SES Console schema v0.1
+// Source design: docs/db-design-v0.1.md was used because docs/db-design-v0.2.md is not present in this workspace.
+// DB target: PostgreSQL. Do not model HR / FINANCE / MARKETING / 管理部採用 as business categories.
+//
+// PostgreSQL follow-up notes for future migrations:
+// - Add partial indexes such as mail_notifications(is_excluded = false) and needs_review = true.
+// - Add pg_trgm / full-text GIN indexes for mail subject/body, project title/work description, person summary, and company aliases.
+// - Add CHECK constraints that Prisma cannot express cleanly, e.g. distribution_logs must reference at least one of project_id or person_id.
+// - Add CHECK constraint for proposals: proposal_type = 'person_to_project' requires project_id, while person_to_company may keep project_id null.
+// - Consider partial unique indexes for active proposals once the final proposal retry/re-entry business rule is fixed.
+
+enum UserRole {
+  ADMIN   @map("admin")
+  MANAGER @map("manager")
+  SALES   @map("sales")
+  VIEWER  @map("viewer")
+  SYSTEM  @map("system")
+
+  @@map("user_role")
+}
+
+enum MailProvider {
+  GMAIL   @map("gmail")
+  OUTLOOK @map("outlook")
+  OTHER   @map("other")
+
+  @@map("mail_provider")
+}
+
+enum MailAccountPurpose {
+  INBOUND_SHARED @map("inbound_shared")
+  SALES_OUTBOUND @map("sales_outbound")
+  PERSONAL_SALES @map("personal_sales")
+  SYSTEM         @map("system")
+
+  @@map("mail_account_purpose")
+}
+
+enum MailCategory {
+  PROJECT_INTRO   @map("project_intro")
+  PERSON_INTRO    @map("person_intro")
+  SEMINAR         @map("seminar")
+  NEWSLETTER      @map("newsletter")
+  SALES_AD        @map("sales_ad")
+  NORMAL_CONTACT  @map("normal_contact")
+  OTHER           @map("other")
+  NEEDS_REVIEW    @map("needs_review")
+  EXCLUDED        @map("excluded")
+
+  @@map("mail_category")
+}
+
+enum ClassificationSource {
+  RULE    @map("rule")
+  AI      @map("ai")
+  MANUAL  @map("manual")
+  SYSTEM  @map("system")
+  UNKNOWN @map("unknown")
+
+  @@map("classification_source")
+}
+
+enum MailFilterRuleType {
+  KEYWORD       @map("keyword")
+  DOMAIN        @map("domain")
+  SENDER        @map("sender")
+  SUBJECT_REGEX @map("subject_regex")
+  BODY_REGEX    @map("body_regex")
+  AI_HINT       @map("ai_hint")
+
+  @@map("mail_filter_rule_type")
+}
+
+enum CompanyTradeStatus {
+  UNKNOWN      @map("unknown")
+  OK           @map("ok")
+  NG           @map("ng")
+  SUSPENDED    @map("suspended")
+  NEEDS_REVIEW @map("needs_review")
+
+  @@map("company_trade_status")
+}
+
+enum ProjectStatus {
+  DRAFT    @map("draft")
+  OPEN     @map("open")
+  PAUSED   @map("paused")
+  CLOSED   @map("closed")
+  ARCHIVED @map("archived")
+
+  @@map("project_status")
+}
+
+enum ProjectCompanyRoleType {
+  UPPER_COMPANY           @map("upper_company")
+  END_USER                @map("end_user")
+  PRIME_CONTRACTOR        @map("prime_contractor")
+  SECONDARY_CONTRACTOR    @map("secondary_contractor")
+  TERTIARY_CONTRACTOR     @map("tertiary_contractor")
+  ACCOUNT_MANAGER_COMPANY @map("account_manager_company")
+  PROPOSAL_TARGET         @map("proposal_target")
+  OTHER                   @map("other")
+
+  @@map("project_company_role_type")
+}
+
+enum ProjectSkillType {
+  REQUIRED        @map("required")
+  PREFERRED       @map("preferred")
+  USED_TECHNOLOGY @map("used_technology")
+  OTHER           @map("other")
+
+  @@map("project_skill_type")
+}
+
+enum ProjectTagType {
+  FOCUS  @map("focus")
+  FILTER @map("filter")
+  MANUAL @map("manual")
+  AI     @map("ai")
+  OTHER  @map("other")
+
+  @@map("project_tag_type")
+}
+
+enum RemoteType {
+  UNKNOWN     @map("unknown")
+  ONSITE      @map("onsite")
+  HYBRID      @map("hybrid")
+  REMOTE      @map("remote")
+  FULL_REMOTE @map("full_remote")
+
+  @@map("remote_type")
+}
+
+enum ContractType {
+  UNKNOWN         @map("unknown")
+  SEMI_DELEGATION @map("semi_delegation")
+  DISPATCH        @map("dispatch")
+  CONTRACT        @map("contract")
+  OTHER           @map("other")
+
+  @@map("contract_type")
+}
+
+enum ForeignNationalityPolicy {
+  UNKNOWN          @map("unknown")
+  NEED_CONFIRMATION @map("need_confirmation")
+  ACCEPTABLE       @map("acceptable")
+  NOT_ACCEPTABLE   @map("not_acceptable")
+
+  @@map("foreign_nationality_policy")
+}
+
+enum SalesInterviewAttendancePolicy {
+  NEED_CONFIRMATION @map("need_confirmation")
+  REQUIRED          @map("required")
+  NOT_REQUIRED      @map("not_required")
+
+  @@map("sales_interview_attendance_policy")
+}
+
+enum PersonStatus {
+  AVAILABLE @map("available")
+  PROPOSING @map("proposing")
+  JOINED    @map("joined")
+  INACTIVE  @map("inactive")
+  ARCHIVED  @map("archived")
+
+  @@map("person_status")
+}
+
+enum ProposalStatus {
+  PROPOSED              @map("proposed")
+  ENTERED               @map("entered")
+  INTERVIEW_SCHEDULING  @map("interview_scheduling")
+  INTERVIEWED           @map("interviewed")
+  OFFERED               @map("offered")
+  REJECTED              @map("rejected")
+  JOINED                @map("joined")
+  WITHDRAWN             @map("withdrawn")
+
+  @@map("proposal_status")
+}
+
+enum ProposalType {
+  PERSON_TO_COMPANY @map("person_to_company")
+  PERSON_TO_PROJECT @map("person_to_project")
+
+  @@map("proposal_type")
+}
+
+enum DeliveryStatus {
+  DRAFT   @map("draft")
+  SENT    @map("sent")
+  FAILED  @map("failed")
+  BOUNCED @map("bounced")
+  REPLIED @map("replied")
+  UNKNOWN @map("unknown")
+
+  @@map("delivery_status")
+}
+
+enum SearchTargetScope {
+  PROJECTS          @map("projects")
+  MAILS             @map("mails")
+  PERSONS           @map("persons")
+  PROPOSALS         @map("proposals")
+  COMPANIES         @map("companies")
+  COMPANY_CONTACTS  @map("company_contacts")
+  DISTRIBUTION_LOGS @map("distribution_logs")
+
+  @@map("search_target_scope")
+}
+
+enum ExtractionTargetType {
+  MAIL             @map("mail")
+  PROJECT          @map("project")
+  PERSON           @map("person")
+  PROPOSAL         @map("proposal")
+  COMPANY          @map("company")
+  COMPANY_CONTACT  @map("company_contact")
+  DISTRIBUTION_LOG @map("distribution_log")
+
+  @@map("extraction_target_type")
+}
+
+enum ExtractionType {
+  CLASSIFICATION      @map("classification")
+  PROJECT_EXTRACTION  @map("project_extraction")
+  PERSON_EXTRACTION   @map("person_extraction")
+  COMPANY_EXTRACTION  @map("company_extraction")
+  OTHER               @map("other")
+
+  @@map("extraction_type")
+}
+
+enum ReviewStatus {
+  PENDING      @map("pending")
+  APPROVED     @map("approved")
+  REJECTED     @map("rejected")
+  NEEDS_REVIEW @map("needs_review")
+
+  @@map("review_status")
+}
+
+enum MailEntityType {
+  PROJECT          @map("project")
+  PERSON           @map("person")
+  PROPOSAL         @map("proposal")
+  DISTRIBUTION_LOG @map("distribution_log")
+  COMPANY          @map("company")
+  COMPANY_CONTACT  @map("company_contact")
+
+  @@map("mail_entity_type")
+}
+
+enum MailEntityLinkType {
+  SOURCE       @map("source")
+  EXTRACTED    @map("extracted")
+  RELATED      @map("related")
+  REPLY        @map("reply")
+  DISTRIBUTION @map("distribution")
+
+  @@map("mail_entity_link_type")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(120)
+  email     String   @unique @db.VarChar(255)
+  role      UserRole @default(SALES)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  auditLogs                AuditLog[]               @relation("AuditActor")
+  createdMailEntityLinks    MailEntityLink[]         @relation("MailEntityLinkCreatedBy")
+  createdMailFilterRules    MailFilterRule[]         @relation("MailFilterRuleCreatedBy")
+  createdPersons            Person[]                 @relation("PersonCreatedBy")
+  createdProjects           Project[]                @relation("ProjectCreatedBy")
+  ownedProjects             Project[]                @relation("ProjectOwner")
+  ownedProposals            Proposal[]               @relation("ProposalOwner")
+  proposalStatusChanges     ProposalStatusHistory[]  @relation("ProposalStatusChangedBy")
+  reviewedExtractionResults ExtractionResult[]       @relation("ExtractionReviewedBy")
+  searchHistories           SearchHistory[]
+  sentDistributionLogs      DistributionLog[]        @relation("DistributionLogSender")
+
+  @@map("users")
+}
+
+model MailAccount {
+  id              String             @id @default(uuid()) @db.Uuid
+  email           String             @unique @db.VarChar(255)
+  provider        MailProvider       @default(GMAIL)
+  displayName     String?            @map("display_name") @db.VarChar(120)
+  purpose         MailAccountPurpose @default(INBOUND_SHARED)
+  isPrimaryIngest Boolean            @default(false) @map("is_primary_ingest")
+  isActive        Boolean            @default(true) @map("is_active")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  distributionLogs DistributionLog[]
+  notifications    MailNotification[]
+  salesMailProposals Proposal[]       @relation("ProposalSalesMailAccount")
+
+  @@index([purpose, isActive])
+  @@map("mail_accounts")
+}
+
+model MailNotification {
+  id                    String                @id @default(uuid()) @db.Uuid
+  sourceAccountId       String                @map("source_account_id") @db.Uuid
+  externalMessageId     String                @map("external_message_id") @db.VarChar(512)
+  externalThreadId      String?               @map("external_thread_id") @db.VarChar(512)
+  inReplyTo             String?               @map("in_reply_to") @db.VarChar(512)
+  referencesHeader      String?               @map("references_header") @db.Text
+  messageDate           DateTime?             @map("message_date") @db.Timestamptz(6)
+  receivedAt            DateTime              @default(now()) @map("received_at") @db.Timestamptz(6)
+  fromEmail             String?               @map("from_email") @db.VarChar(255)
+  fromName              String?               @map("from_name") @db.VarChar(255)
+  toEmails              String[]              @default([]) @map("to_emails")
+  ccEmails              String[]              @default([]) @map("cc_emails")
+  bccEmails             String[]              @default([]) @map("bcc_emails")
+  subject               String?               @db.Text
+  bodyText              String?               @map("body_text") @db.Text
+  bodyHtml              String?               @map("body_html") @db.Text
+  bodyHash              String?               @map("body_hash") @db.Char(64)
+  normalizedSubject     String?               @map("normalized_subject") @db.Text
+  normalizedBody        String?               @map("normalized_body") @db.Text
+  category              MailCategory          @default(NEEDS_REVIEW)
+  categoryConfidence    Decimal?              @map("category_confidence") @db.Decimal(5, 4)
+  isReply               Boolean               @default(false) @map("is_reply")
+  isExcluded            Boolean               @default(false) @map("is_excluded")
+  excludeReason         String?               @map("exclude_reason") @db.Text
+  needsReview           Boolean               @default(false) @map("needs_review")
+  classifiedBy          ClassificationSource? @map("classified_by")
+  classificationVersion String?               @map("classification_version") @db.VarChar(80)
+  sourceRawHeaders      Json?                 @map("source_raw_headers")
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sourceAccount     MailAccount        @relation(fields: [sourceAccountId], references: [id], onDelete: Restrict)
+  attachments       MailAttachment[]
+  extractionResults ExtractionResult[]
+  entityLinks       MailEntityLink[]
+  sourcePersons     Person[]           @relation("PersonSourceMail")
+  sourceProjects    Project[]          @relation("ProjectSourceMail")
+  sourceProposals   Proposal[]         @relation("ProposalSourceMail")
+
+  @@unique([sourceAccountId, externalMessageId])
+  @@index([sourceAccountId, externalThreadId])
+  @@index([category, isExcluded, needsReview])
+  @@index([receivedAt])
+  @@index([isReply])
+  @@index([fromEmail])
+  @@map("mail_notifications")
+}
+
+model MailAttachment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  mailNotificationId String   @map("mail_notification_id") @db.Uuid
+  fileName           String   @map("file_name") @db.VarChar(255)
+  mimeType           String?  @map("mime_type") @db.VarChar(120)
+  fileSize           Int?     @map("file_size")
+  contentHash        String?  @map("content_hash") @db.Char(64)
+  storageKey         String?  @map("storage_key") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  mailNotification MailNotification @relation(fields: [mailNotificationId], references: [id], onDelete: Cascade)
+
+  @@index([mailNotificationId])
+  @@index([contentHash])
+  @@map("mail_attachments")
+}
+
+model MailFilterRule {
+  id              String              @id @default(uuid()) @db.Uuid
+  name            String              @db.VarChar(160)
+  ruleType        MailFilterRuleType  @map("rule_type")
+  targetField     String              @map("target_field") @db.VarChar(80)
+  pattern         String              @db.Text
+  category        MailCategory?
+  setIsExcluded   Boolean?            @map("set_is_excluded")
+  excludeReason   String?             @map("exclude_reason") @db.Text
+  setNeedsReview  Boolean?            @map("set_needs_review")
+  priority        Int                 @default(100)
+  isActive        Boolean             @default(true) @map("is_active")
+  createdByUserId String?             @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy User? @relation("MailFilterRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, priority])
+  @@index([category])
+  @@map("mail_filter_rules")
+}
+
+model Company {
+  id                  String              @id @default(uuid()) @db.Uuid
+  name                String              @db.VarChar(255)
+  normalizedName      String              @map("normalized_name") @db.VarChar(255)
+  corporateNumber     String?             @unique @map("corporate_number") @db.VarChar(32)
+  websiteUrl          String?             @map("website_url") @db.Text
+  mainEmailDomain     String?             @map("main_email_domain") @db.VarChar(255)
+  tradeStatus         CompanyTradeStatus  @default(UNKNOWN) @map("trade_status")
+  tdbScore            Decimal?            @map("tdb_score") @db.Decimal(8, 2)
+  bankruptcyRiskScore Decimal?            @map("bankruptcy_risk_score") @db.Decimal(8, 2)
+  notes               String?             @db.Text
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  aliases                CompanyAlias[]
+  contacts               CompanyContact[]
+  distributionTargetLogs DistributionLog[]  @relation("DistributionTargetCompany")
+  ownerPersons           Person[]           @relation("PersonOwnerCompany")
+  projectRoles           ProjectCompanyRole[]
+  targetProposals        Proposal[]         @relation("ProposalTargetCompany")
+
+  @@index([normalizedName])
+  @@index([mainEmailDomain])
+  @@index([tradeStatus])
+  @@map("companies")
+}
+
+model CompanyAlias {
+  id                  String   @id @default(uuid()) @db.Uuid
+  companyId           String   @map("company_id") @db.Uuid
+  aliasName           String   @map("alias_name") @db.VarChar(255)
+  normalizedAliasName String   @map("normalized_alias_name") @db.VarChar(255)
+  source              String?  @db.VarChar(80)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([normalizedAliasName])
+  @@index([companyId])
+  @@map("company_aliases")
+}
+
+model CompanyContact {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyId     String   @map("company_id") @db.Uuid
+  name          String   @db.VarChar(160)
+  email         String?  @db.VarChar(255)
+  phone         String?  @db.VarChar(80)
+  department    String?  @db.VarChar(160)
+  position      String?  @db.VarChar(160)
+  isActive      Boolean  @default(true) @map("is_active")
+  contactPolicy String?  @map("contact_policy") @db.Text
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company                Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  distributionTargetLogs DistributionLog[]     @relation("DistributionTargetContact")
+  ownerPersons           Person[]              @relation("PersonOwnerContact")
+  projectRoles           ProjectCompanyRole[]
+  targetProposals        Proposal[]            @relation("ProposalTargetContact")
+
+  @@index([companyId, isActive])
+  @@index([email])
+  @@map("company_contacts")
+}
+
+model Project {
+  id              String        @id @default(uuid()) @db.Uuid
+  projectCode     String?       @unique @map("project_code") @db.VarChar(80)
+  title           String        @db.VarChar(255)
+  summary         String?       @db.Text
+  workDescription String?       @map("work_description") @db.Text
+  businessDescription String?   @map("business_description") @db.Text
+  sourceMailId    String?       @map("source_mail_id") @db.Uuid
+  createdByUserId String?       @map("created_by_user_id") @db.Uuid
+  ownerUserId     String?       @map("owner_user_id") @db.Uuid
+  status          ProjectStatus @default(DRAFT)
+  priorityLevel   Int?          @map("priority_level")
+  isFocus         Boolean       @default(false) @map("is_focus")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  publishedAt     DateTime?     @map("published_at") @db.Timestamptz(6)
+
+  createdBy        User?                @relation("ProjectCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  owner            User?                @relation("ProjectOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  sourceMail       MailNotification?    @relation("ProjectSourceMail", fields: [sourceMailId], references: [id], onDelete: SetNull)
+  condition        ProjectCondition?
+  companyRoles     ProjectCompanyRole[]
+  distributionLogs DistributionLog[]
+  proposals        Proposal[]
+  skills           ProjectSkill[]
+  tags             ProjectTag[]
+
+  @@index([status, createdAt])
+  @@index([sourceMailId])
+  @@index([ownerUserId])
+  @@index([isFocus])
+  @@map("projects")
+}
+
+model ProjectCondition {
+  id                                String                           @id @default(uuid()) @db.Uuid
+  projectId                         String                           @unique @map("project_id") @db.Uuid
+  unitPriceMin                      Int?                             @map("unit_price_min")
+  unitPriceMax                      Int?                             @map("unit_price_max")
+  unitPriceText                     String?                          @map("unit_price_text") @db.VarChar(120)
+  upperAmountMin                    Int?                             @map("upper_amount_min")
+  upperAmountMax                    Int?                             @map("upper_amount_max")
+  commissionFeeAmount               Int?                             @map("commission_fee_amount")
+  amProjectFeeAmount                Int?                             @map("am_project_fee_amount")
+  bankruptcyPredictionFeeAmount     Int?                             @map("bankruptcy_prediction_fee_amount")
+  recruitingCount                   Int?                             @map("recruiting_count")
+  workload                          String?                          @db.VarChar(120)
+  startMonth                        DateTime?                        @map("start_month") @db.Date
+  expectedWorkDaysPerWeek           Int?                             @map("expected_work_days_per_week")
+  settlementTimeMin                 Int?                             @map("settlement_time_min")
+  settlementTimeMax                 Int?                             @map("settlement_time_max")
+  fixedWorkStartTime                DateTime?                        @map("fixed_work_start_time") @db.Time(0)
+  fixedWorkEndTime                  DateTime?                        @map("fixed_work_end_time") @db.Time(0)
+  coreTimeStart                     DateTime?                        @map("core_time_start") @db.Time(0)
+  coreTimeEnd                       DateTime?                        @map("core_time_end") @db.Time(0)
+  workLocationText                  String?                          @map("work_location_text") @db.Text
+  prefecture                        String?                          @db.VarChar(20)
+  remoteType                        RemoteType                       @default(UNKNOWN) @map("remote_type")
+  workEnvironment                   String?                          @map("work_environment") @db.Text
+  contractType                      ContractType                     @default(UNKNOWN) @map("contract_type")
+  foreignNationalityPolicy          ForeignNationalityPolicy         @default(UNKNOWN) @map("foreign_nationality_policy")
+  ageCondition                      String?                          @map("age_condition") @db.VarChar(120)
+  siteAtmosphere                    String?                          @map("site_atmosphere") @db.Text
+  dressCode                         String?                          @map("dress_code") @db.Text
+  hairNailRule                      String?                          @map("hair_nail_rule") @db.Text
+  interviewCount                    Int?                             @map("interview_count")
+  salesInterviewAttendanceRequired  SalesInterviewAttendancePolicy?  @map("sales_interview_attendance_required")
+  amContactRequired                 Boolean?                         @map("am_contact_required")
+  amContactName                     String?                          @map("am_contact_name") @db.VarChar(160)
+  notes                             String?                          @db.Text
+  createdAt                         DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                         DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([startMonth])
+  @@index([unitPriceMin, unitPriceMax])
+  @@index([prefecture])
+  @@index([remoteType])
+  @@index([contractType])
+  @@index([foreignNationalityPolicy])
+  @@map("project_conditions")
+}
+
+model ProjectCompanyRole {
+  id               String                 @id @default(uuid()) @db.Uuid
+  projectId        String                 @map("project_id") @db.Uuid
+  companyId        String                 @map("company_id") @db.Uuid
+  companyContactId String?                @map("company_contact_id") @db.Uuid
+  role             ProjectCompanyRoleType
+  roleOrder        Int                    @default(0) @map("role_order")
+  isPrimary        Boolean                @default(false) @map("is_primary")
+  notes            String?                @db.Text
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  companyContact CompanyContact? @relation(fields: [companyContactId], references: [id], onDelete: SetNull)
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, companyId, role])
+  @@index([projectId, role])
+  @@index([companyId, role])
+  @@index([companyContactId])
+  @@map("project_company_roles")
+}
+
+model ProjectSkill {
+  id            String           @id @default(uuid()) @db.Uuid
+  projectId     String           @map("project_id") @db.Uuid
+  skillName     String           @map("skill_name") @db.VarChar(160)
+  skillType     ProjectSkillType @default(OTHER) @map("skill_type")
+  yearsRequired Decimal?         @map("years_required") @db.Decimal(4, 1)
+  notes         String?          @db.Text
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, skillType])
+  @@index([skillName])
+  @@map("project_skills")
+}
+
+model ProjectTag {
+  id        String         @id @default(uuid()) @db.Uuid
+  projectId String         @map("project_id") @db.Uuid
+  tag       String         @db.VarChar(120)
+  tagType   ProjectTagType @default(MANUAL) @map("tag_type")
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, tag, tagType])
+  @@index([tag])
+  @@map("project_tags")
+}
+
+model Person {
+  id               String       @id @default(uuid()) @db.Uuid
+  personCode       String?      @unique @map("person_code") @db.VarChar(80)
+  name             String?      @db.VarChar(160)
+  initials         String?      @db.VarChar(40)
+  sourceMailId     String?      @map("source_mail_id") @db.Uuid
+  ownerCompanyId   String?      @map("owner_company_id") @db.Uuid
+  ownerContactId   String?      @map("owner_contact_id") @db.Uuid
+  summary          String?      @db.Text
+  careerSummary    String?      @map("career_summary") @db.Text
+  desiredUnitPrice Int?         @map("desired_unit_price")
+  availableFrom    DateTime?    @map("available_from") @db.Date
+  preferredLocation String?     @map("preferred_location") @db.Text
+  remotePreference String?      @map("remote_preference") @db.VarChar(120)
+  age              Int?
+  nationality      String?      @db.VarChar(80)
+  status           PersonStatus @default(AVAILABLE)
+  createdByUserId  String?      @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy        User?             @relation("PersonCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  ownerCompany     Company?          @relation("PersonOwnerCompany", fields: [ownerCompanyId], references: [id], onDelete: SetNull)
+  ownerContact     CompanyContact?   @relation("PersonOwnerContact", fields: [ownerContactId], references: [id], onDelete: SetNull)
+  sourceMail       MailNotification? @relation("PersonSourceMail", fields: [sourceMailId], references: [id], onDelete: SetNull)
+  distributionLogs DistributionLog[]
+  proposals        Proposal[]
+  skills           PersonSkill[]
+
+  @@index([sourceMailId])
+  @@index([ownerCompanyId])
+  @@index([ownerContactId])
+  @@index([status])
+  @@index([availableFrom])
+  @@map("persons")
+}
+
+model PersonSkill {
+  id        String   @id @default(uuid()) @db.Uuid
+  personId  String   @map("person_id") @db.Uuid
+  skillName String   @map("skill_name") @db.VarChar(160)
+  years     Decimal? @db.Decimal(4, 1)
+  level     String?  @db.VarChar(80)
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([skillName])
+  @@map("person_skills")
+}
+
+model Proposal {
+  id                      String          @id @default(uuid()) @db.Uuid
+  personId                String          @map("person_id") @db.Uuid
+  projectId               String?         @map("project_id") @db.Uuid
+  proposalType            ProposalType    @default(PERSON_TO_PROJECT) @map("proposal_type")
+  targetCompanyId         String          @map("target_company_id") @db.Uuid
+  targetContactId         String?         @map("target_contact_id") @db.Uuid
+  salesMailAccountId      String          @map("sales_mail_account_id") @db.Uuid
+  ownerUserId             String?         @map("owner_user_id") @db.Uuid
+  sourceMailId            String?         @map("source_mail_id") @db.Uuid
+  latestDistributionLogId String?         @unique @map("latest_distribution_log_id") @db.Uuid
+  status                  ProposalStatus  @default(PROPOSED)
+  statusChangedAt         DateTime        @default(now()) @map("status_changed_at") @db.Timestamptz(6)
+  proposedAt              DateTime?       @map("proposed_at") @db.Timestamptz(6)
+  enteredAt               DateTime?       @map("entered_at") @db.Timestamptz(6)
+  interviewScheduledAt    DateTime?       @map("interview_scheduled_at") @db.Timestamptz(6)
+  interviewedAt           DateTime?       @map("interviewed_at") @db.Timestamptz(6)
+  offeredAt               DateTime?       @map("offered_at") @db.Timestamptz(6)
+  joinedAt                DateTime?       @map("joined_at") @db.Timestamptz(6)
+  rejectedAt              DateTime?       @map("rejected_at") @db.Timestamptz(6)
+  withdrawnAt             DateTime?       @map("withdrawn_at") @db.Timestamptz(6)
+  notes                   String?         @db.Text
+  createdAt               DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  latestDistributionLog DistributionLog? @relation("LatestProposalDistribution", fields: [latestDistributionLogId], references: [id], onDelete: SetNull)
+  ownerUser             User?            @relation("ProposalOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  person                Person           @relation(fields: [personId], references: [id], onDelete: Restrict)
+  project               Project?         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  salesMailAccount      MailAccount      @relation("ProposalSalesMailAccount", fields: [salesMailAccountId], references: [id], onDelete: Restrict)
+  sourceMail            MailNotification? @relation("ProposalSourceMail", fields: [sourceMailId], references: [id], onDelete: SetNull)
+  targetCompany         Company          @relation("ProposalTargetCompany", fields: [targetCompanyId], references: [id], onDelete: Restrict)
+  targetContact         CompanyContact?  @relation("ProposalTargetContact", fields: [targetContactId], references: [id], onDelete: SetNull)
+  distributionLogs      DistributionLog[] @relation("ProposalDistributionLogs")
+  statusHistories       ProposalStatusHistory[]
+
+  @@index([personId, projectId])
+  @@index([personId, projectId, targetCompanyId, salesMailAccountId])
+  @@index([projectId, status])
+  @@index([targetCompanyId, status])
+  @@index([salesMailAccountId, status])
+  @@index([proposalType, status])
+  @@index([sourceMailId])
+  @@map("proposals")
+}
+
+model ProposalStatusHistory {
+  id              String          @id @default(uuid()) @db.Uuid
+  proposalId      String          @map("proposal_id") @db.Uuid
+  fromStatus      ProposalStatus? @map("from_status")
+  toStatus        ProposalStatus  @map("to_status")
+  changedByUserId String?         @map("changed_by_user_id") @db.Uuid
+  changedAt       DateTime        @default(now()) @map("changed_at") @db.Timestamptz(6)
+  reason          String?         @db.Text
+  notes           String?         @db.Text
+
+  changedBy User?    @relation("ProposalStatusChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  proposal  Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, changedAt])
+  @@index([toStatus])
+  @@map("proposal_status_histories")
+}
+
+model DistributionLog {
+  id               String         @id @default(uuid()) @db.Uuid
+  mailAccountId    String         @map("mail_account_id") @db.Uuid
+  senderUserId     String?        @map("sender_user_id") @db.Uuid
+  targetCompanyId  String         @map("target_company_id") @db.Uuid
+  targetContactId  String?        @map("target_contact_id") @db.Uuid
+  projectId        String?        @map("project_id") @db.Uuid
+  personId         String?        @map("person_id") @db.Uuid
+  proposalId       String?        @map("proposal_id") @db.Uuid
+  externalMessageId String?       @map("external_message_id") @db.VarChar(512)
+  externalThreadId String?        @map("external_thread_id") @db.VarChar(512)
+  subject          String?        @db.Text
+  bodyHash         String?        @map("body_hash") @db.Char(64)
+  sentAt           DateTime       @default(now()) @map("sent_at") @db.Timestamptz(6)
+  deliveryStatus   DeliveryStatus @default(UNKNOWN) @map("delivery_status")
+  excludedFromResend Boolean      @default(false) @map("excluded_from_resend")
+  notes            String?        @db.Text
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  mailAccount       MailAccount      @relation(fields: [mailAccountId], references: [id], onDelete: Restrict)
+  person            Person?          @relation(fields: [personId], references: [id], onDelete: SetNull)
+  project           Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  proposal          Proposal?        @relation("ProposalDistributionLogs", fields: [proposalId], references: [id], onDelete: SetNull)
+  senderUser        User?            @relation("DistributionLogSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  targetCompany     Company          @relation("DistributionTargetCompany", fields: [targetCompanyId], references: [id], onDelete: Restrict)
+  targetContact     CompanyContact?  @relation("DistributionTargetContact", fields: [targetContactId], references: [id], onDelete: SetNull)
+  latestForProposal Proposal?        @relation("LatestProposalDistribution")
+
+  @@unique([mailAccountId, externalMessageId])
+  @@index([targetCompanyId, targetContactId, sentAt])
+  @@index([projectId, sentAt])
+  @@index([personId, sentAt])
+  @@index([proposalId, sentAt])
+  @@index([mailAccountId, externalThreadId])
+  @@map("distribution_logs")
+}
+
+model SearchHistory {
+  id          String            @id @default(uuid()) @db.Uuid
+  userId      String?           @map("user_id") @db.Uuid
+  targetScope SearchTargetScope @map("target_scope")
+  queryText   String?           @map("query_text") @db.Text
+  filters     Json?
+  sortKey     String?           @map("sort_key") @db.VarChar(120)
+  resultCount Int?              @map("result_count")
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([targetScope, createdAt])
+  @@map("search_histories")
+}
+
+model ExtractionResult {
+  id                 String               @id @default(uuid()) @db.Uuid
+  mailNotificationId String               @map("mail_notification_id") @db.Uuid
+  targetType         ExtractionTargetType @map("target_type")
+  targetId           String?              @map("target_id") @db.Uuid
+  extractionType     ExtractionType       @map("extraction_type")
+  modelName          String?              @map("model_name") @db.VarChar(120)
+  modelVersion       String?              @map("model_version") @db.VarChar(80)
+  promptVersion      String?              @map("prompt_version") @db.VarChar(80)
+  confidence         Decimal?             @db.Decimal(5, 4)
+  rawResult          Json?                @map("raw_result")
+  normalizedResult   Json?                @map("normalized_result")
+  reviewStatus       ReviewStatus         @default(PENDING) @map("review_status")
+  reviewedByUserId   String?              @map("reviewed_by_user_id") @db.Uuid
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  mailNotification MailNotification @relation(fields: [mailNotificationId], references: [id], onDelete: Cascade)
+  reviewedBy       User?            @relation("ExtractionReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([mailNotificationId, extractionType])
+  @@index([targetType, targetId])
+  @@index([reviewStatus])
+  @@map("extraction_results")
+}
+
+model MailEntityLink {
+  id                 String             @id @default(uuid()) @db.Uuid
+  mailNotificationId String             @map("mail_notification_id") @db.Uuid
+  entityType         MailEntityType     @map("entity_type")
+  entityId           String             @map("entity_id") @db.Uuid
+  linkType           MailEntityLinkType @default(RELATED) @map("link_type")
+  createdByUserId    String?            @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  createdBy        User?            @relation("MailEntityLinkCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  mailNotification MailNotification @relation(fields: [mailNotificationId], references: [id], onDelete: Cascade)
+
+  @@unique([mailNotificationId, entityType, entityId, linkType])
+  @@index([entityType, entityId])
+  @@map("mail_entity_links")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(120)
+  entityType  String   @map("entity_type") @db.VarChar(80)
+  entityId    String?  @map("entity_id") @db.Uuid
+  beforeData  Json?    @map("before_data")
+  afterData   Json?    @map("after_data")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
