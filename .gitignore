@@ -9,3 +9,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 /app/generated/prisma
+
+secrets/
+gmail-oauth-client.json
+*.secret.json

@@ -2,6 +2,9 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../app/generated/prisma/client";
+import { assertNotProductionMutation } from "../lib/production-guard";
+
+assertNotProductionMutation("prisma seed");
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -212,7 +215,7 @@ async function seedCompanyContacts() {
       phone: "03-0000-0002",
       department: "パートナー推進",
       position: "営業担当",
-      contactPolicy: "AM経由連絡推奨"
+      contactPolicy: "上位会社担当者経由連絡推奨"
     },
     {
       id: id.contactMetroDigital,
@@ -468,8 +471,8 @@ async function seedProjectConditions() {
       upperAmountMin: 85,
       upperAmountMax: 100,
       commissionFeeAmount: 10000,
-      amProjectFeeAmount: 10000,
-      bankruptcyPredictionFeeAmount: 0,
+      amProjectFeeAmount: 0,
+      bankruptcyPredictionFeeAmount: null,
       recruitingCount: 2,
       workload: "1人月",
       startMonth: date("2026-06-01T00:00:00Z"),
@@ -488,8 +491,8 @@ async function seedProjectConditions() {
       hairNailRule: "清潔感があれば可",
       interviewCount: 1,
       salesInterviewAttendanceRequired: "NEED_CONFIRMATION",
-      amContactRequired: true,
-      amContactName: "営業担当A",
+      amContactRequired: false,
+      amContactName: null,
       notes: "MOC確認用の案件条件"
     },
     create: {
@@ -501,8 +504,8 @@ async function seedProjectConditions() {
       upperAmountMin: 85,
       upperAmountMax: 100,
       commissionFeeAmount: 10000,
-      amProjectFeeAmount: 10000,
-      bankruptcyPredictionFeeAmount: 0,
+      amProjectFeeAmount: 0,
+      bankruptcyPredictionFeeAmount: null,
       recruitingCount: 2,
       workload: "1人月",
       startMonth: date("2026-06-01T00:00:00Z"),
@@ -521,8 +524,8 @@ async function seedProjectConditions() {
       hairNailRule: "清潔感があれば可",
       interviewCount: 1,
       salesInterviewAttendanceRequired: "NEED_CONFIRMATION",
-      amContactRequired: true,
-      amContactName: "営業担当A",
+      amContactRequired: false,
+      amContactName: null,
       notes: "MOC確認用の案件条件"
     }
   });
@@ -537,7 +540,7 @@ async function seedProjectConditions() {
       upperAmountMax: 95,
       commissionFeeAmount: 0,
       amProjectFeeAmount: 0,
-      bankruptcyPredictionFeeAmount: 0,
+      bankruptcyPredictionFeeAmount: null,
       recruitingCount: 1,
       workload: "1人月",
       startMonth: date("2026-07-01T00:00:00Z"),
@@ -569,7 +572,7 @@ async function seedProjectConditions() {
       upperAmountMax: 95,
       commissionFeeAmount: 0,
       amProjectFeeAmount: 0,
-      bankruptcyPredictionFeeAmount: 0,
+      bankruptcyPredictionFeeAmount: null,
       recruitingCount: 1,
       workload: "1人月",
       startMonth: date("2026-07-01T00:00:00Z"),

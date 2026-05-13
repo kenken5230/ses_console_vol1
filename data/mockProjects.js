@@ -1,27 +1,27 @@
-export const tabs = ["IT", "HR", "FINANCE", "MARKETING", "管理部採用"];
+export const tabs = ["案件", "要員", "未分類"];
 
 export const quickFilters = [
-  { id: "hasResult", label: "取引実績あり", help: true },
-  { id: "amOnly", label: "アカウントマネージャー(AM)案件のみ表示" },
-  { id: "hideTradeNg", label: "取引NGを非表示", defaultChecked: true },
-  { id: "hideAnkenMail", label: "ankenメールを非表示" },
-  { id: "hideForeignNg", label: "外国籍NG非表示" },
-  { id: "hide50sNg", label: "50代NGを非表示" },
-  { id: "hide60sNg", label: "60代NGを非表示" },
-  { id: "createdByMe", label: "自分が作成者の案件のみ表示" },
-  { id: "myAm", label: "自分がAMの案件のみ表示" },
-  { id: "recruitingOnly", label: "募集中の案件のみ表示" }
+  { id: "hasResult", label: "取引実績あり", showOn: ["案件", "要員", "未分類"], help: true },
+  { id: "hideTradeNg", label: "取引NGを非表示", showOn: ["案件", "要員", "未分類"], defaultChecked: true },
+  { id: "hideForeignNg", label: "外国籍NGを非表示", personLabel: "外国籍を非表示", showOn: ["案件", "要員"] },
+  { id: "hide50sNg", label: "50代NGを非表示", personLabel: "50代を非表示", showOn: ["案件", "要員"] },
+  { id: "hide60sNg", label: "60代NGを非表示", personLabel: "60代を非表示", showOn: ["案件", "要員"] },
+  { id: "createdByMe", label: "自分が作成者の案件のみ表示", personLabel: "自分が作成者の要員のみ表示", showOn: ["案件", "要員"] },
+  { id: "recruitingOnly", label: "募集中の案件のみ表示", personLabel: "募集中の要員のみ表示", showOn: ["案件", "要員"] }
 ];
 
 export const focusOptions = [
-  { id: "corporateCs", label: "法人CS注力案件", marked: true },
   { id: "direct", label: "エンド直/元請直", marked: true },
   { id: "highUnitPrice", label: "高単価", marked: true },
-  { id: "replacement", label: "交代要員" }
+  { id: "remoteHybrid", label: "フルリモート/リモート併用", marked: true }
 ];
 
-export const sortOptions = ["おすすめ順", "新着順", "単価が高い順", "単価が低い順"];
-export const pageSizeOptions = [50, 100];
+export const personFocusOptions = [
+  { id: "powerBp", label: "パワーBP", marked: true }
+];
+
+export const sortOptions = ["おすすめ順", "新着順", "名前順", "単価が高い順", "単価が低い順"];
+export const pageSizeOptions = [10, 20, 50];
 
 export const prefectures = [
   "北海道",
@@ -163,9 +163,9 @@ export const projects = [
     createdAt: "15:50",
     status: "公開",
     tags: ["AWS", "IaC", "リモート"],
-    attention: ["法人CS注力案件", "高単価"],
+    attention: ["高単価"],
     detail: {
-      feeLabels: ["AM案件手数料：30,000円", "倒産予測値手数料：10,000円"],
+      feeLabels: ["手数料：10,000円"],
       company: "クラウドビルダーズ株式会社",
       companyTags: ["取引OK", "帝国データバンク：37点"],
       memo: "SKV内全員が閲覧できます",
@@ -174,8 +174,7 @@ export const projects = [
           label: "手数料",
           type: "fee",
           items: [
-            { label: "AM案件手数料：30,000円", tone: "purple" },
-            { label: "倒産予測値手数料：10,000円", tone: "danger" }
+            { label: "手数料：10,000円", tone: "neutral" }
           ]
         },
         {
@@ -231,7 +230,7 @@ export const projects = [
         { label: "想定稼働日数", value: "週5日" },
         { label: "現場の定時", value: "未入力", muted: true },
         { label: "コアタイム", value: "未入力", muted: true },
-        { label: "注力案件", value: "法人CS注力案件、エンド直/元請直、高単価" },
+        { label: "注力案件", value: "エンド直/元請直、高単価" },
         { label: "営業の面談同席の要否", value: "面談前に確認してください" },
         { label: "契約形態", value: "準委任" },
         { label: "外国籍の受け入れ", value: "要確認" },
@@ -273,7 +272,7 @@ export const projects = [
     createdAt: "15:45",
     status: "公開",
     tags: ["PM", "API", "リモート"],
-    attention: ["交代要員"]
+    attention: []
   },
   {
     id: 2085115,
@@ -561,6 +560,18 @@ export const filterFormRows = [
   { id: "workDays", label: "想定稼働日数", type: "checks", options: ["週5日", "週4日", "週3日"] }
 ];
 
+export const personFilterFormRows = [
+  { id: "createdAt", label: "要員作成日", type: "dateRange", fromKey: "createdFrom", toKey: "createdTo", start: "下限", end: "上限" },
+  { id: "projectId", label: "要員ID", type: "text", placeholder: "要員IDを入力" },
+  { id: "exclude", label: "除外するキーワード", type: "text", placeholder: "除外するキーワードを入力" },
+  { id: "startMonth", label: "稼働開始日", type: "dateRange", fromKey: "startMonthFrom", toKey: "startMonthTo", start: "下限", end: "上限" },
+  { id: "skill", label: "スキル", type: "select", placeholder: "スキルタグ名" },
+  { id: "unit", label: "希望単価", type: "priceRange" },
+  { id: "prefecture", label: "希望勤務地", type: "prefecture", placeholder: "希望勤務地を入力" },
+  { id: "remote", label: "リモート条件", type: "checks", options: ["リモート可", "常駐可", "フルリモート"] },
+  { id: "statuses", label: "状態", type: "checks", options: ["提案可", "提案中", "参画中", "停止"] }
+];
+
 export const createFormSections = [
   {
     id: "basic",
@@ -582,10 +593,10 @@ export const createFormSections = [
       { label: "", type: "select", placeholder: "担当者を選択" },
       { label: "想定稼働日数", type: "checks", options: ["週5日", "週4日", "週3日"], value: ["週5日"], required: true },
       { label: "現場の定時\n(コアタイム)", type: "timeRange", placeholders: ["開始時間", "終了時間"] },
-      { label: "注力案件", type: "checks", options: ["法人CS注力案件", "エンド直/元請直", "高単価", "交代要員"] },
+      { label: "注力案件", type: "checks", options: ["エンド直/元請直", "高単価", "フルリモート/リモート併用"] },
       { label: "契約形態", type: "checks", options: ["準委任", "派遣"], value: ["準委任"] },
       { label: "外国籍の受け入れ", type: "radio", options: ["要確認", "可", "不可"], value: "要確認" },
-      { label: "年齢条件", type: "checks", options: ["50代NG", "60代NG"] }
+      { label: "年齢条件", type: "checks", options: ["50代", "60代"] }
     ]
   },
   {

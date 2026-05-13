@@ -1,16 +1,73 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
+import { authErrorResponse, requireAuth } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
+const EMPTY_VALUE = "-";
 
-function formatDateTime(value: Date | null | undefined) {
-  if (!value) return "";
-  return value.toISOString().replace("T", " ").slice(0, 16);
-}
+type DetailItem = {
+  label: string;
+  value?: string;
+  type?: "block" | "tags" | "commerce" | "mail";
+  tags?: string[];
+  items?: string[][];
+  emphasis?: boolean;
+};
+
+type DetailGroup = {
+  title: string;
+  items: DetailItem[];
+};
 
 function formatDate(value: Date | null | undefined) {
   if (!value) return "";
   return value.toISOString().slice(0, 10);
+}
+
+function formatMonth(value: Date | null | undefined) {
+  if (!value) return EMPTY_VALUE;
+  return value.toISOString().slice(0, 7);
+}
+
+function formatTime(value: Date | null | undefined) {
+  if (!value) return "";
+  return value.toISOString().slice(11, 16);
+}
+
+function formatTimeRange(start?: Date | null, end?: Date | null) {
+  const startText = formatTime(start);
+  const endText = formatTime(end);
+  if (startText && endText) return `${startText}〜${endText}`;
+  if (startText) return `${startText}〜`;
+  if (endText) return `〜${endText}`;
+  return EMPTY_VALUE;
+}
+
+function formatInputTimeRange(start?: Date | null, end?: Date | null) {
+  const startText = formatTime(start);
+  const endText = formatTime(end);
+  if (startText && endText) return `${startText}〜${endText}`;
+  return "";
+}
+
+function formatSettlementInput(min?: number | null, max?: number | null) {
+  if (min && max) return `${min}〜${max}h`;
+  if (min) return `${min}h`;
+  return "";
+}
+
+function formatInputNumber(value?: number | null) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function formatNullable(value: any) {
+  if (value === null || value === undefined || value === "") return EMPTY_VALUE;
+  return String(value);
+}
+
+function formatYen(value?: number | null) {
+  if (!value) return EMPTY_VALUE;
+  return `${value.toLocaleString()}円`;
 }
 
 function formatMoneyRange(min?: number | null, max?: number | null, text?: string | null) {
@@ -18,7 +75,7 @@ function formatMoneyRange(min?: number | null, max?: number | null, text?: strin
   if (min && max) return `${min}〜${max}万円`;
   if (min) return `${min}万円〜`;
   if (max) return `〜${max}万円`;
-  return "未定";
+  return EMPTY_VALUE;
 }
 
 function statusLabel(status: string) {
@@ -49,29 +106,60 @@ function statusLabel(status: string) {
   return labels[status] || status;
 }
 
-function categoryLabel(category: string) {
+function personStatusInputLabel(status: string) {
   const labels: Record<string, string> = {
-    PROJECT_INTRO: "案件紹介",
-    PERSON_INTRO: "要員紹介",
-    SEMINAR: "セミナー",
-    NEWSLETTER: "メルマガ",
-    SALES_AD: "営業広告",
-    NORMAL_CONTACT: "通常連絡",
-    OTHER: "その他",
-    NEEDS_REVIEW: "要確認",
-    EXCLUDED: "除外"
+    AVAILABLE: "提案可",
+    PROPOSING: "提案中",
+    JOINED: "参画中",
+    INACTIVE: "停止"
   };
 
-  return labels[category] || category;
+  return labels[status] || status;
 }
 
-function proposalTypeLabel(type: string) {
+function tradeStatusInputLabel(status?: string | null) {
   const labels: Record<string, string> = {
-    PERSON_TO_COMPANY: "要員→会社",
-    PERSON_TO_PROJECT: "要員→案件"
+    UNKNOWN: "未確認",
+    OK: "取引OK",
+    NG: "取引NG",
+    SUSPENDED: "取引NG",
+    NEEDS_REVIEW: "要確認"
   };
 
-  return labels[type] || type;
+  return status ? labels[status] || "未確認" : "";
+}
+
+function contractTypeInputLabel(contractType?: string | null) {
+  const labels: Record<string, string> = {
+    UNKNOWN: "未確認",
+    SEMI_DELEGATION: "準委任",
+    DISPATCH: "派遣",
+    CONTRACT: "請負",
+    OTHER: "その他"
+  };
+
+  return contractType ? labels[contractType] || "未確認" : "";
+}
+
+function foreignNationalityInputLabel(policy?: string | null) {
+  const labels: Record<string, string> = {
+    UNKNOWN: "未確認",
+    NEED_CONFIRMATION: "要確認",
+    ACCEPTABLE: "可",
+    NOT_ACCEPTABLE: "不可"
+  };
+
+  return policy ? labels[policy] || "未確認" : "";
+}
+
+function attendanceInputLabel(policy?: string | null) {
+  const labels: Record<string, string> = {
+    NEED_CONFIRMATION: "未確認",
+    REQUIRED: "必要",
+    NOT_REQUIRED: "不要"
+  };
+
+  return policy ? labels[policy] || "未確認" : "";
 }
 
 function companyRoleLabel(role: string) {
@@ -81,7 +169,6 @@ function companyRoleLabel(role: string) {
     PRIME_CONTRACTOR: "元請",
     SECONDARY_CONTRACTOR: "二次請け",
     TERTIARY_CONTRACTOR: "三次請け",
-    ACCOUNT_MANAGER_COMPANY: "AM会社",
     PROPOSAL_TARGET: "提案先",
     OTHER: "その他"
   };
@@ -98,97 +185,558 @@ function remoteLabel(remoteType?: string | null) {
     FULL_REMOTE: "フルリモート"
   };
 
-  return remoteType ? labels[remoteType] || remoteType : "未確認";
+  return remoteType ? labels[remoteType] || remoteType : EMPTY_VALUE;
 }
 
-function pickProjectCompany(project: any) {
+function contractTypeLabel(contractType?: string | null) {
+  const labels: Record<string, string> = {
+    UNKNOWN: "未確認",
+    SEMI_DELEGATION: "準委任",
+    DISPATCH: "派遣",
+    CONTRACT: "請負",
+    OTHER: "その他"
+  };
+
+  return contractType ? labels[contractType] || contractType : EMPTY_VALUE;
+}
+
+function foreignNationalityLabel(policy?: string | null) {
+  const labels: Record<string, string> = {
+    UNKNOWN: "未確認",
+    NEED_CONFIRMATION: "要確認",
+    ACCEPTABLE: "可",
+    NOT_ACCEPTABLE: "不可"
+  };
+
+  return policy ? labels[policy] || policy : EMPTY_VALUE;
+}
+
+function salesInterviewAttendanceLabel(policy?: string | null) {
+  const labels: Record<string, string> = {
+    NEED_CONFIRMATION: "要確認",
+    REQUIRED: "必要",
+    NOT_REQUIRED: "不要"
+  };
+
+  return policy ? labels[policy] || policy : EMPTY_VALUE;
+}
+
+function findRole(project: any, role: string) {
+  return project.companyRoles.find((item: any) => item.role === role);
+}
+
+function pickProjectCompanyRole(project: any) {
   const preferredRoles = ["UPPER_COMPANY", "PRIME_CONTRACTOR", "END_USER"];
   for (const role of preferredRoles) {
-    const found = project.companyRoles.find((item: any) => item.role === role);
-    if (found) return found.company.name;
+    const found = findRole(project, role);
+    if (found) return found;
   }
-  return project.companyRoles[0]?.company.name || "未入力";
+  return project.companyRoles[0];
+}
+
+function roleCompanyName(project: any, role: string) {
+  return findRole(project, role)?.company?.name || EMPTY_VALUE;
+}
+
+function formatSkillList(skills: string[]) {
+  return skills.length ? skills : [EMPTY_VALUE];
+}
+
+function makeTextItem(label: string, value: any, emphasis = false): DetailItem {
+  return { label, value: formatNullable(value), emphasis };
+}
+
+function makeBlockItem(label: string, value: any): DetailItem {
+  return { label, type: "block", value: formatNullable(value) };
+}
+
+function makeMailItem(mail: any): DetailItem {
+  if (!mail) return { label: "元メール", type: "mail", value: "元メール情報なし" };
+
+  const headerLines = [
+    mail.subject ? `件名: ${mail.subject}` : "件名: -",
+    mail.fromName || mail.fromEmail ? `送信者: ${[mail.fromName, mail.fromEmail].filter(Boolean).join(" / ")}` : "送信者: -",
+    mail.messageDate || mail.receivedAt ? `受信日時: ${formatDate(mail.messageDate || mail.receivedAt)}` : "受信日時: -",
+    mail.externalMessageId ? `Gmail messageId: ${mail.externalMessageId}` : "Gmail messageId: -",
+    mail.externalThreadId ? `threadId: ${mail.externalThreadId}` : "threadId: -"
+  ].filter(Boolean);
+  const body = mailBodyText(mail);
+
+  return {
+    label: "元メール",
+    type: "mail",
+    value: [...headerLines, body].join("\n\n")
+  };
+}
+
+function hasNeedsReviewExtraction(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
+  const extractionResults = sourceMail?.extractionResults || [];
+  return extractionResults.some((result: any) => {
+    return result.targetType === targetType && result.targetId === targetId && result.reviewStatus === "NEEDS_REVIEW";
+  });
+}
+
+function formatDateTime(value: Date | null | undefined) {
+  if (!value) return EMPTY_VALUE;
+  return value.toISOString().replace("T", " ").slice(0, 16);
+}
+
+function normalizeCompanyLike(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function domainFromEmail(email?: string | null) {
+  const domain = email?.split("@")[1]?.trim().toLowerCase();
+  return domain || "";
+}
+
+function categoryLabel(category: string) {
+  const labels: Record<string, string> = {
+    PROJECT_INTRO: "案件紹介",
+    PERSON_INTRO: "要員紹介",
+    SEMINAR: "セミナー",
+    NEWSLETTER: "メルマガ",
+    SALES_AD: "営業広告",
+    NORMAL_CONTACT: "通常連絡",
+    OTHER: "その他",
+    NEEDS_REVIEW: "要確認",
+    EXCLUDED: "除外"
+  };
+
+  return labels[category] || category;
+}
+
+function inferSenderCompany(mail: any, companies: any[]) {
+  const emailDomain = domainFromEmail(mail.fromEmail);
+  const senderText = normalizeCompanyLike([mail.fromName, mail.fromEmail].filter(Boolean).join(" "));
+  const domainMatch = emailDomain
+    ? companies.find((company) => {
+        const domain = company.mainEmailDomain?.toLowerCase();
+        return domain && (emailDomain === domain || emailDomain.endsWith(`.${domain}`));
+      })
+    : null;
+  if (domainMatch) return domainMatch;
+
+  const nameMatch = companies.find((company) => company.normalizedName && senderText.includes(company.normalizedName));
+  if (nameMatch) return nameMatch;
+
+  return null;
+}
+
+function stripMailSignature(value?: string | null) {
+  const text = value || "";
+  const signatureMarkers = ["-- ", "――", "-----Original Message-----", "差出人:"];
+  let result = text;
+  for (const marker of signatureMarkers) {
+    const index = result.indexOf(marker);
+    if (index > 240) {
+      result = result.slice(0, index).trim();
+      break;
+    }
+  }
+  return result || EMPTY_VALUE;
+}
+
+function htmlToText(html?: string | null) {
+  if (!html) return "";
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function mailBodyText(mail: any) {
+  return stripMailSignature(mail?.bodyText || mail?.normalizedBody || htmlToText(mail?.bodyHtml));
+}
+
+function makeTagsItem(label: string, tags: string[]): DetailItem {
+  return { label, type: "tags", tags: formatSkillList(tags) };
+}
+
+function makeCommerceItem(label: string, items: string[][]): DetailItem {
+  return { label, type: "commerce", items: items.length ? items : [["商流", EMPTY_VALUE]] };
 }
 
 function mapProject(project: any) {
   const condition = project.condition;
   const skills = project.skills.map((skill: any) => skill.skillName);
-  const tags = project.tags.map((tag: any) => tag.tag);
+  const requiredSkills = project.skills.filter((skill: any) => skill.skillType === "REQUIRED").map((skill: any) => skill.skillName);
+  const preferredSkills = project.skills.filter((skill: any) => skill.skillType === "PREFERRED").map((skill: any) => skill.skillName);
+  const usedTechnologySkills = project.skills.filter((skill: any) => skill.skillType === "USED_TECHNOLOGY").map((skill: any) => skill.skillName);
+  const hiddenLegacyTags = new Set(["法人CS注力案件", "交代要員"]);
+  const tags = project.tags.map((tag: any) => tag.tag).filter((tag: string) => !hiddenLegacyTags.has(tag));
   const locations = [condition?.prefecture, condition?.workLocationText].filter(Boolean);
-  const unitPrice = formatMoneyRange(condition?.unitPriceMin, condition?.unitPriceMax, condition?.unitPriceText);
+  const upperAmount = formatMoneyRange(condition?.upperAmountMin, condition?.upperAmountMax);
+  const unitPrice = upperAmount !== EMPTY_VALUE ? upperAmount : formatMoneyRange(condition?.unitPriceMin, condition?.unitPriceMax, condition?.unitPriceText);
+  const projectUnitPrice = formatMoneyRange(condition?.unitPriceMin, condition?.unitPriceMax, condition?.unitPriceText);
   const createdAt = formatDate(project.createdAt);
-  const company = pickProjectCompany(project);
+  const upperCompanyRole = pickProjectCompanyRole(project);
+  const company = upperCompanyRole?.company?.name || EMPTY_VALUE;
+  const upperCompany = upperCompanyRole?.company;
+  const companyTradeStatuses = project.companyRoles.map((role: any) => role.company.tradeStatus).filter(Boolean);
+  const endUser = roleCompanyName(project, "END_USER");
+  const primeContractor = roleCompanyName(project, "PRIME_CONTRACTOR");
+  const secondaryContractor = roleCompanyName(project, "SECONDARY_CONTRACTOR");
+  const tertiaryContractor = roleCompanyName(project, "TERTIARY_CONTRACTOR");
   const commerceItems = project.companyRoles
+    .filter((role: any) => role.role !== "ACCOUNT_MANAGER_COMPANY")
     .sort((a: any, b: any) => a.roleOrder - b.roleOrder)
     .map((role: any) => [companyRoleLabel(role.role), role.company.name]);
+  const commercePath = commerceItems.map(([, name]: string[]) => name).join(" → ") || EMPTY_VALUE;
+  const primaryContactRole = project.companyRoles.find((role: any) => role.companyContact);
+  const primaryContact = primaryContactRole?.companyContact;
+  const fixedWorkTime = formatTimeRange(condition?.fixedWorkStartTime, condition?.fixedWorkEndTime);
+  const coreTime = formatTimeRange(condition?.coreTimeStart, condition?.coreTimeEnd);
+  const commerceNote = condition?.notes?.startsWith("商流: ") ? condition.notes.replace(/^商流:\s*/, "") : "";
+  const needsReview = hasNeedsReviewExtraction(project.sourceMail, "PROJECT", project.id);
+  const projectFormValues = {
+    title: project.title || "",
+    upperCompanyName: company === EMPTY_VALUE ? "" : company,
+    tradeStatus: tradeStatusInputLabel(upperCompany?.tradeStatus),
+    tdbScore: upperCompany?.tdbScore?.toString?.() || "",
+    workDescription: project.workDescription || "",
+    usedTechnologies: usedTechnologySkills.join("\n"),
+    requiredSkills: requiredSkills.join("\n"),
+    preferredSkills: preferredSkills.join("\n"),
+    company: endUser === EMPTY_VALUE ? "" : endUser,
+    unitPrice: formatInputNumber(condition?.unitPriceMax || condition?.unitPriceMin),
+    recruitingCount: formatInputNumber(condition?.recruitingCount),
+    workload: condition?.workload || "",
+    startMonth: formatMonth(condition?.startMonth) === EMPTY_VALUE ? "" : formatMonth(condition?.startMonth),
+    workEnvironment: condition?.workEnvironment || "",
+    prefecture: condition?.prefecture || "",
+    workLocation: condition?.workLocationText || "",
+    skills: skills.join("\n"),
+    upperAmount: formatInputNumber(condition?.upperAmountMax || condition?.upperAmountMin),
+    settlementTimeRange: formatSettlementInput(condition?.settlementTimeMin, condition?.settlementTimeMax),
+    projectStartMonth: formatMonth(condition?.startMonth) === EMPTY_VALUE ? "" : formatMonth(condition?.startMonth),
+    expectedWorkDaysPerWeek: formatInputNumber(condition?.expectedWorkDaysPerWeek),
+    fixedWorkTime: formatInputTimeRange(condition?.fixedWorkStartTime, condition?.fixedWorkEndTime),
+    coreTime: formatInputTimeRange(condition?.coreTimeStart, condition?.coreTimeEnd),
+    isFocus: project.isFocus ? "該当" : "非該当",
+    salesInterviewAttendanceRequired: attendanceInputLabel(condition?.salesInterviewAttendanceRequired),
+    contractType: contractTypeInputLabel(condition?.contractType),
+    foreignNationalityPolicy: foreignNationalityInputLabel(condition?.foreignNationalityPolicy),
+    ageCondition: condition?.ageCondition || "",
+    siteAtmosphere: condition?.siteAtmosphere || "",
+    dressCode: condition?.dressCode || "",
+    hairNailRule: condition?.hairNailRule || "",
+    interviewCount: formatInputNumber(condition?.interviewCount),
+    commerceFlow: commerceNote,
+    endUser: endUser === EMPTY_VALUE ? "" : endUser,
+    primeContractor: primeContractor === EMPTY_VALUE ? "" : primeContractor,
+    secondaryContractor: secondaryContractor === EMPTY_VALUE ? "" : secondaryContractor,
+    tertiaryContractor: tertiaryContractor === EMPTY_VALUE ? "" : tertiaryContractor,
+    upperContactName: primaryContact?.name || "",
+    contact: primaryContact?.email || primaryContact?.phone || "",
+    createdBy: project.createdBy?.name || "",
+    createdAt: createdAt || ""
+  };
+  const detailGroups: DetailGroup[] = [
+    {
+      title: "上位会社",
+      items: [
+        makeTextItem("会社名", company, true),
+        makeTextItem("取引可否", upperCompany?.tradeStatus || EMPTY_VALUE)
+      ]
+    },
+    {
+      title: "元メール",
+      items: [makeMailItem(project.sourceMail)]
+    },
+    {
+      title: "作業内容",
+      items: [
+        makeBlockItem("業務内容", project.workDescription || project.summary),
+        makeTagsItem("使用技術", usedTechnologySkills.length ? usedTechnologySkills : skills),
+        makeTagsItem("必須スキル", requiredSkills.length ? requiredSkills : skills),
+        makeTagsItem("尚良スキル", preferredSkills)
+      ]
+    },
+    {
+      title: "案件条件",
+      items: [
+        makeTextItem("企業", endUser, true),
+        makeTextItem("単価", projectUnitPrice, true),
+        makeTextItem("募集人数", condition?.recruitingCount ? `${condition.recruitingCount}名` : EMPTY_VALUE, true),
+        makeTextItem("工数", condition?.workload || EMPTY_VALUE),
+        makeTextItem("開始月", formatMonth(condition?.startMonth)),
+        makeTextItem("就業環境", condition?.workEnvironment || remoteLabel(condition?.remoteType), true),
+        makeTextItem("作業場所", locations.join(" / ") || EMPTY_VALUE, true),
+        makeTagsItem("スキル", skills),
+        makeTextItem("上位金額", upperAmount, true),
+        makeTextItem("精算時間幅", condition?.settlementTimeMin && condition?.settlementTimeMax ? `${condition.settlementTimeMin}〜${condition.settlementTimeMax}h` : EMPTY_VALUE, true),
+        makeTextItem("案件開始月", formatMonth(condition?.startMonth)),
+        makeTextItem("想定稼働日数", condition?.expectedWorkDaysPerWeek ? `週${condition.expectedWorkDaysPerWeek}日` : EMPTY_VALUE),
+        makeTextItem("現場の定時", fixedWorkTime),
+        makeTextItem("コアタイム", coreTime)
+      ]
+    },
+    {
+      title: "営業・契約条件",
+      items: [
+        makeTextItem("注力案件", project.isFocus ? "該当" : tags.includes("高単価") || tags.length ? tags.join(" / ") : EMPTY_VALUE, true),
+        makeTextItem("営業の面談同席の要否", salesInterviewAttendanceLabel(condition?.salesInterviewAttendanceRequired)),
+        makeTextItem("契約形態", contractTypeLabel(condition?.contractType), true),
+        makeTextItem("外国籍の受け入れ", foreignNationalityLabel(condition?.foreignNationalityPolicy), true),
+        makeTextItem("年齢条件", condition?.ageCondition || EMPTY_VALUE),
+        makeTextItem("現場の雰囲気", condition?.siteAtmosphere || EMPTY_VALUE),
+        makeTextItem("作業時の服装", condition?.dressCode || EMPTY_VALUE),
+        makeTextItem("髪型、爪等の規定", condition?.hairNailRule || EMPTY_VALUE),
+        makeTextItem("面談回数", condition?.interviewCount ? `${condition.interviewCount}回` : EMPTY_VALUE, true)
+      ]
+    },
+    {
+      title: "商流",
+      items: [
+        makeCommerceItem("商流", commerceItems),
+        makeTextItem("商流サマリ", commercePath),
+        makeTextItem("エンドユーザー", endUser),
+        makeTextItem("元請", primeContractor),
+        makeTextItem("二次請け", secondaryContractor),
+        makeTextItem("三次請け", tertiaryContractor)
+      ]
+    },
+    {
+      title: "担当者",
+      items: [
+        makeTextItem("上位担当者", primaryContact?.name || EMPTY_VALUE),
+        makeTextItem("連絡先", primaryContact?.email || primaryContact?.phone || EMPTY_VALUE),
+        makeTextItem("案件作成者", project.createdBy?.name || EMPTY_VALUE),
+        makeTextItem("案件作成日", createdAt || EMPTY_VALUE)
+      ]
+    }
+  ];
 
   return {
     id: project.projectCode || project.id.slice(0, 8),
     dbId: project.id,
+    sourceMailDbId: project.sourceMail?.id || project.sourceMailId || null,
     title: project.title,
     category: "SES",
     unitPrice,
-    unitPriceValue: condition?.unitPriceMax || condition?.unitPriceMin || 0,
-    locations: locations.length ? locations : ["未入力"],
-    interviewCount: condition?.interviewCount ? `${condition.interviewCount}回` : "未入力",
+    unitPriceValue: condition?.upperAmountMax || condition?.upperAmountMin || condition?.unitPriceMax || condition?.unitPriceMin || 0,
+    locations: locations.length ? locations : [EMPTY_VALUE],
+    interviewCount: condition?.interviewCount ? `${condition.interviewCount}回` : EMPTY_VALUE,
     company,
-    fee: condition?.commissionFeeAmount ? `${condition.commissionFeeAmount.toLocaleString()}円` : "0円",
+    fee: condition?.commissionFeeAmount ? `${condition.commissionFeeAmount.toLocaleString()}円` : EMPTY_VALUE,
     hasResult: project.companyRoles.some((role: any) => role.company.tradeStatus === "OK"),
     creator: project.createdBy?.name?.slice(0, 2) || "DB",
     createdAt,
     status: statusLabel(project.status),
+    statusRaw: project.status,
+    isRecruiting: project.status === "OPEN",
+    createdByName: project.createdBy?.name || EMPTY_VALUE,
+    createdByUserId: project.createdBy?.id || "",
+    hasTradeNg: companyTradeStatuses.some((status: string) => status === "NG" || status === "SUSPENDED"),
+    needsReview,
+    foreignNationalityPolicyRaw: condition?.foreignNationalityPolicy || "UNKNOWN",
+    ageConditionText: condition?.ageCondition || "",
     tags: [...skills, ...tags].slice(0, 10),
     attention: tags,
     detail: {
-      memo: "DB seedデータを読み取り専用で表示しています",
+      meta: [
+        { label: "案件ID", value: project.projectCode || project.id.slice(0, 8) },
+        { label: "作成日", value: createdAt || EMPTY_VALUE },
+        { label: "上位会社", value: company }
+      ],
+      highlights: [
+        { label: "単価", value: projectUnitPrice },
+        { label: "作業場所", value: locations.join(" / ") || EMPTY_VALUE },
+        { label: "面談回数", value: condition?.interviewCount ? `${condition.interviewCount}回` : EMPTY_VALUE },
+        { label: "契約形態", value: contractTypeLabel(condition?.contractType) }
+      ],
+      groups: detailGroups,
+      fields: detailGroups.flatMap((group) => group.items)
+    },
+    formValues: projectFormValues
+  };
+}
+
+function mapPerson(person: any) {
+  const skillNames = person.skills.map((skill: any) => skill.skillName);
+  const skillsText = skillNames.join(" / ") || "未入力";
+  const createdAt = formatDate(person.createdAt);
+  const availableFrom = formatDate(person.availableFrom);
+  const company = person.ownerCompany?.name || "未入力";
+  const contact = person.ownerContact?.name || "未入力";
+  const status = statusLabel(person.status);
+  const unitPrice = person.desiredUnitPrice ? `${person.desiredUnitPrice}万円` : "未定";
+  const ownerCompanyTradeStatus = person.ownerCompany?.tradeStatus || "UNKNOWN";
+  const needsReview = hasNeedsReviewExtraction(person.sourceMail, "PERSON", person.id);
+  const detailGroups: DetailGroup[] = [
+    {
+      title: "基本情報",
+      items: [
+        makeTextItem("状態", status, true),
+        makeTextItem("年齢", person.age ? `${person.age}歳` : EMPTY_VALUE),
+        makeTextItem("国籍", person.nationality || EMPTY_VALUE)
+      ]
+    },
+    {
+      title: "希望条件",
+      items: [
+        makeTextItem("希望単価", unitPrice, true),
+        makeTextItem("希望勤務地", person.preferredLocation || EMPTY_VALUE),
+        makeTextItem("リモート可否", person.remotePreference || EMPTY_VALUE),
+        makeTextItem("稼働開始", availableFrom || EMPTY_VALUE)
+      ]
+    },
+    {
+      title: "所属会社",
+      items: [
+        makeTextItem("会社名", company, true),
+        makeTextItem("取引可否", tradeStatusInputLabel(ownerCompanyTradeStatus))
+      ]
+    },
+    {
+      title: "元メール",
+      items: [makeMailItem(person.sourceMail)]
+    },
+    {
+      title: "スキル",
+      items: [
+        makeBlockItem("経験職種", person.careerSummary || person.summary),
+        makeTextItem("対応工程", EMPTY_VALUE),
+        makeTagsItem("使用技術", skillNames),
+        makeBlockItem("得意領域", person.summary || person.careerSummary)
+      ]
+    },
+    {
+      title: "営業情報",
+      items: [
+        makeTextItem("担当者", contact),
+        makeTextItem("作成者", person.createdBy?.name || EMPTY_VALUE),
+        makeTextItem("作成日", createdAt || EMPTY_VALUE)
+      ]
+    }
+  ];
+
+  const displayName = person.name || person.initials || person.sourceMail?.subject || "未入力";
+
+  return {
+    id: person.personCode || person.id.slice(0, 8),
+    dbId: person.id,
+    sourceMailDbId: person.sourceMail?.id || person.sourceMailId || null,
+    name: displayName,
+    initials: person.initials || "",
+    status,
+    statusRaw: person.status,
+    company,
+    contact,
+    unitPrice,
+    unitPriceValue: person.desiredUnitPrice || 0,
+    availableFrom: availableFrom || "未入力",
+    availableFromRaw: availableFrom || "",
+    preferredLocation: person.preferredLocation || "",
+    remotePreference: person.remotePreference || "",
+    age: person.age || null,
+    nationality: person.nationality || "",
+    hasResult: ownerCompanyTradeStatus === "OK",
+    hasTradeNg: ownerCompanyTradeStatus === "NG" || ownerCompanyTradeStatus === "SUSPENDED",
+    needsReview,
+    skills: skillsText,
+    skillList: skillNames,
+    createdAt,
+    createdByName: person.createdBy?.name || EMPTY_VALUE,
+    detail: {
+      meta: [
+        { label: "要員ID", value: person.personCode || person.id.slice(0, 8) },
+        { label: "作成日", value: createdAt || EMPTY_VALUE },
+        { label: "所属会社", value: company }
+      ],
+      highlights: [],
+      groups: detailGroups,
+      fields: detailGroups.flatMap((group) => group.items)
+    },
+    formValues: {
+      name: person.name || "",
+      initials: person.initials || "",
+      ownerCompanyName: person.ownerCompany?.name || "",
+      ownerContactName: person.ownerContact?.name || "",
+      ownerContactEmail: person.ownerContact?.email || "",
+      status: personStatusInputLabel(person.status),
+      desiredUnitPrice: formatInputNumber(person.desiredUnitPrice),
+      availableFrom: availableFrom || "",
+      preferredLocation: person.preferredLocation || "",
+      remotePreference: person.remotePreference || "",
+      age: formatInputNumber(person.age),
+      nationality: person.nationality || "",
+      summary: person.summary || "",
+      careerSummary: person.careerSummary || "",
+      skills: skillNames.join("\n"),
+      createdBy: person.createdBy?.name || "",
+      createdAt: createdAt || ""
+    }
+  };
+}
+
+function mapUnclassifiedMail(mail: any, companies: any[]) {
+  const matchedCompany = inferSenderCompany(mail, companies);
+  const senderCompany = matchedCompany?.name || mail.fromName || domainFromEmail(mail.fromEmail) || EMPTY_VALUE;
+  const sender = [mail.fromName, mail.fromEmail].filter(Boolean).join(" / ") || EMPTY_VALUE;
+  const needsReview =
+    mail.needsReview ||
+    mail.category === "NEEDS_REVIEW" ||
+    mail.extractionResults.some((result: any) => result.reviewStatus === "NEEDS_REVIEW");
+  const bodyText = mailBodyText(mail);
+
+  return {
+    id: mail.externalMessageId?.slice(0, 12) || mail.id.slice(0, 8),
+    dbId: mail.id,
+    subject: mail.subject || "(件名なし)",
+    senderCompany,
+    sender,
+    fromName: mail.fromName || "",
+    fromEmail: mail.fromEmail || "",
+    receivedAt: formatDateTime(mail.messageDate || mail.receivedAt),
+    receivedAtRaw: (mail.messageDate || mail.receivedAt)?.toISOString?.() || "",
+    classification: categoryLabel(mail.category),
+    categoryRaw: mail.category,
+    isExcluded: mail.isExcluded,
+    excludedLabel: mail.isExcluded ? "除外" : "通常",
+    excludeReason: mail.excludeReason || "",
+    needsReview,
+    hasResult: matchedCompany?.tradeStatus === "OK",
+    hasTradeNg: matchedCompany?.tradeStatus === "NG" || matchedCompany?.tradeStatus === "SUSPENDED",
+    bodyText,
+    externalMessageId: mail.externalMessageId,
+    externalThreadId: mail.externalThreadId || "",
+    detail: {
+      meta: [
+        { label: "メールID", value: mail.externalMessageId || mail.id.slice(0, 8) },
+        { label: "threadId", value: mail.externalThreadId || EMPTY_VALUE },
+        { label: "分類", value: categoryLabel(mail.category) }
+      ],
       fields: [
-        {
-          label: "手数料",
-          type: "fee",
-          items: [
-            { label: `AM案件手数料：${(condition?.amProjectFeeAmount || 0).toLocaleString()}円`, tone: "purple" },
-            { label: `倒産予測値手数料：${(condition?.bankruptcyPredictionFeeAmount || 0).toLocaleString()}円`, tone: "danger" }
-          ]
-        },
-        {
-          label: "上位会社",
-          type: "company",
-          value: company,
-          tags: [{ label: project.companyRoles.some((role: any) => role.company.tradeStatus === "OK") ? "取引OK" : "要確認", tone: "success" }]
-        },
-        {
-          label: "作業内容",
-          type: "longText",
-          lines: ["■業務内容", project.workDescription || project.summary || "未入力", "", "■業務背景", project.businessDescription || "未入力"]
-        },
-        { label: "作業場所", value: locations.join(" / ") || "未入力" },
-        { label: "スキル", type: "tags", tags: skills.length ? skills : ["未入力"] },
-        { label: "上位金額", value: formatMoneyRange(condition?.upperAmountMin, condition?.upperAmountMax) },
-        { label: "精算時間幅", value: condition?.settlementTimeMin && condition?.settlementTimeMax ? `${condition.settlementTimeMin}〜${condition.settlementTimeMax}h` : "未入力" },
-        { label: "案件開始月", value: formatDate(condition?.startMonth) || "未入力" },
-        { label: "想定稼働日数", value: condition?.expectedWorkDaysPerWeek ? `週${condition.expectedWorkDaysPerWeek}日` : "未入力" },
-        { label: "就業環境", value: remoteLabel(condition?.remoteType) },
-        { label: "契約形態", value: condition?.contractType || "未入力" },
-        { label: "外国籍の受け入れ", value: condition?.foreignNationalityPolicy || "未入力" },
-        { label: "年齢条件", value: condition?.ageCondition || "未入力" },
-        { label: "現場の雰囲気", value: condition?.siteAtmosphere || "未入力" },
-        { label: "作業時の服装", value: condition?.dressCode || "未入力" },
-        { label: "髪型、爪等の規定", value: condition?.hairNailRule || "未入力" },
-        { label: "面談回数", value: condition?.interviewCount ? `${condition.interviewCount}回` : "未入力" },
-        { label: "募集人数", value: condition?.recruitingCount ? `${condition.recruitingCount}名` : "未入力" },
-        { label: "商流", type: "commerce", items: commerceItems.length ? commerceItems : [["商流", "未入力"]] },
-        { label: "上位担当者", value: project.companyRoles.find((role: any) => role.companyContact)?.companyContact?.name || "未入力" },
-        { label: "連絡先", value: project.companyRoles.find((role: any) => role.companyContact)?.companyContact?.email || "未入力" },
-        { label: "案件作成者", type: "person", value: project.createdBy?.name || "未入力", avatar: project.createdBy?.name?.slice(0, 1) || "D" },
-        { label: "案件作成日", value: createdAt || "未入力" }
+        { label: "送付元の会社", value: senderCompany },
+        { label: "担当者 / 送信者", value: sender },
+        { label: "受信日時", value: formatDateTime(mail.messageDate || mail.receivedAt) },
+        { label: "元メール", value: bodyText, type: "mail" }
       ]
     }
   };
 }
 
-export async function GET() {
-  const [projects, persons, mailNotifications, proposals, distributionLogs] = await Promise.all([
+export async function GET(request: Request) {
+  try {
+    const currentUser = await requireAuth(request);
+    const [projects, persons, unclassifiedMails, companies] = await Promise.all([
     prisma.project.findMany({
+      where: {
+        status: { not: "ARCHIVED" }
+      },
       orderBy: { createdAt: "desc" },
       include: {
         condition: true,
@@ -200,89 +748,121 @@ export async function GET() {
           orderBy: { roleOrder: "asc" }
         },
         createdBy: true,
+        sourceMail: {
+          select: {
+            id: true,
+            externalMessageId: true,
+            externalThreadId: true,
+            subject: true,
+            bodyText: true,
+            bodyHtml: true,
+            normalizedBody: true,
+            fromName: true,
+            fromEmail: true,
+            messageDate: true,
+            receivedAt: true,
+            extractionResults: {
+              select: {
+                targetType: true,
+                targetId: true,
+                extractionType: true,
+                reviewStatus: true
+              }
+            }
+          }
+        },
         skills: true,
         tags: true
       }
     }),
     prisma.person.findMany({
+      where: {
+        status: { not: "ARCHIVED" }
+      },
       orderBy: { createdAt: "desc" },
       include: {
         ownerCompany: true,
         ownerContact: true,
+        createdBy: true,
+        sourceMail: {
+          select: {
+            id: true,
+            externalMessageId: true,
+            externalThreadId: true,
+            subject: true,
+            bodyText: true,
+            bodyHtml: true,
+            normalizedBody: true,
+            fromName: true,
+            fromEmail: true,
+            messageDate: true,
+            receivedAt: true,
+            extractionResults: {
+              select: {
+                targetType: true,
+                targetId: true,
+                extractionType: true,
+                reviewStatus: true
+              }
+            }
+          }
+        },
         skills: true
       }
     }),
     prisma.mailNotification.findMany({
+      where: {
+        category: { in: ["NEEDS_REVIEW", "OTHER", "NORMAL_CONTACT"] },
+        isExcluded: false,
+        sourceProjects: { none: { status: { not: "ARCHIVED" } } },
+        sourcePersons: { none: { status: { not: "ARCHIVED" } } }
+      },
       orderBy: { receivedAt: "desc" },
-      take: 20
-    }),
-    prisma.proposal.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        person: true,
-        project: true,
-        targetCompany: true,
-        targetContact: true,
-        salesMailAccount: true,
-        ownerUser: true
+      select: {
+        id: true,
+        externalMessageId: true,
+        externalThreadId: true,
+        messageDate: true,
+        receivedAt: true,
+        fromEmail: true,
+        fromName: true,
+        subject: true,
+        bodyText: true,
+        bodyHtml: true,
+        normalizedBody: true,
+        category: true,
+        isExcluded: true,
+        excludeReason: true,
+        needsReview: true,
+        extractionResults: {
+          select: {
+            reviewStatus: true,
+            targetType: true,
+            targetId: true
+          }
+        }
       }
     }),
-    prisma.distributionLog.findMany({
-      orderBy: { sentAt: "desc" },
-      include: {
-        project: true,
-        person: true,
-        proposal: true,
-        targetCompany: true,
-        targetContact: true,
-        mailAccount: true,
-        senderUser: true
+    prisma.company.findMany({
+      select: {
+        name: true,
+        normalizedName: true,
+        mainEmailDomain: true,
+        tradeStatus: true
       }
     })
   ]);
 
-  return NextResponse.json({
-    projects: projects.map(mapProject),
-    persons: persons.map((person) => ({
-      id: person.personCode || person.id.slice(0, 8),
-      name: person.name || person.initials || "未入力",
-      status: statusLabel(person.status),
-      company: person.ownerCompany?.name || "未入力",
-      contact: person.ownerContact?.name || "未入力",
-      unitPrice: person.desiredUnitPrice ? `${person.desiredUnitPrice}万円` : "未定",
-      availableFrom: formatDate(person.availableFrom) || "未入力",
-      skills: person.skills.map((skill) => skill.skillName).join(" / ") || "未入力"
-    })),
-    mailNotifications: mailNotifications.map((mail) => ({
-      id: mail.id.slice(0, 8),
-      subject: mail.subject || "件名なし",
-      category: categoryLabel(mail.category),
-      from: mail.fromName || mail.fromEmail || "未入力",
-      receivedAt: formatDateTime(mail.receivedAt),
-      isExcluded: mail.isExcluded,
-      needsReview: mail.needsReview
-    })),
-    proposals: proposals.map((proposal) => ({
-      id: proposal.id.slice(0, 8),
-      proposalType: proposalTypeLabel(proposal.proposalType),
-      person: proposal.person.name || proposal.person.initials || "未入力",
-      project: proposal.project?.title || "案件未紐付け",
-      company: proposal.targetCompany.name,
-      contact: proposal.targetContact?.name || "未入力",
-      status: statusLabel(proposal.status),
-      salesMailAccount: proposal.salesMailAccount.email,
-      owner: proposal.ownerUser?.name || "未入力"
-    })),
-    distributionLogs: distributionLogs.map((log) => ({
-      id: log.id.slice(0, 8),
-      subject: log.subject || "件名なし",
-      project: log.project?.title || "案件未紐付け",
-      person: log.person?.name || log.person?.initials || "要員未紐付け",
-      company: log.targetCompany.name,
-      contact: log.targetContact?.name || "未入力",
-      mailAccount: log.mailAccount.email,
-      sentAt: formatDateTime(log.sentAt),
-      status: statusLabel(log.deliveryStatus)
-    }))
-  });
+    return NextResponse.json({
+      currentUser,
+      projects: projects.map(mapProject),
+      persons: persons.map(mapPerson),
+      unclassifiedMails: unclassifiedMails.map((mail) => mapUnclassifiedMail(mail, companies))
+    });
+  } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) return authResponse;
+
+    return NextResponse.json({ message: "DBデータの取得に失敗しました" }, { status: 500 });
+  }
 }

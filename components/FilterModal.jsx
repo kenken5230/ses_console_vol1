@@ -49,6 +49,17 @@ function CalendarPicker({ label, onChange, onClose, onOpen, open, placeholder, v
     setDisplayMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
   }, [open, value]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
   const shiftMonth = (amount) => {
     setDisplayMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
   };
@@ -87,7 +98,12 @@ function CalendarPicker({ label, onChange, onClose, onOpen, open, placeholder, v
                 <button
                   className={draftValue === formatDate(day) ? "selected" : ""}
                   key={formatDate(day)}
-                  onClick={() => setDraftValue(formatDate(day))}
+                  onClick={() => {
+                    const nextValue = formatDate(day);
+                    setDraftValue(nextValue);
+                    onChange(nextValue);
+                    onClose();
+                  }}
                   type="button"
                 >
                   {day.getDate()}
@@ -111,15 +127,6 @@ function CalendarPicker({ label, onChange, onClose, onOpen, open, placeholder, v
             <div>
               <button onClick={onClose} type="button">
                 キャンセル
-              </button>
-              <button
-                onClick={() => {
-                  onChange(draftValue);
-                  onClose();
-                }}
-                type="button"
-              >
-                OK
               </button>
             </div>
           </div>
@@ -169,11 +176,11 @@ function TextField({ row, values, onChange }) {
   );
 }
 
-function PriceRangeField({ values, onChange }) {
+function PriceRangeField({ row, values, onChange }) {
   return (
     <div className="range-row price-range">
       <input
-        aria-label="単価 下限"
+        aria-label={`${row.label} 下限`}
         inputMode="numeric"
         min="0"
         onChange={(event) => onChange("unitMin", event.target.value)}
@@ -183,7 +190,7 @@ function PriceRangeField({ values, onChange }) {
       />
       <span>~</span>
       <input
-        aria-label="単価 上限"
+        aria-label={`${row.label} 上限`}
         inputMode="numeric"
         min="0"
         onChange={(event) => onChange("unitMax", event.target.value)}
@@ -201,7 +208,7 @@ function PriceRangeField({ values, onChange }) {
 }
 
 function PrefectureField({ row, values, onChange }) {
-  const datalistId = "prefecture-options";
+  const datalistId = `${row.id}-options`;
 
   return (
     <div className="prefecture-field">
@@ -253,17 +260,26 @@ function CheckGroup({ row, values, onToggle }) {
 function FormControl({ row, values, onChange, onToggle }) {
   if (row.type === "dateRange") return <DateRangeField onChange={onChange} row={row} values={values} />;
   if (row.type === "text" || row.type === "select") return <TextField onChange={onChange} row={row} values={values} />;
-  if (row.type === "priceRange") return <PriceRangeField onChange={onChange} values={values} />;
+  if (row.type === "priceRange") return <PriceRangeField onChange={onChange} row={row} values={values} />;
   if (row.type === "prefecture") return <PrefectureField onChange={onChange} row={row} values={values} />;
   if (row.type === "checks") return <CheckGroup onToggle={onToggle} row={row} values={values} />;
 
   return null;
 }
 
-export default function FilterModal({ onApply, onChange, onClear, onClose, onToggle, values }) {
+export default function FilterModal({ onApply, onChange, onClear, onClose, onToggle, rows = filterFormRows, values }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="modal-backdrop">
-      <section className="filter-modal" role="dialog" aria-modal="true" aria-label="フィルター">
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="filter-modal" role="dialog" aria-modal="true" aria-label="フィルター" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading">
           <h2>フィルター</h2>
           <button className="modal-close" onClick={onClose} type="button" aria-label="閉じる">
@@ -271,7 +287,7 @@ export default function FilterModal({ onApply, onChange, onClear, onClose, onTog
           </button>
         </div>
         <div className="filter-body">
-          {filterFormRows.map((row) => (
+          {rows.map((row) => (
             <div className="form-row" key={row.id}>
               <label>
                 {row.label}

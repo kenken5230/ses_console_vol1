@@ -1,19 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import DbReadOnlyPanels from "../components/DbReadOnlyPanels";
 import FilterModal from "../components/FilterModal";
 import Header from "../components/Header";
 import KeywordModal from "../components/KeywordModal";
+import LoginPanel from "../components/LoginPanel";
 import Pagination from "../components/Pagination";
-import ProjectCreateModal from "../components/ProjectCreateModal";
+import PersonCreateDrawer from "../components/PersonCreateDrawer";
+import PersonDetailPane from "../components/PersonDetailPane";
+import PersonTable from "../components/PersonTable";
+import ProjectCreateDrawer from "../components/ProjectCreateDrawer";
 import ProjectDetailPane from "../components/ProjectDetailPane";
 import ProjectTable from "../components/ProjectTable";
 import SearchHistoryModal from "../components/SearchHistoryModal";
 import SearchToolbar from "../components/SearchToolbar";
-import { focusOptions, quickFilters } from "../data/mockProjects";
+import UnclassifiedMailDetailPane from "../components/UnclassifiedMailDetailPane";
+import UnclassifiedMailTable from "../components/UnclassifiedMailTable";
+import { filterFormRows, focusOptions, personFilterFormRows, quickFilters } from "../data/mockProjects";
 
 const defaultQuickFilters = Object.fromEntries(quickFilters.map((filter) => [filter.id, Boolean(filter.defaultChecked)]));
+const currentMocUserName = "営業担当A";
+
+async function fetchDashboardData() {
+  const response = await fetch("/api/dashboard-data", { cache: "no-store" });
+  if (!response.ok) throw new Error("DBデータの取得に失敗しました");
+
+  return response.json();
+}
 
 function formatDate(date) {
   const year = date.getFullYear();
@@ -47,6 +60,7 @@ function createEmptyFilterValues() {
     unitUndecidedOnly: false,
     prefecture: "",
     remote: [],
+    statuses: [],
     workDays: []
   };
 }
@@ -94,22 +108,76 @@ function collectProjectText(project) {
     .toLowerCase();
 }
 
-function buildActiveConditions(filters) {
+function collectPersonText(person) {
+  const detailFields = person.detail?.fields || [];
+  const detailText = detailFields
+    .flatMap((field) => [field.value, field.lines, field.tags, field.items])
+    .flat(3)
+    .filter(Boolean)
+    .join(" ");
+
+  return [
+    person.id,
+    person.name,
+    person.company,
+    person.status,
+    person.unitPrice,
+    person.availableFrom,
+    person.preferredLocation,
+    person.remotePreference,
+    person.nationality,
+    person.skills,
+    person.createdAt,
+    person.createdByName,
+    detailText
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function collectMailText(mail) {
+  const detailFields = mail.detail?.fields || [];
+  const detailText = detailFields
+    .flatMap((field) => [field.value, field.lines, field.tags, field.items])
+    .flat(3)
+    .filter(Boolean)
+    .join(" ");
+
+  return [
+    mail.id,
+    mail.subject,
+    mail.senderCompany,
+    mail.sender,
+    mail.fromName,
+    mail.fromEmail,
+    mail.receivedAt,
+    mail.classification,
+    mail.excludedLabel,
+    mail.bodyText,
+    detailText
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function buildActiveConditions(filters, isProjectTab) {
   const conditions = [];
 
   if (filters.createdFrom || filters.createdTo) {
     conditions.push({
       id: "createdAt",
-      label: "案件作成日",
+      label: isProjectTab ? "案件作成日" : "要員作成日",
       value: `${filters.createdFrom || "下限"} ~${filters.createdTo ? ` ${filters.createdTo}` : ""}`
     });
   }
-  if (filters.projectId.trim()) conditions.push({ id: "projectId", label: "案件ID", value: filters.projectId.trim() });
+  if (filters.projectId.trim()) conditions.push({ id: "projectId", label: isProjectTab ? "案件ID" : "要員ID", value: filters.projectId.trim() });
   if (filters.exclude.trim()) conditions.push({ id: "exclude", label: "除外キーワード", value: filters.exclude.trim() });
   if (filters.startMonthFrom || filters.startMonthTo) {
     conditions.push({
       id: "startMonth",
-      label: "案件開始月",
+      label: isProjectTab ? "案件開始月" : "稼働開始日",
       value: `${filters.startMonthFrom || "下限"} ~${filters.startMonthTo ? ` ${filters.startMonthTo}` : ""}`
     });
   }
@@ -117,22 +185,48 @@ function buildActiveConditions(filters) {
   if (filters.unitMin || filters.unitMax || filters.unitUndecidedOnly) {
     conditions.push({
       id: "unit",
-      label: "単価",
+      label: isProjectTab ? "単価" : "希望単価",
       value: filters.unitUndecidedOnly ? "未定のみ" : `${filters.unitMin || "下限"} ~ ${filters.unitMax || "上限"}万円`
     });
   }
-  if (filters.prefecture.trim()) conditions.push({ id: "prefecture", label: "都道府県", value: filters.prefecture.trim() });
-  if (filters.remote.length) conditions.push({ id: "remote", label: "こだわり条件", value: filters.remote.join("、") });
-  if (filters.workDays.length) conditions.push({ id: "workDays", label: "想定稼働日数", value: filters.workDays.join("、") });
+  if (filters.prefecture.trim()) conditions.push({ id: "prefecture", label: isProjectTab ? "都道府県" : "希望勤務地", value: filters.prefecture.trim() });
+  if (filters.remote.length) conditions.push({ id: "remote", label: isProjectTab ? "こだわり条件" : "リモート条件", value: filters.remote.join("、") });
+  if (filters.statuses.length) conditions.push({ id: "statuses", label: "状態", value: filters.statuses.join("、") });
+  if (isProjectTab && filters.workDays.length) conditions.push({ id: "workDays", label: "想定稼働日数", value: filters.workDays.join("、") });
 
   return conditions;
 }
 
+function isForeignNationality(nationality) {
+  const value = String(nationality || "").trim();
+  if (!value || value === "未入力" || value === "-") return false;
+  return !/(日本|日本国籍|日本人|Japanese|Japan|JPN)/i.test(value);
+}
+
+function matchesProjectFocus(project, focusId) {
+  const projectText = collectProjectText(project);
+
+  if (focusId === "direct") {
+    return project.attention?.includes("エンド直/元請直") || projectText.includes("エンド直") || projectText.includes("元請直");
+  }
+  if (focusId === "highUnitPrice") {
+    return Number(project.unitPriceValue || 0) >= 90;
+  }
+  if (focusId === "remoteHybrid") {
+    return projectText.includes("フルリモート") || projectText.includes("リモート併用");
+  }
+
+  return false;
+}
+
 export default function Home() {
   const [projects, setProjects] = useState([]);
-  const [dbData, setDbData] = useState({ persons: [], mailNotifications: [], proposals: [], distributionLogs: [] });
+  const [persons, setPersons] = useState([]);
+  const [unclassifiedMails, setUnclassifiedMails] = useState([]);
   const [isLoadingDbData, setIsLoadingDbData] = useState(true);
-  const [activeTab, setActiveTab] = useState("IT");
+  const [authStatus, setAuthStatus] = useState("checking");
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("案件");
   const [search, setSearch] = useState("");
   const [checkedFilters, setCheckedFilters] = useState(defaultQuickFilters);
   const [selectedFocus, setSelectedFocus] = useState([]);
@@ -140,59 +234,217 @@ export default function Home() {
   const [pageSize, setPageSize] = useState(50);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedPerson, setSelectedPerson] = useState(null);
+  const [selectedMail, setSelectedMail] = useState(null);
+  const [isMovingMail, setIsMovingMail] = useState(false);
   const [menuProjectId, setMenuProjectId] = useState(null);
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [focusMenuOpen, setFocusMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [pageSizeMenuOpen, setPageSizeMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
-  const [proposalIds, setProposalIds] = useState([]);
   const [notice, setNotice] = useState("");
+  const [isSyncingGmail, setIsSyncingGmail] = useState(false);
+  const [hasPendingDataRefresh, setHasPendingDataRefresh] = useState(false);
   const [keywordDraft, setKeywordDraft] = useState({ include: "", exclude: "" });
   const [filterValues, setFilterValues] = useState(createDefaultFilterValues);
 
   useEffect(() => {
     let ignore = false;
 
-    async function loadDashboardData() {
+    async function loadInitialData() {
       setIsLoadingDbData(true);
       try {
-        const response = await fetch("/api/dashboard-data", { cache: "no-store" });
-        if (!response.ok) throw new Error("DBデータの取得に失敗しました");
-        const nextData = await response.json();
+        const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
+        const session = await sessionResponse.json().catch(() => ({}));
+        if (!session?.authenticated || !session?.user) {
+          if (ignore) return;
+          setCurrentUser(null);
+          setAuthStatus("unauthenticated");
+          setProjects([]);
+          setPersons([]);
+          setUnclassifiedMails([]);
+          return;
+        }
+
         if (ignore) return;
+        setCurrentUser(session.user);
+        setAuthStatus("authenticated");
+
+        const nextData = await fetchDashboardData();
+        if (ignore) return;
+        if (nextData.currentUser) setCurrentUser(nextData.currentUser);
         setProjects(nextData.projects || []);
-        setDbData({
-          persons: nextData.persons || [],
-          mailNotifications: nextData.mailNotifications || [],
-          proposals: nextData.proposals || [],
-          distributionLogs: nextData.distributionLogs || []
-        });
+        setPersons(nextData.persons || []);
+        setUnclassifiedMails(nextData.unclassifiedMails || []);
       } catch (error) {
-        if (!ignore) setNotice(error instanceof Error ? error.message : "DBデータの取得に失敗しました");
+        if (!ignore) {
+          setAuthStatus("unauthenticated");
+          setNotice(error instanceof Error ? error.message : "DBデータの取得に失敗しました");
+        }
       } finally {
         if (!ignore) setIsLoadingDbData(false);
       }
     }
 
-    loadDashboardData();
+    loadInitialData();
 
     return () => {
       ignore = true;
     };
   }, []);
 
+  useEffect(() => {
+    if (!notice) return undefined;
+
+    const timerId = window.setTimeout(() => {
+      setNotice("");
+    }, 3000);
+
+    return () => window.clearTimeout(timerId);
+  }, [notice]);
+
+  const handleRefresh = async () => {
+    closeMenus();
+    setIsLoadingDbData(true);
+    try {
+      const nextData = await fetchDashboardData();
+      setProjects(nextData.projects || []);
+      setPersons(nextData.persons || []);
+      setUnclassifiedMails(nextData.unclassifiedMails || []);
+      setHasPendingDataRefresh(false);
+      setNotice("DBから最新データを再取得しました");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "DBデータの再取得に失敗しました");
+    } finally {
+      setIsLoadingDbData(false);
+    }
+  };
+
+  const reloadDashboardData = async () => {
+    const nextData = await fetchDashboardData();
+    if (nextData.currentUser) setCurrentUser(nextData.currentUser);
+    setProjects(nextData.projects || []);
+    setPersons(nextData.persons || []);
+    setUnclassifiedMails(nextData.unclassifiedMails || []);
+    return nextData;
+  };
+
+  const handleAuthenticated = async (user) => {
+    setCurrentUser(user);
+    setAuthStatus("authenticated");
+    setIsLoadingDbData(true);
+    try {
+      await reloadDashboardData();
+      setNotice("ログインしました");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "DBデータの取得に失敗しました");
+    } finally {
+      setIsLoadingDbData(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    setCurrentUser(null);
+    setAuthStatus("unauthenticated");
+    setProjects([]);
+    setPersons([]);
+    setUnclassifiedMails([]);
+    setSelectedProject(null);
+    setSelectedPerson(null);
+    setSelectedMail(null);
+    setHasPendingDataRefresh(false);
+    setNotice("");
+  };
+
+  const handleProjectSaved = async (message = "案件を保存しました", projectId = null, keepSelected = false) => {
+    setActiveModal(null);
+    setActiveTab("案件");
+    setIsLoadingDbData(true);
+    try {
+      const nextData = await reloadDashboardData();
+      const nextSelectedProject = keepSelected && projectId ? nextData.projects?.find((project) => project.dbId === projectId || project.id === projectId) : null;
+      setSelectedProject(nextSelectedProject || null);
+      setNotice(message);
+      setCurrentPage(1);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "案件保存後の一覧更新に失敗しました");
+    } finally {
+      setIsLoadingDbData(false);
+    }
+  };
+
+  const handleProjectCreated = (result) => {
+    handleProjectSaved("案件を作成しました", result?.projectId, false);
+  };
+
+  const handleProjectUpdated = (result) => {
+    handleProjectSaved("案件を更新しました", result?.projectId || selectedProject?.dbId, true);
+  };
+
+  const handlePersonCreated = async () => {
+    setActiveModal(null);
+    setActiveTab("要員");
+    setSelectedPerson(null);
+    setIsLoadingDbData(true);
+    try {
+      await reloadDashboardData();
+      setNotice("要員を作成しました");
+      setCurrentPage(1);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "要員作成後の一覧更新に失敗しました");
+    } finally {
+      setIsLoadingDbData(false);
+    }
+  };
+
+  const currentUserName = currentUser?.name || currentMocUserName;
+  const canEditEntities = ["ADMIN", "MANAGER", "SALES"].includes(currentUser?.role);
+  const canManageSync = ["ADMIN", "MANAGER"].includes(currentUser?.role);
+
+  const handleRunGmailSync = async () => {
+    if (!canManageSync) {
+      setNotice("この操作を実行する権限がありません");
+      return;
+    }
+
+    closeMenus();
+    setIsSyncingGmail(true);
+    try {
+      const response = await fetch("/api/admin/gmail/sync-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "pipeline" }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok && response.status !== 202) {
+        throw new Error(result?.message || result?.error || "Gmail同期に失敗しました");
+      }
+
+      if (result.status === "already_running") {
+        setNotice("Gmail同期はすでに実行中です");
+        return;
+      }
+
+      const summary = result.summary || {};
+      setHasPendingDataRefresh(true);
+      setNotice(
+        `Gmail同期が完了しました。取得${summary.fetched ?? 0}件 / 新規${summary.created ?? 0}件 / 案件${summary.projectCreated ?? 0}件 / 要員${summary.personCreated ?? 0}件。表示更新は手動で実行してください`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Gmail同期に失敗しました");
+    } finally {
+      setIsSyncingGmail(false);
+    }
+  };
+
   const filteredProjects = useMemo(() => {
     const normalized = search.trim().toLowerCase();
     let result = projects;
 
     if (normalized) {
-      result = result.filter((project) => {
-        const haystack = [project.id, project.title, project.company, project.unitPrice, project.locations.join(" "), project.tags.join(" ")]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(normalized);
-      });
+      result = result.filter((project) => collectProjectText(project).includes(normalized));
     }
 
     if (filterValues.createdFrom || filterValues.createdTo) {
@@ -248,13 +500,26 @@ export default function Home() {
     }
 
     if (checkedFilters.hasResult) result = result.filter((project) => project.hasResult);
-    if (selectedFocus.length) {
-      const selectedLabels = focusOptions.filter((option) => selectedFocus.includes(option.id)).map((option) => option.label);
-      result = result.filter((project) => selectedLabels.some((label) => project.attention?.includes(label)));
+    if (checkedFilters.hideTradeNg) result = result.filter((project) => !project.hasTradeNg);
+    if (checkedFilters.hideForeignNg) result = result.filter((project) => project.foreignNationalityPolicyRaw !== "NOT_ACCEPTABLE");
+    if (checkedFilters.hide50sNg) {
+      result = result.filter((project) => !/(50代|50歳|五十代).*(NG|不可)|50代不可|50代NG/i.test(project.ageConditionText || ""));
+    }
+    if (checkedFilters.hide60sNg) {
+      result = result.filter((project) => !/(60代|60歳|六十代).*(NG|不可)|60代不可|60代NG|50代まで|50歳まで|59歳まで|60歳未満/i.test(project.ageConditionText || ""));
+    }
+    if (checkedFilters.createdByMe) result = result.filter((project) => project.createdByName === currentUserName);
+    if (checkedFilters.recruitingOnly) result = result.filter((project) => project.isRecruiting);
+    const selectedProjectFocusIds = selectedFocus.filter((id) => focusOptions.some((option) => option.id === id));
+    if (selectedProjectFocusIds.length) {
+      result = result.filter((project) => selectedProjectFocusIds.some((id) => matchesProjectFocus(project, id)));
     }
 
     if (selectedSort === "新着順") {
-      result = [...result].sort((a, b) => b.id - a.id);
+      result = [...result].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    }
+    if (selectedSort === "名前順") {
+      result = [...result].sort((a, b) => String(a.title).localeCompare(String(b.title), "ja"));
     }
     if (selectedSort === "単価が高い順") {
       result = [...result].sort((a, b) => b.unitPriceValue - a.unitPriceValue);
@@ -264,10 +529,130 @@ export default function Home() {
     }
 
     return result;
-  }, [checkedFilters.hasResult, filterValues, projects, search, selectedFocus, selectedSort]);
+  }, [checkedFilters, currentUserName, filterValues, projects, search, selectedFocus, selectedSort]);
 
-  const displayProjects = filteredProjects.slice(0, Math.min(pageSize, filteredProjects.length));
-  const activeConditions = useMemo(() => buildActiveConditions(filterValues), [filterValues]);
+  const filteredPersons = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    let result = persons;
+
+    if (normalized) {
+      result = result.filter((person) => collectPersonText(person).includes(normalized));
+    }
+
+    if (filterValues.createdFrom || filterValues.createdTo) {
+      result = result.filter((person) => {
+        const createdDate = person.createdAt || "";
+        if (!createdDate) return true;
+        if (filterValues.createdFrom && createdDate < filterValues.createdFrom) return false;
+        if (filterValues.createdTo && createdDate > filterValues.createdTo) return false;
+        return true;
+      });
+    }
+    if (filterValues.projectId.trim()) {
+      result = result.filter((person) => String(person.id).includes(filterValues.projectId.trim()));
+    }
+    if (filterValues.exclude.trim()) {
+      const excluded = filterValues.exclude.trim().toLowerCase();
+      result = result.filter((person) => !collectPersonText(person).includes(excluded));
+    }
+    if (filterValues.startMonthFrom || filterValues.startMonthTo) {
+      result = result.filter((person) => {
+        const availableFrom = person.availableFromRaw || "";
+        if (!availableFrom) return true;
+        if (filterValues.startMonthFrom && availableFrom < filterValues.startMonthFrom) return false;
+        if (filterValues.startMonthTo && availableFrom > filterValues.startMonthTo) return false;
+        return true;
+      });
+    }
+    if (filterValues.skill.trim()) {
+      const skill = filterValues.skill.trim().toLowerCase();
+      result = result.filter((person) => collectPersonText(person).includes(skill));
+    }
+    if (filterValues.unitUndecidedOnly) {
+      result = result.filter((person) => person.unitPriceValue === 0 || person.unitPrice === "未定");
+    } else {
+      if (filterValues.unitMin) result = result.filter((person) => person.unitPriceValue >= Number(filterValues.unitMin));
+      if (filterValues.unitMax) result = result.filter((person) => person.unitPriceValue <= Number(filterValues.unitMax));
+    }
+    if (filterValues.prefecture.trim()) {
+      const location = filterValues.prefecture.trim().toLowerCase();
+      result = result.filter((person) => collectPersonText(person).includes(location));
+    }
+    if (filterValues.remote.length) {
+      result = result.filter((person) => {
+        const personText = collectPersonText(person);
+        return filterValues.remote.some((condition) => personText.includes(condition.toLowerCase().replace("可", "")) || personText.includes(condition.toLowerCase()));
+      });
+    }
+    if (filterValues.statuses.length) {
+      result = result.filter((person) => filterValues.statuses.includes(person.status));
+    }
+
+    if (checkedFilters.hideForeignNg) result = result.filter((person) => !isForeignNationality(person.nationality));
+    if (checkedFilters.hide50sNg) result = result.filter((person) => !person.age || person.age < 50 || person.age >= 60);
+    if (checkedFilters.hide60sNg) result = result.filter((person) => !person.age || person.age < 60);
+    if (checkedFilters.hasResult) result = result.filter((person) => person.hasResult);
+    if (checkedFilters.hideTradeNg) result = result.filter((person) => !person.hasTradeNg);
+    if (checkedFilters.createdByMe) result = result.filter((person) => person.createdByName === currentUserName);
+    if (checkedFilters.recruitingOnly) result = result.filter((person) => person.statusRaw === "AVAILABLE");
+    if (selectedSort === "新着順") {
+      result = [...result].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    }
+    if (selectedSort === "名前順") {
+      result = [...result].sort((a, b) => String(a.name).localeCompare(String(b.name), "ja"));
+    }
+    if (selectedSort === "単価が高い順") {
+      result = [...result].sort((a, b) => b.unitPriceValue - a.unitPriceValue);
+    }
+    if (selectedSort === "単価が低い順") {
+      result = [...result].sort((a, b) => a.unitPriceValue - b.unitPriceValue);
+    }
+
+    return result;
+  }, [checkedFilters, currentUserName, filterValues, persons, search, selectedSort]);
+
+  const filteredUnclassifiedMails = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    let result = unclassifiedMails;
+
+    if (normalized) {
+      result = result.filter((mail) => collectMailText(mail).includes(normalized));
+    }
+
+    if (checkedFilters.hasResult) result = result.filter((mail) => mail.hasResult);
+    if (checkedFilters.hideTradeNg) result = result.filter((mail) => !mail.hasTradeNg);
+
+    if (selectedSort === "新着順" || selectedSort === "おすすめ順") {
+      result = [...result].sort((a, b) => String(b.receivedAtRaw || b.receivedAt).localeCompare(String(a.receivedAtRaw || a.receivedAt)));
+    }
+    if (selectedSort === "名前順") {
+      result = [...result].sort((a, b) => String(a.subject).localeCompare(String(b.subject), "ja"));
+    }
+
+    return result;
+  }, [checkedFilters, search, selectedSort, unclassifiedMails]);
+
+  const isProjectTab = activeTab === "案件";
+  const isPersonTab = activeTab === "要員";
+  const isUnclassifiedTab = activeTab === "未分類";
+  const activeRows = isProjectTab ? filteredProjects : isPersonTab ? filteredPersons : filteredUnclassifiedMails;
+  const totalPages = Math.max(1, Math.ceil(activeRows.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const displayStart = activeRows.length ? (safeCurrentPage - 1) * pageSize + 1 : 0;
+  const displayEnd = Math.min(safeCurrentPage * pageSize, activeRows.length);
+  const displayProjects = filteredProjects.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+  const displayPersons = filteredPersons.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+  const displayUnclassifiedMails = filteredUnclassifiedMails.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+  const activeConditions = useMemo(() => (isUnclassifiedTab ? [] : buildActiveConditions(filterValues, isProjectTab)), [filterValues, isProjectTab, isUnclassifiedTab]);
+  const toolbarConditions = activeConditions;
+  const focusCount = isProjectTab
+    ? projects.filter((project) => focusOptions.some((option) => matchesProjectFocus(project, option.id))).length
+    : 0;
+  const proposalIds = [];
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, checkedFilters, filterValues, pageSize, search, selectedFocus, selectedSort]);
 
   const closeMenus = () => {
     setFocusMenuOpen(false);
@@ -276,6 +661,17 @@ export default function Home() {
     setMenuProjectId(null);
     setSideMenuOpen(false);
   };
+
+  useEffect(() => {
+    if (!focusMenuOpen && !sortMenuOpen && !pageSizeMenuOpen && !menuProjectId) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") closeMenus();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [focusMenuOpen, menuProjectId, pageSizeMenuOpen, sortMenuOpen]);
 
   const handleQuickFilterChange = (id, group) => {
     if (group === "focus") {
@@ -308,45 +704,141 @@ export default function Home() {
       if (id === "createdAt") return { ...current, createdFrom: "", createdTo: "" };
       if (id === "startMonth") return { ...current, startMonthFrom: "", startMonthTo: "" };
       if (id === "unit") return { ...current, unitMin: "", unitMax: "", unitUndecidedOnly: false };
-      if (id === "remote" || id === "workDays") return { ...current, [id]: [] };
+      if (id === "remote" || id === "workDays" || id === "statuses") return { ...current, [id]: [] };
       return { ...current, [id]: "" };
     });
   };
 
   const handleAddProposal = (project) => {
-    setNotice(`「${project.title}」の提案作成はまだ未実装です（DB読み取り専用）`);
+    if (!canEditEntities) {
+      setNotice("この操作を実行する権限がありません");
+      return;
+    }
+    console.log("project proposal draft", project?.id || project?.dbId || "");
+    setNotice(`「${project.title}」の提案開始を仮実行しました（DB登録なし）`);
     setMenuProjectId(null);
   };
 
-  const handleCopyUrl = (project) => {
-    setNotice(`案件URLをコピーしました: /projects/${project.id}`);
+  const handleCopyUrl = async (project) => {
+    console.log("project copy draft", project?.id || project?.dbId || "");
+    const projectUrl = `${window.location.origin}/projects/${project.id}`;
+    try {
+      await navigator.clipboard?.writeText(projectUrl);
+      setNotice(`案件URLをコピーしました: ${projectUrl}`);
+    } catch {
+      setNotice(`コピー対象URL: ${projectUrl}`);
+    }
     setMenuProjectId(null);
   };
 
-  const handleMemoSave = (projectId, memo) => {
-    setNotice("共有メモ保存はまだ未実装です（DB読み取り専用）");
-  };
+  const handleDetailAction = async (action, project) => {
+    console.log(`project ${action} draft`, project?.id || project?.dbId || "");
 
-  const handleDetailAction = (action, project) => {
+    if (["edit", "archive", "proposal", "unclassify"].includes(action) && !canEditEntities) {
+      setNotice("この操作を実行する権限がありません");
+      return;
+    }
+
     if (action === "edit") {
-      setNotice(`「${project.title}」の編集はまだ未実装です（DB読み取り専用）`);
+      closeMenus();
+      setSelectedProject(project);
+      setActiveModal("editProject");
+      return;
     }
 
-    if (action === "hide" || action === "delete") {
-      setNotice(action === "hide" ? "非表示操作はまだ未実装です（DB読み取り専用）" : "削除操作はまだ未実装です（DB読み取り専用）");
+    if (action === "archive") {
+      closeMenus();
+      setIsLoadingDbData(true);
+      try {
+        const response = await fetch("/api/projects", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: project.dbId, action: "archive" })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.message || "案件アーカイブに失敗しました");
+        const nextData = await reloadDashboardData();
+        setSelectedProject(null);
+        setNotice("案件をアーカイブしました");
+        setCurrentPage(1);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "案件アーカイブに失敗しました");
+      } finally {
+        setIsLoadingDbData(false);
+      }
+      return;
     }
 
-    if (action === "closeRecruiting") {
-      setNotice("募集終了操作はまだ未実装です（DB読み取り専用）");
+    if (action === "unclassify") {
+      await handleMoveEntityToUnclassified("project", project);
+      return;
     }
 
     setMenuProjectId(null);
     setSideMenuOpen(false);
   };
 
-  const handleCreate = () => {
-    setActiveModal(null);
-    setNotice("案件作成はまだ未実装です（DB読み取り専用）");
+  const handleMoveEntityToUnclassified = async (entityType, entity) => {
+    if (!entity?.dbId) return;
+    if (!canEditEntities) {
+      setNotice("この操作を実行する権限がありません");
+      return;
+    }
+
+    closeMenus();
+    setIsLoadingDbData(true);
+    try {
+      const response = await fetch("/api/entities/move-to-unclassified", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entityType, entityId: entity.dbId })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "未分類への移行に失敗しました");
+
+      await reloadDashboardData();
+      setSelectedProject(null);
+      setSelectedPerson(null);
+      setSelectedMail(null);
+      setActiveTab("未分類");
+      setCurrentPage(1);
+      setNotice("未分類へ移行しました");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "未分類への移行に失敗しました");
+    } finally {
+      setIsLoadingDbData(false);
+    }
+  };
+
+  const handleUnclassifiedMailMove = async (target, mail) => {
+    if (!mail?.dbId) return;
+    if (!canEditEntities) {
+      setNotice("この操作を実行する権限がありません");
+      return;
+    }
+
+    setIsMovingMail(true);
+    setIsLoadingDbData(true);
+    try {
+      const response = await fetch(`/api/mail-notifications/${mail.dbId}/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "未分類メールの移動に失敗しました");
+
+      await reloadDashboardData();
+      setSelectedMail(null);
+      setActiveTab(target === "project" ? "案件" : "要員");
+      setCurrentPage(1);
+      setNotice(target === "project" ? "未分類メールを案件として扱いました" : "未分類メールを要員として扱いました");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "未分類メールの移動に失敗しました");
+    } finally {
+      setIsMovingMail(false);
+      setIsLoadingDbData(false);
+    }
   };
 
   const applyKeyword = () => {
@@ -354,22 +846,54 @@ export default function Home() {
     setActiveModal(null);
   };
 
+  if (authStatus === "checking") {
+    return (
+      <main className="auth-page">
+        <section className="auth-panel auth-panel-compact" aria-live="polite">
+          <div className="auth-brand">
+            <span className="brand-logo">SKV</span>
+            <span className="brand-badge">管理コンソール</span>
+          </div>
+          <p className="auth-message">認証状態を確認中です</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (authStatus !== "authenticated") {
+    return <LoginPanel onAuthenticated={handleAuthenticated} />;
+  }
+
   return (
     <main className="console-app">
-      <Header />
+      <Header currentUser={currentUser} onLogout={handleLogout} />
       <SearchToolbar
         activeTab={activeTab}
-        activeConditions={activeConditions}
+        activeConditions={toolbarConditions}
+        canRunSync={canManageSync}
+        canCreate={canEditEntities}
         checkedFilters={checkedFilters}
+        displayEnd={displayEnd}
+        displayStart={displayStart}
+        focusCount={focusCount}
         focusMenuOpen={focusMenuOpen}
+        hasPendingRefresh={hasPendingDataRefresh}
+        isSyncing={isSyncingGmail}
         onConditionRemove={handleConditionRemove}
         onFocusToggle={() => {
           setFocusMenuOpen(!focusMenuOpen);
           setSortMenuOpen(false);
         }}
         onOpenCreate={() => {
+          if (!canEditEntities) {
+            setNotice("この操作を実行する権限がありません");
+            return;
+          }
           closeMenus();
-          setNotice("案件登録はまだ未実装です（DB読み取り専用）");
+          setSelectedProject(null);
+          setSelectedPerson(null);
+          setSelectedMail(null);
+          setActiveModal(isProjectTab ? "create" : "createPerson");
         }}
         onOpenFilter={() => {
           closeMenus();
@@ -385,6 +909,8 @@ export default function Home() {
           setActiveModal("keyword");
         }}
         onQuickFilterChange={handleQuickFilterChange}
+        onRefresh={handleRefresh}
+        onRunSync={handleRunGmailSync}
         onSearchChange={setSearch}
         onSortOpen={() => {
           setSortMenuOpen(!sortMenuOpen);
@@ -397,9 +923,14 @@ export default function Home() {
         onTabChange={(tab) => {
           setActiveTab(tab);
           setSelectedProject(null);
+          setSelectedPerson(null);
+          setSelectedMail(null);
+          setFocusMenuOpen(false);
+          setCurrentPage(1);
         }}
         pageSize={pageSize}
         pageSizeMenuOpen={pageSizeMenuOpen}
+        resultCount={activeRows.length}
         search={search}
         selectedFocus={selectedFocus}
         selectedSort={selectedSort}
@@ -423,46 +954,88 @@ export default function Home() {
         </div>
       ) : null}
 
-      <section className={`content-grid ${selectedProject ? "with-detail" : ""}`}>
+      <section className="content-grid">
         <div className="list-panel">
           <div className="top-pagination">
-            <Pagination currentPage={currentPage} onPageChange={setCurrentPage} compact={Boolean(selectedProject)} />
+            <Pagination currentPage={safeCurrentPage} onPageChange={setCurrentPage} totalPages={totalPages} />
           </div>
-          <ProjectTable
-            compact={Boolean(selectedProject)}
-            menuProjectId={menuProjectId}
-            onAddProposal={handleAddProposal}
-            onCopyUrl={handleCopyUrl}
-            onDetailAction={handleDetailAction}
-            onMenuToggle={(id) => setMenuProjectId(menuProjectId === id ? null : id)}
-            onSelectProject={(project) => {
-              setSelectedProject(project);
-              setMenuProjectId(null);
-            }}
-            projects={displayProjects}
-            proposalIds={proposalIds}
-            selectedProjectId={selectedProject?.id}
-          />
-          {!displayProjects.length && !isLoadingDbData ? <div className="empty-state">表示できる案件データがありません</div> : null}
+          {isProjectTab ? (
+            <>
+              <ProjectTable
+                canEdit={canEditEntities}
+                compact={false}
+                menuProjectId={menuProjectId}
+                onAddProposal={handleAddProposal}
+                onCopyUrl={handleCopyUrl}
+                onDetailAction={handleDetailAction}
+                onMenuToggle={(id) => setMenuProjectId(menuProjectId === id ? null : id)}
+                onSelectProject={(project) => {
+                  setSelectedProject(project);
+                  setMenuProjectId(null);
+                }}
+                projects={displayProjects}
+                proposalIds={proposalIds}
+                selectedProjectId={selectedProject?.id}
+              />
+              {!displayProjects.length && !isLoadingDbData ? <div className="empty-state">表示できる案件データがありません</div> : null}
+            </>
+          ) : isPersonTab ? (
+            <>
+              <PersonTable
+                onSelectPerson={(person) => {
+                  setSelectedPerson(person);
+                }}
+                persons={displayPersons}
+                selectedPersonId={selectedPerson?.id}
+              />
+              {!displayPersons.length && !isLoadingDbData ? <div className="empty-state">表示できる要員データがありません</div> : null}
+            </>
+          ) : (
+            <>
+              <UnclassifiedMailTable
+                mails={displayUnclassifiedMails}
+                onSelectMail={(mail) => {
+                  setSelectedMail(mail);
+                }}
+                selectedMailId={selectedMail?.id}
+              />
+              {!displayUnclassifiedMails.length && !isLoadingDbData ? <div className="empty-state">表示できる未分類メールがありません</div> : null}
+            </>
+          )}
           <div className="bottom-pagination">
-            <Pagination currentPage={currentPage} onPageChange={setCurrentPage} />
+            <Pagination currentPage={safeCurrentPage} onPageChange={setCurrentPage} totalPages={totalPages} />
           </div>
         </div>
 
-        <ProjectDetailPane
-          menuOpen={sideMenuOpen}
-          onAddProposal={handleAddProposal}
-          onClose={() => setSelectedProject(null)}
-          onCopyUrl={handleCopyUrl}
-          onDetailAction={handleDetailAction}
-          onMemoSave={handleMemoSave}
-          onMenuToggle={() => setSideMenuOpen(!sideMenuOpen)}
-          project={selectedProject}
-          proposalIds={proposalIds}
-        />
+        {isProjectTab ? (
+          <ProjectDetailPane
+            canEdit={canEditEntities}
+            onAddProposal={handleAddProposal}
+            onClose={() => setSelectedProject(null)}
+            onCopyUrl={handleCopyUrl}
+            onDetailAction={handleDetailAction}
+            project={selectedProject}
+          />
+        ) : null}
+        {isPersonTab ? (
+          <PersonDetailPane
+            canEdit={canEditEntities}
+            onClose={() => setSelectedPerson(null)}
+            onMoveToUnclassified={(person) => handleMoveEntityToUnclassified("person", person)}
+            person={selectedPerson}
+          />
+        ) : null}
+        {isUnclassifiedTab ? (
+          <UnclassifiedMailDetailPane
+            canEdit={canEditEntities}
+            isMoving={isMovingMail}
+            mail={selectedMail}
+            onClose={() => setSelectedMail(null)}
+            onMoveToPerson={(mail) => handleUnclassifiedMailMove("person", mail)}
+            onMoveToProject={(mail) => handleUnclassifiedMailMove("project", mail)}
+          />
+        ) : null}
       </section>
-
-      <DbReadOnlyPanels data={dbData} />
 
       {activeModal === "filter" ? (
         <FilterModal
@@ -471,6 +1044,7 @@ export default function Home() {
           onClear={handleFilterClear}
           onClose={() => setActiveModal(null)}
           onToggle={handleFilterToggle}
+          rows={isProjectTab ? filterFormRows : personFilterFormRows}
           values={filterValues}
         />
       ) : null}
@@ -486,7 +1060,17 @@ export default function Home() {
           onClose={() => setActiveModal(null)}
         />
       ) : null}
-      {activeModal === "create" ? <ProjectCreateModal onClose={() => setActiveModal(null)} onCreate={handleCreate} /> : null}
+      {activeModal === "create" ? <ProjectCreateDrawer mode="create" onClose={() => setActiveModal(null)} onSaved={handleProjectCreated} /> : null}
+      {activeModal === "editProject" && selectedProject ? (
+        <ProjectCreateDrawer
+          initialValues={selectedProject.formValues || {}}
+          mode="edit"
+          onClose={() => setActiveModal(null)}
+          onSaved={handleProjectUpdated}
+          projectId={selectedProject.dbId}
+        />
+      ) : null}
+      {activeModal === "createPerson" ? <PersonCreateDrawer onClose={() => setActiveModal(null)} onSaved={handlePersonCreated} /> : null}
     </main>
   );
 }
