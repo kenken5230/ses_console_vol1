@@ -1,9 +1,21 @@
+"use client";
+
+import { useEffect } from "react";
 import { searchHistories } from "../data/mockProjects";
 
 export default function SearchHistoryModal({ onApply, onClose }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="modal-backdrop">
-      <section className="history-modal" role="dialog" aria-modal="true" aria-label="検索履歴">
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="history-modal" role="dialog" aria-modal="true" aria-label="検索履歴" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading">
           <h2>検索履歴</h2>
           <button className="modal-close" onClick={onClose} type="button" aria-label="閉じる">

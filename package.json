@@ -7,7 +7,18 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "gmail:auth": "tsx scripts/gmail-auth.ts",
+    "gmail:test": "tsx scripts/gmail-fetch-test.ts",
+    "gmail:sync": "tsx scripts/gmail-sync-mail-notifications.ts",
+    "gmail:stats": "tsx scripts/gmail-mail-stats.ts",
+    "gmail:classify": "tsx scripts/gmail-classify-mail-notifications.ts",
+    "gmail:classify:audit": "tsx scripts/gmail-classification-audit.ts",
+    "gmail:extract:preview": "tsx scripts/gmail-extract-preview.ts",
+    "gmail:extract": "tsx scripts/gmail-extract-to-entities.ts",
+    "gmail:extract:duplicates": "tsx scripts/gmail-extract-duplicates.ts",
+    "gmail:extract:mismatches": "tsx scripts/gmail-extract-mismatch-report.ts",
+    "gmail:extract:archive-mismatches": "tsx scripts/gmail-extract-archive-mismatches.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",

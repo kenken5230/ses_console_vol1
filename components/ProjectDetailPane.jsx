@@ -1,215 +1,177 @@
-import { useEffect, useState } from "react";
-import { sidePaneItemLabels } from "../data/mockProjects";
+import { useEffect } from "react";
 import { Badge } from "./Badge";
 
-function orderDetailFields(fields) {
-  const order = new Map(sidePaneItemLabels.map((label, index) => [label, index]));
-  return [...fields].sort((a, b) => (order.get(a.label) ?? 999) - (order.get(b.label) ?? 999));
+function isEmpty(value) {
+  return value === "-" || value === "未入力" || value === "" || value === null || value === undefined;
 }
 
-function DetailValue({ field }) {
-  if (field.type === "fee") {
-    return (
-      <div className="tag-flow">
-        {field.items.map((item) => (
-          <Badge tone={item.tone} key={item.label}>
-            {item.label}
-          </Badge>
-        ))}
-      </div>
-    );
+function DetailItemValue({ item }) {
+  if (item.type === "block") {
+    return <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>;
   }
 
-  if (field.type === "company") {
-    return (
-      <div>
-        <strong>{field.value}</strong>
-        <div className="tag-flow detail-tags">
-          {field.tags.map((tag) => (
-            <Badge tone={tag.tone} key={tag.label}>
-              {tag.label}
-            </Badge>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === "longText") {
-    return (
-      <div className="work-text">
-        {field.lines.map((line, index) =>
-          line ? (
-            <p key={`${line}-${index}`}>{line}</p>
-          ) : (
-            <div className="text-spacer" key={`spacer-${index}`} />
-          )
-        )}
-      </div>
-    );
-  }
-
-  if (field.type === "tags") {
+  if (item.type === "tags") {
     return (
       <div className="tag-flow wrap">
-        {field.tags.map((tag) => (
+        {item.tags.map((tag) => (
           <Badge key={tag}>{tag}</Badge>
         ))}
       </div>
     );
   }
 
-  if (field.type === "commerce") {
+  if (item.type === "commerce") {
     return (
       <div className="commerce-detail">
-        {field.items.map(([label, value]) => (
-          <div key={label}>
+        {item.items.map(([label, value]) => (
+          <div key={`${label}-${value}`}>
             <span>{label}</span>
-            <strong className={value === "未入力" ? "muted-value" : ""}>{value}</strong>
+            <strong className={isEmpty(value) ? "muted-value" : ""}>{value}</strong>
           </div>
         ))}
       </div>
     );
   }
 
-  if (field.type === "person") {
+  if (item.type === "mail") {
     return (
-      <span className="person-value">
-        <span className="avatar small">{field.avatar}</span>
-        <strong>{field.value}</strong>
-      </span>
+      <details className="mail-body-box">
+        <summary>元メール本文を表示</summary>
+        <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>
+      </details>
     );
   }
 
-  return <strong className={field.muted ? "muted-value" : ""}>{field.value}</strong>;
+  return <strong className={`${item.emphasis ? "important-value" : ""} ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</strong>;
 }
 
-export default function ProjectDetailPane({
-  menuOpen,
-  onAddProposal,
-  onClose,
-  onCopyUrl,
-  onDetailAction,
-  onMemoSave,
-  onMenuToggle,
-  project,
-  proposalIds
-}) {
-  const [isEditingMemo, setIsEditingMemo] = useState(false);
-  const [memoDraft, setMemoDraft] = useState("");
-
+export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClose, onCopyUrl, onDetailAction, project }) {
   useEffect(() => {
-    setMemoDraft(project?.detail?.memo || "SKV内全員が閲覧できます");
-    setIsEditingMemo(false);
-  }, [project]);
+    if (!project) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, project]);
 
   if (!project) return null;
 
-  const detail = project.detail || {
-    memo: "SKV内全員が閲覧できます",
-    fields: [
-      {
-        label: "手数料",
-        type: "fee",
-        items: [{ label: "AM案件手数料：10,000円", tone: "purple" }]
-      },
-      {
-        label: "上位会社",
-        type: "company",
-        value: project.company,
-        tags: [{ label: "取引OK", tone: "success" }]
-      },
-      {
-        label: "作業内容",
-        type: "longText",
-        lines: ["■業務内容", `${project.title} の詳細説明が入ります。`, `関連スキル：${project.tags.join("、")}`]
-      },
-      { label: "作業場所", value: project.locations.join(" / ") },
-      { label: "スキル", type: "tags", tags: project.tags },
-      { label: "上位金額", value: project.unitPrice },
-      { label: "面談回数", value: project.interviewCount },
-      { label: "案件作成日", value: project.createdAt }
-    ]
-  };
-  const fields = orderDetailFields(detail.fields);
+  const detail = project.detail || { groups: [], highlights: [], meta: [] };
+  const groups = detail.groups || [];
+  const highlights = detail.highlights || [];
+  const meta = detail.meta || [];
 
-  const handleMemoSave = () => {
-    onMemoSave(project.id, memoDraft);
-    setIsEditingMemo(false);
+  const handleAction = (action) => {
+    console.log(`project detail action: ${action}`, project?.id || project?.dbId || "");
+    if (action === "copy") {
+      onCopyUrl(project);
+      return;
+    }
+    if (action === "proposal") {
+      onAddProposal(project);
+      return;
+    }
+    onDetailAction(action, project);
   };
 
   return (
-    <aside className="detail-pane">
-      <div className="detail-toolbar">
-        <div>
-          <span className="detail-subtitle">案件の詳細（ID：{project.id}）</span>
-        </div>
-        <div className="detail-actions">
-          <button className="outline-primary" onClick={() => onAddProposal(project)} type="button">
-            ＋ {proposalIds.includes(project.id) ? "提案リスト追加済み" : "提案リストに追加"}
-          </button>
-          <button className="icon-button tooltip-target" onClick={() => onCopyUrl(project)} type="button" aria-label="案件URLをコピー">
-            ⛓
-            <span className="tooltip">案件URLをコピー</span>
-          </button>
-          <div className="relative">
-            <button className={`icon-button bordered ${menuOpen ? "active" : ""}`} onClick={onMenuToggle} type="button" aria-label="案件操作">
-              ⋯
+    <div className="detail-drawer-backdrop" onClick={onClose}>
+      <aside
+        aria-labelledby="project-detail-title"
+        aria-modal="true"
+        className="detail-pane detail-drawer"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className="detail-toolbar">
+          <div>
+            <span className="detail-subtitle">案件詳細</span>
+          </div>
+          <div className="detail-actions">
+            <button className="icon-button close-button" onClick={onClose} type="button" aria-label="閉じる">
+              ×
             </button>
-            {menuOpen ? (
-              <div className="side-menu">
-                <button onClick={() => onDetailAction("edit", project)} type="button">
+          </div>
+        </div>
+
+        <div className="detail-scroll">
+          <section className="detail-hero">
+            <div className="detail-title-row">
+              <div>
+                <span className="drawer-eyebrow">案件名</span>
+                <h2 id="project-detail-title">{project.title}</h2>
+              </div>
+              <div className="detail-title-badges">
+                {project.needsReview ? <Badge tone="danger">要確認</Badge> : null}
+                <Badge tone="outline">{project.status}</Badge>
+              </div>
+            </div>
+            <div className="detail-meta">
+              {meta.map((item) => (
+                <span key={item.label}>
+                  {item.label}: <strong>{item.value || "-"}</strong>
+                </span>
+              ))}
+            </div>
+            <div className="detail-action-row">
+              {canEdit ? (
+                <button className="outline-primary" onClick={() => handleAction("edit")} type="button">
                   編集
                 </button>
-                <button onClick={() => onDetailAction("hide", project)} type="button">
-                  案件ではないので非表示
-                </button>
-                <button className="muted" onClick={() => onDetailAction("closeRecruiting", project)} type="button">
-                  募集を終了
-                </button>
-                <button className="muted" onClick={() => onDetailAction("delete", project)} type="button">
-                  案件を削除
-                </button>
-              </div>
-            ) : null}
-          </div>
-          <button className="icon-button close-button" onClick={onClose} type="button" aria-label="閉じる">
-            ×
-          </button>
-        </div>
-      </div>
-
-      <div className="detail-scroll">
-        <div className="detail-title-row">
-          <h2>{project.title}</h2>
-          <Badge tone="outline">{project.status}</Badge>
-        </div>
-        <div className="memo-card">
-          <strong>案件に関しての共有メモ</strong>
-          {isEditingMemo ? (
-            <input aria-label="共有メモ" onChange={(event) => setMemoDraft(event.target.value)} value={memoDraft} />
-          ) : (
-            <span>{detail.memo}</span>
-          )}
-          {isEditingMemo ? (
-            <button onClick={handleMemoSave} type="button">
-              保存
-            </button>
-          ) : (
-            <button onClick={() => setIsEditingMemo(true)} type="button">
-              メモを編集
-            </button>
-          )}
-        </div>
-        <section className="detail-section">
-          {fields.map((field) => (
-            <div className={`detail-grid-row ${field.type === "longText" ? "top-align long-row" : ""}`} key={field.label}>
-              <span className="field-label">{field.label}</span>
-              <DetailValue field={field} />
+              ) : null}
+              <button className="outline-button" onClick={() => handleAction("copy")} type="button">
+                コピー
+              </button>
+              {canEdit ? (
+                <>
+                  <button className="outline-button" onClick={() => handleAction("archive")} type="button">
+                    アーカイブ
+                  </button>
+                  <button className="primary-button detail-primary" onClick={() => handleAction("proposal")} type="button">
+                    提案開始
+                  </button>
+                  <button className="outline-primary" onClick={() => handleAction("unclassify")} type="button">
+                    未分類へ移行
+                  </button>
+                </>
+              ) : null}
+              <button className="ghost-button detail-close-action" onClick={onClose} type="button">
+                閉じる
+              </button>
             </div>
-          ))}
-        </section>
-      </div>
-    </aside>
+          </section>
+
+          {highlights.length ? (
+            <section className="detail-highlight-grid">
+              {highlights.map((item) => (
+                <div className="detail-highlight" key={item.label}>
+                  <span>{item.label}</span>
+                  <strong className={isEmpty(item.value) ? "muted-value" : ""}>{item.value || "-"}</strong>
+                </div>
+              ))}
+            </section>
+          ) : null}
+
+          <div className="detail-groups">
+            {groups.map((group) => (
+              <section className="detail-group" key={group.title}>
+                <h3>{group.title}</h3>
+                <div className="detail-group-body">
+                  {group.items.map((item) => (
+                    <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "commerce" || item.type === "mail" ? "detail-item-wide" : ""}`} key={`${group.title}-${item.label}`}>
+                      <span className="field-label">{item.label}</span>
+                      <DetailItemValue item={item} />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }

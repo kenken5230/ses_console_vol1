@@ -1,6 +1,7 @@
 import { Badge } from "./Badge";
 
 export default function ProjectTable({
+  canEdit = true,
   compact,
   menuProjectId,
   onAddProposal,
@@ -35,7 +36,10 @@ export default function ProjectTable({
             >
               <td className="id-cell">{project.id}</td>
               <td className="title-cell" title={project.title}>
-                {project.title}
+                <div className="title-with-badges">
+                  <span>{project.title}</span>
+                  {project.needsReview ? <Badge tone="danger">要確認</Badge> : null}
+                </div>
               </td>
               <td className={project.unitPrice !== "未定" ? "price-cell" : ""}>{project.unitPrice}</td>
               <td>
@@ -60,27 +64,28 @@ export default function ProjectTable({
                   <td />
                   <td>{project.createdAt}</td>
                   <td className="action-cell" onClick={(event) => event.stopPropagation()}>
+                    {canEdit ? (
+                      <>
                     <button className="kebab-button" onClick={() => onMenuToggle(project.id)} type="button" aria-label="案件メニュー">
                       ⋯
                     </button>
                     {menuProjectId === project.id ? (
                       <div className="row-action-menu">
                         <button onClick={() => onAddProposal(project)} type="button">
-                          {proposalIds.includes(project.id) ? "提案リストに追加済み" : "提案リストに追加"}
+                          {proposalIds.includes(project.id) ? "提案開始済み" : "提案開始"}
                         </button>
                         <button onClick={() => onCopyUrl(project)} type="button">
-                          案件URLをコピー
+                          コピー
                         </button>
-                        <button onClick={() => onDetailAction("hide", project)} type="button">
-                          案件ではないので非表示
+                        <button onClick={() => onDetailAction("edit", project)} type="button">
+                          編集
                         </button>
-                        <button className="muted" onClick={() => onDetailAction("closeRecruiting", project)} type="button">
-                          募集を終了
-                        </button>
-                        <button className="muted" onClick={() => onDetailAction("delete", project)} type="button">
-                          案件を削除
+                        <button onClick={() => onDetailAction("archive", project)} type="button">
+                          アーカイブ
                         </button>
                       </div>
+                    ) : null}
+                      </>
                     ) : null}
                   </td>
                 </>

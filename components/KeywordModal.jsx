@@ -1,7 +1,20 @@
+"use client";
+
+import { useEffect } from "react";
+
 export default function KeywordModal({ keywordDraft, onApply, onChange, onClose }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="modal-backdrop">
-      <section className="keyword-modal" role="dialog" aria-modal="true" aria-label="キーワードフィルター">
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="keyword-modal" role="dialog" aria-modal="true" aria-label="キーワードフィルター" onClick={(event) => event.stopPropagation()}>
         <div className="modal-heading compact">
           <h2>キーワードフィルター</h2>
           <button className="modal-close" onClick={onClose} type="button" aria-label="閉じる">
