@@ -58,8 +58,28 @@ function redactKnownSecrets(value: string) {
   return redacted;
 }
 
+function getAuthPayloadsToRedact() {
+  const user = process.env.SMTP_USER;
+  const password = process.env.SMTP_PASSWORD;
+  const payloads = [
+    user ? Buffer.from(user, "utf8").toString("base64") : null,
+    password ? Buffer.from(password, "utf8").toString("base64") : null,
+    user && password ? Buffer.from(`\u0000${user}\u0000${password}`, "utf8").toString("base64") : null
+  ];
+
+  return payloads.filter((payload): payload is string => Boolean(payload && payload.length >= 8));
+}
+
+function redactAuthPayloads(value: string) {
+  let redacted = value;
+  for (const payload of getAuthPayloadsToRedact()) {
+    redacted = redacted.replace(new RegExp(escapeRegExp(payload), "g"), "[REDACTED_AUTH_PAYLOAD]");
+  }
+  return redacted;
+}
+
 function sanitizeLogValue(value: string) {
-  return redactKnownSecrets(value)
+  return redactAuthPayloads(redactKnownSecrets(value))
     .replace(/AUTH\s+PLAIN\s+[A-Za-z0-9+/=]+/gi, "AUTH PLAIN [REDACTED]")
     .replace(/([?&]resetToken=)[^&\s]+/gi, "$1[REDACTED]")
     .replace(/(\bresetToken\b\s*[:=]\s*)[^\s,;]+/gi, "$1[REDACTED]")
@@ -160,6 +180,10 @@ async function sendCommand(socket: SmtpSocket, command: string, expectedCodes: s
   return response;
 }
 
+function isSmtpCommandError(error: unknown): error is SmtpCommandError {
+  return error instanceof SmtpCommandError;
+}
+
 function connect(config: SmtpConfig) {
   return new Promise<SmtpSocket>((resolve, reject) => {
     const socket = config.secure
@@ -197,6 +221,48 @@ function encodeMessage(input: MailInput, from: string) {
   return `${headers.join("\r\n")}\r\n\r\n${input.text.replace(/\r?\n/g, "\r\n")}\r\n.`;
 }
 
+async function authenticateWithLogin(socket: SmtpSocket, config: SmtpConfig) {
+  if (!config.user || !config.password) return;
+
+  await sendCommand(socket, "AUTH LOGIN", ["334"], "AUTH LOGIN");
+  await sendCommand(
+    socket,
+    Buffer.from(config.user, "utf8").toString("base64"),
+    ["334"],
+    "AUTH LOGIN username"
+  );
+  await sendCommand(
+    socket,
+    Buffer.from(config.password, "utf8").toString("base64"),
+    ["235"],
+    "AUTH LOGIN password"
+  );
+}
+
+async function authenticateWithPlain(socket: SmtpSocket, config: SmtpConfig) {
+  if (!config.user || !config.password) return;
+
+  const authPayload = Buffer.from(`\u0000${config.user}\u0000${config.password}`, "utf8").toString("base64");
+  await sendCommand(socket, `AUTH PLAIN ${authPayload}`, ["235"], "AUTH PLAIN");
+}
+
+function canFallbackFromLoginToPlain(error: SmtpCommandError) {
+  return error.smtpStage === "AUTH LOGIN" && ["500", "502", "503", "504"].includes(error.smtpCode);
+}
+
+async function authenticate(socket: SmtpSocket, config: SmtpConfig) {
+  if (!config.user || !config.password) return;
+
+  try {
+    await authenticateWithLogin(socket, config);
+  } catch (error) {
+    if (!isSmtpCommandError(error) || !canFallbackFromLoginToPlain(error)) {
+      throw error;
+    }
+    await authenticateWithPlain(socket, config);
+  }
+}
+
 export async function sendMail(input: MailInput) {
   const config = getSmtpConfig();
   if (!config) {
@@ -214,10 +280,7 @@ export async function sendMail(input: MailInput) {
       await sendCommand(socket, `EHLO ${process.env.SMTP_HELO_HOST || "localhost"}`, ["250"], "EHLO");
     }
 
-    if (config.user && config.password) {
-      const authPayload = Buffer.from(`\u0000${config.user}\u0000${config.password}`, "utf8").toString("base64");
-      await sendCommand(socket, `AUTH PLAIN ${authPayload}`, ["235"], "AUTH PLAIN");
-    }
+    await authenticate(socket, config);
 
     await sendCommand(socket, `MAIL FROM:<${config.from}>`, ["250"], "MAIL FROM");
     await sendCommand(socket, `RCPT TO:<${input.to}>`, ["250", "251"], "RCPT TO");
