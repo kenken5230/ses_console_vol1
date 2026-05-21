@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 import { AuthError, authErrorResponse, createPasswordResetToken, normalizeEmail } from "../../../../../lib/auth";
-import { sendPasswordResetEmail } from "../../../../../lib/mailer";
+import { getSafeMailErrorDetails, sendPasswordResetEmail } from "../../../../../lib/mailer";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,15 @@ export async function POST(request: Request) {
     const resetUrl = buildResetUrl(request, token);
     const sendResult = await sendPasswordResetEmail(user.email, resetUrl);
 
+    if (!sendResult.sent) {
+      console.error("Reset email was not sent", {
+        reason: sendResult.reason,
+        message: sendResult.missing?.length
+          ? `Missing ${sendResult.missing.join(" / ")}`
+          : "SMTP mailer returned without sending"
+      });
+    }
+
     if (!sendResult.sent && process.env.NODE_ENV !== "production") {
       return successResponse("パスワード再設定を受け付けました。SMTP設定が未完了のためメールは送信されていません。");
     }
@@ -45,6 +54,8 @@ export async function POST(request: Request) {
     if (error instanceof AuthError) {
       return NextResponse.json({ message: error.message }, { status: error.status });
     }
+
+    console.error("Reset email request failed", getSafeMailErrorDetails(error));
 
     return NextResponse.json({ message: "パスワード再設定の受付に失敗しました" }, { status: 500 });
   }
