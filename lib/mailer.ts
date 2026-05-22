@@ -61,6 +61,7 @@ function redactKnownSecrets(value: string) {
 function sanitizeLogValue(value: string) {
   return redactKnownSecrets(value)
     .replace(/AUTH\s+PLAIN\s+[A-Za-z0-9+/=]+/gi, "AUTH PLAIN [REDACTED]")
+    .replace(/AUTH\s+LOGIN\s+[A-Za-z0-9+/=]+/gi, "AUTH LOGIN [REDACTED]")
     .replace(/([?&]resetToken=)[^&\s]+/gi, "$1[REDACTED]")
     .replace(/(\bresetToken\b\s*[:=]\s*)[^\s,;]+/gi, "$1[REDACTED]")
     .replace(/("resetToken"\s*:\s*")[^"]*(")/gi, "$1[REDACTED]$2")
@@ -183,6 +184,32 @@ async function upgradeToTls(socket: SmtpSocket, config: SmtpConfig) {
   });
 }
 
+function encodeBase64(value: string) {
+  return Buffer.from(value, "utf8").toString("base64");
+}
+
+function buildAuthPlainPayload(user: string, password: string) {
+  const nullByte = String.fromCharCode(0);
+  return encodeBase64(`${nullByte}${user}${nullByte}${password}`);
+}
+
+async function authenticateSmtp(socket: SmtpSocket, config: SmtpConfig) {
+  if (!config.user || !config.password) return;
+
+  try {
+    await sendCommand(socket, `AUTH PLAIN ${buildAuthPlainPayload(config.user, config.password)}`, ["235"], "AUTH PLAIN");
+    return;
+  } catch (error) {
+    if (!(error instanceof SmtpCommandError)) {
+      throw error;
+    }
+  }
+
+  await sendCommand(socket, "AUTH LOGIN", ["334"], "AUTH LOGIN");
+  await sendCommand(socket, encodeBase64(config.user), ["334"], "AUTH LOGIN username");
+  await sendCommand(socket, encodeBase64(config.password), ["235"], "AUTH LOGIN password");
+}
+
 function encodeMessage(input: MailInput, from: string) {
   const subject = Buffer.from(input.subject, "utf8").toString("base64");
   const headers = [
@@ -214,10 +241,7 @@ export async function sendMail(input: MailInput) {
       await sendCommand(socket, `EHLO ${process.env.SMTP_HELO_HOST || "localhost"}`, ["250"], "EHLO");
     }
 
-    if (config.user && config.password) {
-      const authPayload = Buffer.from(`\u0000${config.user}\u0000${config.password}`, "utf8").toString("base64");
-      await sendCommand(socket, `AUTH PLAIN ${authPayload}`, ["235"], "AUTH PLAIN");
-    }
+    await authenticateSmtp(socket, config);
 
     await sendCommand(socket, `MAIL FROM:<${config.from}>`, ["250"], "MAIL FROM");
     await sendCommand(socket, `RCPT TO:<${input.to}>`, ["250", "251"], "RCPT TO");
