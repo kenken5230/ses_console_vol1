@@ -1,5 +1,5 @@
-import net from "node:net";
-import tls from "node:tls";
+import nodemailer from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
 
 type MailInput = {
   to: string;
@@ -11,12 +11,12 @@ type SmtpConfig = {
   host: string;
   port: number;
   secure: boolean;
+  startTls: boolean;
   user?: string;
   password?: string;
   from: string;
+  heloHost?: string;
 };
-
-type SmtpSocket = net.Socket | tls.TLSSocket;
 
 const SECRET_ENV_NAMES = [
   "SMTP_PASSWORD",
@@ -28,21 +28,6 @@ const SECRET_ENV_NAMES = [
 ] as const;
 
 type SafeLogDetails = Record<string, string | number | boolean | null>;
-
-class SmtpCommandError extends Error {
-  smtpCode: string;
-  smtpStage: string;
-  responsePreview: string;
-
-  constructor(code: string, response: string, stage: string) {
-    const responsePreview = buildSafeResponsePreview(response);
-    super(`SMTP command failed with ${code}${responsePreview ? `: ${responsePreview}` : ""}`);
-    this.name = "SmtpCommandError";
-    this.smtpCode = code;
-    this.smtpStage = stage;
-    this.responsePreview = responsePreview;
-  }
-}
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -81,6 +66,7 @@ function redactAuthPayloads(value: string) {
 function sanitizeLogValue(value: string) {
   return redactAuthPayloads(redactKnownSecrets(value))
     .replace(/AUTH\s+PLAIN\s+[A-Za-z0-9+/=]+/gi, "AUTH PLAIN [REDACTED]")
+    .replace(/AUTH\s+LOGIN\s+[A-Za-z0-9+/=]+/gi, "AUTH LOGIN [REDACTED]")
     .replace(/([?&]resetToken=)[^&\s]+/gi, "$1[REDACTED]")
     .replace(/(\bresetToken\b\s*[:=]\s*)[^\s,;]+/gi, "$1[REDACTED]")
     .replace(/("resetToken"\s*:\s*")[^"]*(")/gi, "$1[REDACTED]$2")
@@ -88,30 +74,42 @@ function sanitizeLogValue(value: string) {
     .replace(/("password"\s*:\s*")[^"]*(")/gi, "$1[REDACTED]$2");
 }
 
-function buildSafeResponsePreview(response: string) {
-  return sanitizeLogValue(response).replace(/\s+/g, " ").trim().slice(0, 180);
+function buildSafeTextPreview(value: string, maxLength = 180) {
+  return sanitizeLogValue(value).replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
 export function getSafeMailErrorDetails(error: unknown): SafeLogDetails {
   if (!(error instanceof Error)) {
-    return { message: sanitizeLogValue(String(error)) };
+    return { message: buildSafeTextPreview(String(error), 300) };
   }
 
   const details: SafeLogDetails = {
-    name: error.name,
-    message: sanitizeLogValue(error.message)
+    name: buildSafeTextPreview(error.name, 120),
+    message: buildSafeTextPreview(error.message, 300)
   };
 
   const maybeError = error as Error & Record<string, unknown>;
-  for (const key of ["code", "errno", "syscall", "smtpCode", "smtpStage", "responsePreview"]) {
+  for (const key of ["code", "errno", "syscall", "command"]) {
     const value = maybeError[key];
     if (typeof value === "string") {
-      details[key] = sanitizeLogValue(value);
+      details[key] = buildSafeTextPreview(value, 180);
     } else if (typeof value === "number" || typeof value === "boolean") {
       details[key] = value;
     } else if (value === null) {
       details[key] = null;
     }
+  }
+
+  const responseCode = maybeError.responseCode;
+  if (typeof responseCode === "number") {
+    details.responseCode = responseCode;
+  } else if (typeof responseCode === "string") {
+    details.responseCode = buildSafeTextPreview(responseCode, 60);
+  }
+
+  const response = maybeError.response;
+  if (typeof response === "string") {
+    details.response = buildSafeTextPreview(response);
   }
 
   return details;
@@ -130,137 +128,42 @@ function getSmtpConfig(): SmtpConfig | null {
   if (!host || !from) return null;
 
   const port = Number(process.env.SMTP_PORT || "587");
+  const secure = process.env.SMTP_SECURE === "true" || port === 465;
+
   return {
     host,
     port,
-    secure: process.env.SMTP_SECURE === "true" || port === 465,
+    secure,
+    startTls: !secure && process.env.SMTP_STARTTLS !== "false",
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
-    from
+    from,
+    heloHost: process.env.SMTP_HELO_HOST
   };
 }
 
-function readResponse(socket: SmtpSocket) {
-  return new Promise<string>((resolve, reject) => {
-    let buffer = "";
-
-    const cleanup = () => {
-      socket.off("data", onData);
-      socket.off("error", onError);
-    };
-
-    const onError = (error: Error) => {
-      cleanup();
-      reject(error);
-    };
-
-    const onData = (chunk: Buffer) => {
-      buffer += chunk.toString("utf8");
-      const lines = buffer.split(/\r?\n/).filter(Boolean);
-      if (!lines.length) return;
-      const last = lines[lines.length - 1];
-      if (/^\d{3}\s/.test(last)) {
-        cleanup();
-        resolve(buffer);
-      }
-    };
-
-    socket.on("data", onData);
-    socket.on("error", onError);
-  });
-}
-
-async function sendCommand(socket: SmtpSocket, command: string, expectedCodes: string[], stage = "SMTP command") {
-  socket.write(`${command}\r\n`);
-  const response = await readResponse(socket);
-  const code = response.slice(0, 3);
-  if (!expectedCodes.includes(code)) {
-    throw new SmtpCommandError(code, response, stage);
-  }
-  return response;
-}
-
-function isSmtpCommandError(error: unknown): error is SmtpCommandError {
-  return error instanceof SmtpCommandError;
-}
-
-function connect(config: SmtpConfig) {
-  return new Promise<SmtpSocket>((resolve, reject) => {
-    const socket = config.secure
-      ? tls.connect(config.port, config.host, { servername: config.host })
-      : net.createConnection(config.port, config.host);
-
-    socket.once("connect", () => resolve(socket));
-    socket.once("error", reject);
-  });
-}
-
-async function upgradeToTls(socket: SmtpSocket, config: SmtpConfig) {
-  return new Promise<tls.TLSSocket>((resolve, reject) => {
-    const secureSocket = tls.connect({
-      socket,
+function createTransport(config: SmtpConfig) {
+  const options: SMTPTransport.Options = {
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    requireTLS: config.startTls,
+    ignoreTLS: !config.secure && !config.startTls,
+    name: config.heloHost || undefined,
+    authMethod: config.user && config.password ? "LOGIN" : undefined,
+    auth:
+      config.user && config.password
+        ? {
+            user: config.user,
+            pass: config.password
+          }
+        : undefined,
+    tls: {
       servername: config.host
-    });
-
-    secureSocket.once("secureConnect", () => resolve(secureSocket));
-    secureSocket.once("error", reject);
-  });
-}
-
-function encodeMessage(input: MailInput, from: string) {
-  const subject = Buffer.from(input.subject, "utf8").toString("base64");
-  const headers = [
-    `From: ${from}`,
-    `To: ${input.to}`,
-    `Subject: =?UTF-8?B?${subject}?=`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit"
-  ];
-
-  return `${headers.join("\r\n")}\r\n\r\n${input.text.replace(/\r?\n/g, "\r\n")}\r\n.`;
-}
-
-async function authenticateWithLogin(socket: SmtpSocket, config: SmtpConfig) {
-  if (!config.user || !config.password) return;
-
-  await sendCommand(socket, "AUTH LOGIN", ["334"], "AUTH LOGIN");
-  await sendCommand(
-    socket,
-    Buffer.from(config.user, "utf8").toString("base64"),
-    ["334"],
-    "AUTH LOGIN username"
-  );
-  await sendCommand(
-    socket,
-    Buffer.from(config.password, "utf8").toString("base64"),
-    ["235"],
-    "AUTH LOGIN password"
-  );
-}
-
-async function authenticateWithPlain(socket: SmtpSocket, config: SmtpConfig) {
-  if (!config.user || !config.password) return;
-
-  const authPayload = Buffer.from(`\u0000${config.user}\u0000${config.password}`, "utf8").toString("base64");
-  await sendCommand(socket, `AUTH PLAIN ${authPayload}`, ["235"], "AUTH PLAIN");
-}
-
-function canFallbackFromLoginToPlain(error: SmtpCommandError) {
-  return error.smtpStage === "AUTH LOGIN" && ["500", "502", "503", "504"].includes(error.smtpCode);
-}
-
-async function authenticate(socket: SmtpSocket, config: SmtpConfig) {
-  if (!config.user || !config.password) return;
-
-  try {
-    await authenticateWithLogin(socket, config);
-  } catch (error) {
-    if (!isSmtpCommandError(error) || !canFallbackFromLoginToPlain(error)) {
-      throw error;
     }
-    await authenticateWithPlain(socket, config);
-  }
+  };
+
+  return nodemailer.createTransport(options);
 }
 
 export async function sendMail(input: MailInput) {
@@ -269,28 +172,26 @@ export async function sendMail(input: MailInput) {
     return { sent: false, reason: "SMTP_NOT_CONFIGURED" as const, missing: getMissingSmtpConfig() };
   }
 
-  let socket = await connect(config);
+  const transporter = createTransport(config);
+
   try {
-    await readResponse(socket);
-    await sendCommand(socket, `EHLO ${process.env.SMTP_HELO_HOST || "localhost"}`, ["250"], "EHLO");
-
-    if (!config.secure && process.env.SMTP_STARTTLS !== "false") {
-      await sendCommand(socket, "STARTTLS", ["220"], "STARTTLS");
-      socket = await upgradeToTls(socket, config);
-      await sendCommand(socket, `EHLO ${process.env.SMTP_HELO_HOST || "localhost"}`, ["250"], "EHLO");
-    }
-
-    await authenticate(socket, config);
-
-    await sendCommand(socket, `MAIL FROM:<${config.from}>`, ["250"], "MAIL FROM");
-    await sendCommand(socket, `RCPT TO:<${input.to}>`, ["250", "251"], "RCPT TO");
-    await sendCommand(socket, "DATA", ["354"], "DATA");
-    await sendCommand(socket, encodeMessage(input, config.from), ["250"], "DATA body");
-    await sendCommand(socket, "QUIT", ["221"], "QUIT");
+    await transporter.sendMail({
+      from: config.from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      envelope: {
+        from: config.from,
+        to: input.to
+      }
+    });
 
     return { sent: true as const };
+  } catch (error) {
+    console.error("SMTP send failed", getSafeMailErrorDetails(error));
+    throw error;
   } finally {
-    socket.end();
+    transporter.close();
   }
 }
 
