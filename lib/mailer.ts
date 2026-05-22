@@ -29,6 +29,8 @@ const SECRET_ENV_NAMES = [
 
 type SafeLogDetails = Record<string, string | number | boolean | null>;
 
+const EXPECTED_GMAIL_ADDRESS = "sho.sato@skv.co.jp";
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -122,6 +124,37 @@ function getMissingSmtpConfig() {
   return missing;
 }
 
+function getLength(value: string | undefined) {
+  return value?.length ?? 0;
+}
+
+function hasTrimLengthChanged(value: string | undefined) {
+  return Boolean(value && value.length !== value.trim().length);
+}
+
+function logSmtpEnvDiagnostics() {
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPassword = process.env.SMTP_PASSWORD;
+  const mailFrom = process.env.MAIL_FROM;
+
+  // Temporary diagnostic log for staging SMTP env investigation. Remove after confirming Vercel env values.
+  console.info("SMTP env diagnostics", {
+    smtpHostConfigured: Boolean(process.env.SMTP_HOST),
+    smtpPort: process.env.SMTP_PORT || "587",
+    smtpUserConfigured: Boolean(smtpUser),
+    smtpUserLength: getLength(smtpUser),
+    smtpUserMatchesExpected: smtpUser === EXPECTED_GMAIL_ADDRESS,
+    smtpUserTrimLengthChanged: hasTrimLengthChanged(smtpUser),
+    smtpPasswordConfigured: Boolean(smtpPassword),
+    smtpPasswordLength: getLength(smtpPassword),
+    smtpPasswordTrimLengthChanged: hasTrimLengthChanged(smtpPassword),
+    smtpPasswordContainsSpace: Boolean(smtpPassword && smtpPassword.includes(" ")),
+    smtpPasswordContainsNewline: Boolean(smtpPassword && /[\r\n]/.test(smtpPassword)),
+    mailFromConfigured: Boolean(mailFrom),
+    mailFromMatchesExpected: mailFrom === EXPECTED_GMAIL_ADDRESS
+  });
+}
+
 function getSmtpConfig(): SmtpConfig | null {
   const host = process.env.SMTP_HOST;
   const from = process.env.MAIL_FROM;
@@ -167,6 +200,8 @@ function createTransport(config: SmtpConfig) {
 }
 
 export async function sendMail(input: MailInput) {
+  logSmtpEnvDiagnostics();
+
   const config = getSmtpConfig();
   if (!config) {
     return { sent: false, reason: "SMTP_NOT_CONFIGURED" as const, missing: getMissingSmtpConfig() };
