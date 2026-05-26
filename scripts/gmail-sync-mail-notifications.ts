@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 
 import { prisma } from "../lib/prisma";
+import { buildMailBodyContent, normalizeSearchText } from "../lib/gmail-message-body";
 import { assertNotProductionMutation } from "../lib/production-guard";
 import {
   getGmailScriptConfig,
@@ -184,15 +185,6 @@ function toInternalDate(value: string | undefined): Date {
   return Number.isFinite(millis) ? new Date(millis) : new Date();
 }
 
-function normalizeText(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized || null;
-}
-
 function sha256(value: string | null): string | null {
   if (!value) {
     return null;
@@ -291,15 +283,13 @@ function extractMessage(message: GmailMessageFullResponse): ExtractedMessage {
   const headers = collectHeaders(message.payload);
   const from = parseNameEmail(getHeader(headers, "From"));
   const body = collectBody(message.payload);
-  const bodyText = body.text.join("\n\n").trim() || null;
-  const bodyHtml = body.html.join("\n\n").trim() || null;
+  const bodyContent = buildMailBodyContent(body);
   const subject = getHeader(headers, "Subject");
   const inReplyTo = getHeader(headers, "In-Reply-To");
   const referencesHeader = getHeader(headers, "References");
   const messageDate = toDate(getHeader(headers, "Date"));
   const receivedAt = toInternalDate(message.internalDate);
-  const normalizedBody = normalizeText(bodyText);
-  const normalizedSubject = normalizeText(subject);
+  const normalizedSubject = normalizeSearchText(subject);
 
   return {
     gmailId: message.id,
@@ -318,11 +308,11 @@ function extractMessage(message: GmailMessageFullResponse): ExtractedMessage {
     referencesHeader,
     messageDate,
     receivedAt,
-    bodyText,
-    bodyHtml,
-    bodyHash: sha256(bodyText ?? bodyHtml),
+    bodyText: bodyContent.bodyText,
+    bodyHtml: bodyContent.bodyHtml,
+    bodyHash: sha256(bodyContent.bodyText ?? bodyContent.bodyHtml),
     normalizedSubject,
-    normalizedBody,
+    normalizedBody: bodyContent.normalizedBody,
     isReply: Boolean(inReplyTo || referencesHeader || subject?.trim().toLowerCase().startsWith("re:")),
     headers,
   };

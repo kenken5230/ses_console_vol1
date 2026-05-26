@@ -50,6 +50,7 @@ function buildMailSource(mail: any, target: ExtractTarget): MailExtractionSource
     subject: mail.subject,
     normalizedSubject: mail.normalizedSubject,
     bodyText,
+    bodyHtml: mail.bodyHtml,
     normalizedBody: mail.normalizedBody,
     fromEmail: mail.fromEmail,
     fromName: mail.fromName,

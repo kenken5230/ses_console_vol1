@@ -15,6 +15,7 @@
     "gmail:classify": "tsx scripts/gmail-classify-mail-notifications.ts",
     "gmail:classify:audit": "tsx scripts/gmail-classification-audit.ts",
     "gmail:extract:preview": "tsx scripts/gmail-extract-preview.ts",
+    "gmail:extract:unlinked": "tsx scripts/gmail-extract-unlinked.ts",
     "gmail:extract": "tsx scripts/gmail-extract-to-entities.ts",
     "gmail:extract:duplicates": "tsx scripts/gmail-extract-duplicates.ts",
     "gmail:extract:mismatches": "tsx scripts/gmail-extract-mismatch-report.ts",
