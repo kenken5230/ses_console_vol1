@@ -55,6 +55,7 @@ async function main(): Promise<void> {
       externalMessageId: true,
       subject: true,
       bodyText: true,
+      bodyHtml: true,
       normalizedBody: true,
       fromEmail: true,
       fromName: true,

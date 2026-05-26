@@ -476,6 +476,7 @@ async function main(): Promise<void> {
       subject: true,
       normalizedSubject: true,
       bodyText: true,
+      bodyHtml: true,
       normalizedBody: true,
       fromEmail: true,
       fromName: true,

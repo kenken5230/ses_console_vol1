@@ -147,7 +147,7 @@ export async function findExistingProjectForMail(tx: TransactionClient, mailId: 
   return null;
 }
 
-async function findExistingProjectForSenderSubject(
+export async function findExistingProjectForSenderSubject(
   tx: TransactionClient,
   mail: MailExtractionSource,
 ): Promise<ExistingEntity | null> {
@@ -215,7 +215,7 @@ export async function findExistingPersonForMail(tx: TransactionClient, mailId: s
   return null;
 }
 
-async function findExistingPersonForSenderSubject(
+export async function findExistingPersonForSenderSubject(
   tx: TransactionClient,
   mail: MailExtractionSource,
 ): Promise<ExistingEntity | null> {
@@ -235,6 +235,20 @@ async function findExistingPersonForSenderSubject(
   });
 
   return existing ? { id: existing.id, status: existing.status, source: "senderSubject" } : null;
+}
+
+export async function findExistingProjectForExtraction(
+  tx: TransactionClient,
+  mail: MailExtractionSource,
+): Promise<ExistingEntity | null> {
+  return findExistingProjectForMail(tx, mail.id);
+}
+
+export async function findExistingPersonForExtraction(
+  tx: TransactionClient,
+  mail: MailExtractionSource,
+): Promise<ExistingEntity | null> {
+  return findExistingPersonForMail(tx, mail.id);
 }
 
 export async function ensureExtractionResult(tx: TransactionClient, params: {
@@ -336,13 +350,6 @@ export async function createProjectFromExtraction(
     return { entity: "project", action: "skipped", id: existing.id, reason: existing.source };
   }
 
-  const senderSubjectExisting = await findExistingProjectForSenderSubject(tx, mail);
-  if (senderSubjectExisting) {
-    await ensureExtractionResult(tx, { mailId: mail.id, extraction, targetId: senderSubjectExisting.id });
-    await ensureMailEntityLink(tx, { mailId: mail.id, entityType: "PROJECT", entityId: senderSubjectExisting.id });
-    return { entity: "project", action: "skipped", id: senderSubjectExisting.id, reason: senderSubjectExisting.source };
-  }
-
   const title = extraction.title || mail.subject || "Gmail imported project";
   const project = await tx.project.create({
     data: {
@@ -431,13 +438,6 @@ export async function createPersonFromExtraction(
     await ensureExtractionResult(tx, { mailId: mail.id, extraction, targetId: existing.id });
     await ensureMailEntityLink(tx, { mailId: mail.id, entityType: "PERSON", entityId: existing.id });
     return { entity: "person", action: "skipped", id: existing.id, reason: existing.source };
-  }
-
-  const senderSubjectExisting = await findExistingPersonForSenderSubject(tx, mail);
-  if (senderSubjectExisting) {
-    await ensureExtractionResult(tx, { mailId: mail.id, extraction, targetId: senderSubjectExisting.id });
-    await ensureMailEntityLink(tx, { mailId: mail.id, entityType: "PERSON", entityId: senderSubjectExisting.id });
-    return { entity: "person", action: "skipped", id: senderSubjectExisting.id, reason: senderSubjectExisting.source };
   }
 
   const company = await findOrCreateCompany(tx, extraction.ownerCompanyName);

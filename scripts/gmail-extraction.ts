@@ -1,3 +1,5 @@
+import { buildExtractionBodyText } from "../lib/gmail-message-body";
+
 export type ExtractTarget = "project" | "person";
 
 export type MailExtractionSource = {
@@ -7,7 +9,9 @@ export type MailExtractionSource = {
   subject: string | null;
   normalizedSubject?: string | null;
   bodyText: string | null;
+  bodyHtml?: string | null;
   normalizedBody: string | null;
+  snippet?: string | null;
   fromEmail: string | null;
   fromName: string | null;
   receivedAt: Date;
@@ -185,7 +189,8 @@ function clean(value: string | null | undefined): string | null {
 }
 
 function mailText(mail: MailExtractionSource): string {
-  return [mail.subject, mail.bodyText, mail.normalizedBody].filter(Boolean).join("\n");
+  const bodyText = buildExtractionBodyText(mail);
+  return [mail.subject, bodyText].filter(Boolean).join("\n");
 }
 
 function cleanSubject(subject: string | null): string {
