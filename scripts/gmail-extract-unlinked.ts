@@ -150,11 +150,46 @@ function skipReasonFromExistingLinks(mail: CandidateMail, target: EntityTarget):
 
 function safeErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message
+  return safeLogText(message, 1000);
+}
+
+function safeErrorName(error: unknown): string {
+  return safeLogText(error instanceof Error ? error.name : "", 120);
+}
+
+function safeErrorCode(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  return safeLogText(typeof code === "string" ? code : "", 80);
+}
+
+function safeLogText(value: string | null | undefined, maxLength: number): string {
+  const secretValues = Object.entries(process.env)
+    .filter(([key, secret]) => {
+      return Boolean(
+        secret &&
+          secret.length >= 8 &&
+          /(DATABASE_URL|SECRET|TOKEN|PASSWORD|PASS|KEY)/i.test(key),
+      );
+    })
+    .map(([, secret]) => secret as string);
+
+  let next = value ?? "";
+  for (const secret of secretValues) {
+    next = next.split(secret).join("[redacted]");
+  }
+
+  return next
     .replace(/postgres(?:ql)?:\/\/\S+/gi, "[redacted-database-url]")
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
-    .replace(/(client_secret|refresh_token|access_token|password)=([^&\s]+)/gi, "$1=[redacted]")
-    .slice(0, 120);
+    .replace(/(client_secret|refresh_token|access_token|reset_token|resetToken|password|token|secret)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/(DATABASE_URL|database_url)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function safeSubject(subject: string | null | undefined): string {
+  return safeLogText(subject || "(no subject)", 160);
 }
 
 async function findExistingForTarget(target: EntityTarget, source: MailExtractionSource) {
@@ -280,7 +315,7 @@ async function main(): Promise<void> {
         duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
-        subject: mail.subject?.slice(0, 80) ?? "(no subject)",
+        subject: safeSubject(mail.subject),
         mailId: mail.id,
       });
       continue;
@@ -297,7 +332,7 @@ async function main(): Promise<void> {
         duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
-        subject: mail.subject?.slice(0, 80) ?? "(no subject)",
+        subject: safeSubject(mail.subject),
         mailId: mail.id,
       });
       continue;
@@ -317,7 +352,7 @@ async function main(): Promise<void> {
         duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
-        subject: mail.subject?.slice(0, 80) ?? "(no subject)",
+        subject: safeSubject(mail.subject),
         mailId: mail.id,
         entityId: result.id,
       });
@@ -332,8 +367,11 @@ async function main(): Promise<void> {
         duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
-        subject: mail.subject?.slice(0, 80) ?? "(no subject)",
+        subject: safeSubject(mail.subject),
         mailId: mail.id,
+        errorName: safeErrorName(error),
+        errorCode: safeErrorCode(error),
+        errorMessage: safeErrorMessage(error),
       });
     }
   }
