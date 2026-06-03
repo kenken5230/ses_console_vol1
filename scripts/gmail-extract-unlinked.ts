@@ -11,7 +11,7 @@ import {
   findExistingProjectForSenderSubject,
 } from "../lib/gmail-extract-entities";
 import { buildExtractionBodyText } from "../lib/gmail-message-body";
-import { extractFromMail, type MailExtractionSource } from "./gmail-extraction";
+import { extractFromMail, formatDate, personDisplayName, type MailExtraction, type MailExtractionSource } from "./gmail-extraction";
 
 type ExtractTarget = "all" | "project" | "person";
 type EntityTarget = "project" | "person";
@@ -189,7 +189,47 @@ function safeLogText(value: string | null | undefined, maxLength: number): strin
 }
 
 function safeSubject(subject: string | null | undefined): string {
-  return safeLogText(subject || "(no subject)", 160);
+  return safeLogText(subject || "(no subject)", 120);
+}
+
+function shortId(value: string | null | undefined): string {
+  return value ? value.slice(0, 8) : "";
+}
+
+function qualityColumns(extraction: MailExtraction, mail: CandidateMail) {
+  if (extraction.target === "person") {
+    return {
+      extractedName: extraction.name ?? extraction.initials ?? "",
+      finalName: personDisplayName(mail.id, extraction.name, extraction.initials),
+      nameConfidence: extraction.nameConfidence,
+      needsReview: extraction.needsReview,
+      reviewReasons: extraction.reviewReasons.join(", "),
+      roleHeadline: extraction.roleHeadline ?? "",
+      age: extraction.age ?? "",
+      price: extraction.desiredUnitPrice ?? "",
+      availableFrom: formatDate(extraction.availableFrom) ?? "",
+      skillCount: extraction.skills.length,
+      skills: extraction.skills.slice(0, 6).join(", "),
+      classificationWarning: extraction.classificationWarning ?? "",
+      wouldNeedsReview: extraction.needsReview ? "yes" : "",
+    };
+  }
+
+  return {
+    extractedName: "",
+    finalName: extraction.title,
+    nameConfidence: "",
+    needsReview: extraction.needsReview,
+    reviewReasons: extraction.needsReview ? extraction.missingFields.join(", ") : "",
+    roleHeadline: "",
+    age: "",
+    price: extraction.unitPriceMax ?? "",
+    availableFrom: formatDate(extraction.startMonth) ?? "",
+    skillCount: extraction.requiredSkills.length + extraction.preferredSkills.length + extraction.usedTechnologies.length,
+    skills: extraction.requiredSkills.slice(0, 6).join(", "),
+    classificationWarning: "",
+    wouldNeedsReview: extraction.needsReview ? "yes" : "",
+  };
 }
 
 async function findExistingForTarget(target: EntityTarget, source: MailExtractionSource) {
@@ -286,6 +326,7 @@ async function main(): Promise<void> {
     includeProcessed,
     fetched: mails.length,
     wouldCreate: 0,
+    wouldNeedsReview: 0,
     created: 0,
     updated: 0,
     skipped: 0,
@@ -312,28 +353,31 @@ async function main(): Promise<void> {
         target: entityTarget,
         category: mail.category,
         duplicateCandidate,
-        duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
+        duplicateCandidateEntityId: shortId(sameSenderSubjectCandidate?.id),
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
         subject: safeSubject(mail.subject),
-        mailId: mail.id,
+        mailId: shortId(mail.id),
+        ...qualityColumns(extraction, mail),
       });
       continue;
     }
 
     if (!apply) {
       summary.wouldCreate += 1;
+      if (extraction.needsReview) summary.wouldNeedsReview += 1;
       rows.push({
         action: "would_create",
         reason: extraction.needsReview ? "needs_review" : "ok",
         target: entityTarget,
         category: mail.category,
         duplicateCandidate,
-        duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
+        duplicateCandidateEntityId: shortId(sameSenderSubjectCandidate?.id),
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
         subject: safeSubject(mail.subject),
-        mailId: mail.id,
+        mailId: shortId(mail.id),
+        ...qualityColumns(extraction, mail),
       });
       continue;
     }
@@ -349,12 +393,13 @@ async function main(): Promise<void> {
         target: entityTarget,
         category: mail.category,
         duplicateCandidate,
-        duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
+        duplicateCandidateEntityId: shortId(sameSenderSubjectCandidate?.id),
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
         subject: safeSubject(mail.subject),
-        mailId: mail.id,
-        entityId: result.id,
+        mailId: shortId(mail.id),
+        entityId: shortId(result.id),
+        ...qualityColumns(extraction, mail),
       });
     } catch (error) {
       summary.failed += 1;
@@ -364,14 +409,15 @@ async function main(): Promise<void> {
         target: entityTarget,
         category: mail.category,
         duplicateCandidate,
-        duplicateCandidateEntityId: sameSenderSubjectCandidate?.id ?? "",
+        duplicateCandidateEntityId: shortId(sameSenderSubjectCandidate?.id),
         bodyTextLength,
         missing: extraction.missingFields.join(", "),
         subject: safeSubject(mail.subject),
-        mailId: mail.id,
+        mailId: shortId(mail.id),
         errorName: safeErrorName(error),
         errorCode: safeErrorCode(error),
         errorMessage: safeErrorMessage(error),
+        ...qualityColumns(extraction, mail),
       });
     }
   }
