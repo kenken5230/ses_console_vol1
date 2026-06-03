@@ -23,6 +23,9 @@ type PersonForRemediation = {
     id: string;
     subject: string | null;
     externalMessageId: string;
+    sourceAccount: {
+      provider: string;
+    };
   } | null;
   skills: Array<{ skillName: string }>;
 };
@@ -139,6 +142,7 @@ async function getPrisma(): Promise<PrismaClient> {
 
 function buildCandidate(person: PersonForRemediation): RemediationCandidate | null {
   if (!person.name?.trim()) return null;
+  if (person.sourceMail?.sourceAccount.provider !== "GMAIL") return null;
 
   const skills = person.skills.map((skill) => skill.skillName);
   const analysis = analyzePersonNameCandidate({
@@ -204,6 +208,15 @@ async function applyCandidate(candidate: RemediationCandidate): Promise<"updated
       where: {
         id: person.id,
         sourceMailId: { not: null },
+        sourceMail: {
+          is: {
+            sourceAccount: {
+              is: {
+                provider: "GMAIL",
+              },
+            },
+          },
+        },
         status: { not: "ARCHIVED" },
         name: person.name,
       },
@@ -264,6 +277,15 @@ async function main(): Promise<void> {
   const persons = await db.person.findMany({
     where: {
       sourceMailId: { not: null },
+      sourceMail: {
+        is: {
+          sourceAccount: {
+            is: {
+              provider: "GMAIL",
+            },
+          },
+        },
+      },
       status: { not: "ARCHIVED" },
       name: { not: null },
     },
@@ -280,6 +302,11 @@ async function main(): Promise<void> {
           id: true,
           subject: true,
           externalMessageId: true,
+          sourceAccount: {
+            select: {
+              provider: true,
+            },
+          },
         },
       },
       skills: {
