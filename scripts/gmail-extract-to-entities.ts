@@ -54,6 +54,16 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
+function truncateText(value: string, maxLength: number): string {
+  return value.length > maxLength ? value.slice(0, maxLength) : value;
+}
+
+function nullableText(value: string | null | undefined, maxLength: number): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return truncateText(trimmed, maxLength);
+}
+
 function normalizeSubjectForDedupe(value: string | null | undefined): string | null {
   const normalized = value?.replace(/\s+/g, " ").trim();
   return normalized || null;
@@ -413,6 +423,28 @@ async function createPersonFromExtraction(
   mail: MailExtractionSource,
   extraction: PersonExtraction,
 ): Promise<ExtractActionResult> {
+  const name = nullableText(extraction.name, 160);
+  const initials = nullableText(extraction.initials, 40);
+  const missingPersonName = "要員名";
+  const missingFields = name || extraction.missingFields.includes(missingPersonName)
+    ? extraction.missingFields
+    : [...extraction.missingFields, missingPersonName];
+  const reviewReasons = unique([
+    ...extraction.reviewReasons,
+    !name ? "PERSON_NAME_LOW_CONFIDENCE" : "",
+    !name && initials ? "PERSON_NAME_INITIALS_ONLY" : "",
+  ]);
+  const normalizedExtraction: PersonExtraction = {
+    ...extraction,
+    name,
+    initials,
+    remotePreference: nullableText(extraction.remotePreference, 120),
+    nationality: nullableText(extraction.nationality, 80),
+    needsReview: extraction.needsReview || !name || extraction.missingFields.includes(missingPersonName) || reviewReasons.length > 0,
+    missingFields,
+    reviewReasons,
+  };
+
   const existing = await findExistingPersonForMail(tx, mail.id);
   if (existing) {
     return { entity: "person", action: "skipped", id: existing.id, reason: existing.source };
@@ -420,39 +452,42 @@ async function createPersonFromExtraction(
 
   const senderSubjectExisting = await findExistingPersonForSenderSubject(tx, mail);
   if (senderSubjectExisting) {
-    await createExtractionResult(tx, { mailId: mail.id, extraction, targetId: senderSubjectExisting.id });
+    await createExtractionResult(tx, { mailId: mail.id, extraction: normalizedExtraction, targetId: senderSubjectExisting.id });
     await createMailEntityLink(tx, { mailId: mail.id, entityType: "PERSON", entityId: senderSubjectExisting.id });
     return { entity: "person", action: "skipped", id: senderSubjectExisting.id, reason: senderSubjectExisting.source };
   }
 
-  const company = await findOrCreateCompany(tx, extraction.ownerCompanyName);
-  const contact = company ? await findOrCreateContact(tx, company.id, extraction.contactName, extraction.contactEmail) : null;
+  const company = await findOrCreateCompany(tx, normalizedExtraction.ownerCompanyName);
+  const contact = company ? await findOrCreateContact(tx, company.id, normalizedExtraction.contactName, normalizedExtraction.contactEmail) : null;
   const person = await tx.person.create({
     data: {
       personCode: personCode(mail.id),
-      name: extraction.name || mail.subject || "Gmail imported person",
-      initials: extraction.initials,
+      name: normalizedExtraction.name,
+      initials: normalizedExtraction.initials,
       sourceMailId: mail.id,
       ownerCompanyId: company?.id ?? null,
       ownerContactId: contact?.id ?? null,
       summary: mail.subject,
-      careerSummary: extraction.careerSummary,
-      desiredUnitPrice: extraction.desiredUnitPrice,
-      availableFrom: extraction.availableFrom,
-      preferredLocation: extraction.preferredLocation,
-      remotePreference: extraction.remotePreference,
-      age: extraction.age,
-      nationality: extraction.nationality,
-      status: extraction.status,
+      careerSummary: normalizedExtraction.careerSummary,
+      desiredUnitPrice: normalizedExtraction.desiredUnitPrice,
+      availableFrom: normalizedExtraction.availableFrom,
+      preferredLocation: normalizedExtraction.preferredLocation,
+      remotePreference: normalizedExtraction.remotePreference,
+      age: normalizedExtraction.age,
+      nationality: normalizedExtraction.nationality,
+      status: normalizedExtraction.status,
     },
   });
 
-  const skillRows = unique(extraction.skills).map((skillName) => ({ personId: person.id, skillName }));
+  const skillRows = unique(normalizedExtraction.skills)
+    .map((skillName) => nullableText(skillName, 160))
+    .filter((skillName): skillName is string => Boolean(skillName))
+    .map((skillName) => ({ personId: person.id, skillName }));
   if (skillRows.length) {
     await tx.personSkill.createMany({ data: skillRows, skipDuplicates: true });
   }
 
-  await createExtractionResult(tx, { mailId: mail.id, extraction, targetId: person.id });
+  await createExtractionResult(tx, { mailId: mail.id, extraction: normalizedExtraction, targetId: person.id });
   await createMailEntityLink(tx, { mailId: mail.id, entityType: "PERSON", entityId: person.id });
 
   return { entity: "person", action: "created", id: person.id };

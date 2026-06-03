@@ -53,12 +53,19 @@ export type PersonExtraction = {
   target: "person";
   name: string | null;
   initials: string | null;
+  nameConfidence: "HIGH" | "MEDIUM" | "LOW";
+  nameSource: "label" | "initials" | "none";
+  rejectedNameCandidate: string | null;
   ownerCompanyName: string | null;
   desiredUnitPrice: number | null;
   availableFrom: Date | null;
   skills: string[];
+  skillCountBeforeLimit: number;
+  skillOverExtraction: boolean;
   careerSummary: string | null;
   processText: string | null;
+  roleHeadline: string | null;
+  classificationWarning: string | null;
   preferredLocation: string | null;
   remotePreference: string | null;
   age: number | null;
@@ -69,6 +76,7 @@ export type PersonExtraction = {
   confidence: string;
   needsReview: boolean;
   missingFields: string[];
+  reviewReasons: string[];
   raw: Record<string, unknown>;
 };
 
@@ -140,47 +148,69 @@ const majorCities: Record<string, string> = {
   甲府: "山梨県",
 };
 
-const skillKeywords = [
-  "JavaScript",
-  "TypeScript",
-  "React",
-  "Next.js",
-  "Vue",
-  "Nuxt",
-  "Node",
-  "Java",
-  "Spring",
-  "PHP",
-  "Laravel",
-  "Python",
-  "Django",
-  "FastAPI",
-  "Go",
-  "C#",
-  "VB.NET",
-  "C++",
-  "AWS",
-  "Azure",
-  "GCP",
-  "Oracle",
-  "MySQL",
-  "PostgreSQL",
-  "SQL",
-  "Linux",
-  "Windows",
-  "VMware",
-  "Terraform",
-  "Flutter",
-  "Kotlin",
-  "Swift",
-  "SAP",
-  "PMO",
-  "PM",
-  "UiPath",
-  "VBA",
-  "Access",
-  "Figma",
-  "QA",
+const skillDefinitions: Array<{ canonical: string; aliases: string[] }> = [
+  { canonical: "JavaScript", aliases: ["JavaScript", "JS"] },
+  { canonical: "TypeScript", aliases: ["TypeScript", "TS"] },
+  { canonical: "React", aliases: ["React", "React.js", "Reactjs"] },
+  { canonical: "Next.js", aliases: ["Next.js", "Nextjs", "Next"] },
+  { canonical: "Vue", aliases: ["Vue", "Vue.js", "Vuejs"] },
+  { canonical: "Nuxt", aliases: ["Nuxt", "Nuxt.js", "Nuxtjs"] },
+  { canonical: "Node", aliases: ["Node", "Node.js", "Nodejs"] },
+  { canonical: "Java", aliases: ["Java"] },
+  { canonical: "Spring", aliases: ["Spring", "Spring Boot"] },
+  { canonical: "PHP", aliases: ["PHP"] },
+  { canonical: "Laravel", aliases: ["Laravel"] },
+  { canonical: "Python", aliases: ["Python"] },
+  { canonical: "Django", aliases: ["Django"] },
+  { canonical: "FastAPI", aliases: ["FastAPI"] },
+  { canonical: "Go", aliases: ["Go", "Golang"] },
+  { canonical: "C#", aliases: ["C#", "C#.NET", "C# .NET"] },
+  { canonical: ".NET", aliases: [".NET", "C#.NET", "VB.NET", "ASP.NET"] },
+  { canonical: "VB.NET", aliases: ["VB.NET", "VB .NET"] },
+  { canonical: "C++", aliases: ["C++"] },
+  { canonical: "AWS", aliases: ["AWS"] },
+  { canonical: "Azure", aliases: ["Azure"] },
+  { canonical: "GCP", aliases: ["GCP", "Google Cloud"] },
+  { canonical: "Oracle", aliases: ["Oracle"] },
+  { canonical: "MySQL", aliases: ["MySQL"] },
+  { canonical: "PostgreSQL", aliases: ["PostgreSQL", "Postgres", "Postgre"] },
+  { canonical: "SQL", aliases: ["SQL"] },
+  { canonical: "Linux", aliases: ["Linux"] },
+  { canonical: "Windows", aliases: ["Windows"] },
+  { canonical: "VMware", aliases: ["VMware"] },
+  { canonical: "Terraform", aliases: ["Terraform"] },
+  { canonical: "Flutter", aliases: ["Flutter"] },
+  { canonical: "Kotlin", aliases: ["Kotlin"] },
+  { canonical: "Swift", aliases: ["Swift"] },
+  { canonical: "SAP", aliases: ["SAP"] },
+  { canonical: "PMO", aliases: ["PMO"] },
+  { canonical: "PM", aliases: ["PM", "Project Manager"] },
+  { canonical: "UiPath", aliases: ["UiPath"] },
+  { canonical: "VBA", aliases: ["VBA"] },
+  { canonical: "Access", aliases: ["Access"] },
+  { canonical: "Figma", aliases: ["Figma"] },
+  { canonical: "QA", aliases: ["QA"] },
+];
+
+const skillKeywords = skillDefinitions.map((definition) => definition.canonical);
+const personSkillLimit = 12;
+const projectLikeSubjectPattern =
+  /案件のご紹介|熱い案件|急募案件|募集案件|参画案件|案件情報|作業内容|商流|面談|精算|勤務地|単価|募集人数/;
+const lowConfidenceNamePattern =
+  /\[SES配信\]|ご紹介です|案件|熱い案件|急募|募集|エンジニアのご紹介|要件定義|運用保守|弊社フリーランス|Laravel,\s*CakePHP|React\/Vue/i;
+const roleHeadlinePatterns: Array<{ pattern: RegExp; value: string }> = [
+  { pattern: /フルスタックエンジニア/i, value: "フルスタックエンジニア" },
+  { pattern: /フロントエンドエンジニア|フロントエンド/i, value: "フロントエンドエンジニア" },
+  { pattern: /バックエンドエンジニア|バックエンド/i, value: "バックエンドエンジニア" },
+  { pattern: /PHPエンジニア|PHP/i, value: "PHPエンジニア" },
+  { pattern: /\.NET|C#\.?NET|VB\.?NET/i, value: ".NETエンジニア" },
+  { pattern: /Javaエンジニア|Java(?!Script)/i, value: "Javaエンジニア" },
+  { pattern: /インフラSE|インフラエンジニア|インフラ/i, value: "インフラSE" },
+  { pattern: /PM\/PL|PM・PL|PM、PL/i, value: "PM/PL" },
+  { pattern: /PMO/i, value: "PMO" },
+  { pattern: /SAP/i, value: "SAP" },
+  { pattern: /Webディレクター|WEBディレクター/i, value: "Webディレクター" },
+  { pattern: /SE/i, value: "SE" },
 ];
 
 function clean(value: string | null | undefined): string | null {
@@ -190,7 +220,9 @@ function clean(value: string | null | undefined): string | null {
 
 function mailText(mail: MailExtractionSource): string {
   const bodyText = buildExtractionBodyText(mail);
-  return [mail.subject, bodyText].filter(Boolean).join("\n");
+  const subject = clean(mail.subject);
+  const body = clean(bodyText);
+  return [subject, body && body !== subject ? body : null].filter(Boolean).join("\n");
 }
 
 function cleanSubject(subject: string | null): string {
@@ -202,6 +234,16 @@ function cleanSubject(subject: string | null): string {
     .trim();
 
   return cleaned.slice(0, 255) || "Gmail取込案件";
+}
+
+function cleanPersonSubject(subject: string | null): string {
+  return cleanSubject(subject)
+    .replace(/のご紹介です[！!]?.*$/i, "")
+    .replace(/ご紹介です[！!]?.*$/i, "")
+    .replace(/[【[].*?[】\]]/g, " ")
+    .replace(/[、。].*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function valueAfterLabel(text: string, labels: string[]): string | null {
@@ -222,9 +264,151 @@ function unique(values: Array<string | null | undefined>): string[] {
   return Array.from(new Set(values.map((value) => clean(value)).filter((value): value is string => Boolean(value))));
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsAsciiSkillAlias(text: string, alias: string): boolean {
+  const escaped = escapeRegExp(alias);
+  const pattern = new RegExp(`(^|[^A-Za-z0-9+#.])${escaped}($|[^A-Za-z0-9+#.])`, "i");
+  return pattern.test(text);
+}
+
+function containsSkillAlias(text: string, alias: string): boolean {
+  if (/^[A-Za-z0-9+#.\s]+$/.test(alias)) {
+    return containsAsciiSkillAlias(text, alias);
+  }
+
+  return text.toLowerCase().includes(alias.toLowerCase());
+}
+
 function extractSkills(text: string): string[] {
-  const lower = text.toLowerCase();
-  return skillKeywords.filter((skill) => lower.includes(skill.toLowerCase()));
+  return skillDefinitions
+    .filter((definition) => definition.aliases.some((alias) => containsSkillAlias(text, alias)))
+    .map((definition) => definition.canonical);
+}
+
+function extractPrioritizedPersonSkills(text: string): { skills: string[]; rawSkillCount: number; overExtraction: boolean } {
+  const focusedText = [
+    blockAfterLabel(text, ["スキル", "経験スキル", "保有スキル", "得意技術", "技術"]),
+    blockAfterLabel(text, ["経歴", "経験", "職務経歴"]),
+    text,
+  ].filter((value): value is string => Boolean(value));
+  const rawSkills = unique(focusedText.flatMap((value) => extractSkills(value)));
+
+  return {
+    skills: rawSkills.slice(0, personSkillLimit),
+    rawSkillCount: rawSkills.length,
+    overExtraction: rawSkills.length > personSkillLimit,
+  };
+}
+
+function extractInitials(text: string, subject: string | null): string | null {
+  const labeled = valueAfterLabel(text, ["イニシャル", "initial"]);
+  if (labeled) return labeled.slice(0, 40);
+
+  const subjectInitials = subject?.match(/^\s*([A-Z]{1,3}(?:[.,][A-Z]{1,3})?)\s*(?=[\/（(]|$)/)?.[1];
+  if (subjectInitials && /[\/（(]\s*\d{2}\s*歳/.test(subject ?? "")) return subjectInitials.replace(",", ".");
+
+  const bodyInitials = text.match(/(?:^|\n)\s*([A-Z]{1,3}(?:[.,][A-Z]{1,3})?)\s*[\/（(]\s*\d{2}\s*歳/)?.[1];
+  return bodyInitials?.replace(",", ".") ?? null;
+}
+
+function extractRoleHeadline(text: string, subject: string | null): string | null {
+  const labeled = valueAfterLabel(text, ["経験職種", "得意領域", "職種", "ポジション"]);
+  const candidates = unique([labeled, cleanPersonSubject(subject), text.slice(0, 240)]);
+
+  for (const candidate of candidates) {
+    for (const role of roleHeadlinePatterns) {
+      if (role.pattern.test(candidate)) return role.value;
+    }
+  }
+
+  return null;
+}
+
+function reviewConfidenceFromQuality(baseConfidence: string, nameConfidence: PersonExtraction["nameConfidence"], needsReview: boolean): string {
+  const parsed = Number(baseConfidence);
+  const base = Number.isFinite(parsed) ? parsed : 0.6;
+  const penalty = nameConfidence === "LOW" ? 0.2 : nameConfidence === "MEDIUM" ? 0.08 : 0;
+  const reviewPenalty = needsReview ? 0.05 : 0;
+  return Math.max(0.35, Math.min(0.9, base - penalty - reviewPenalty)).toFixed(4);
+}
+
+export function personPlaceholderName(mailId: string): string {
+  return `氏名未取得（GMAIL-${mailId.slice(0, 8).toUpperCase()}）`;
+}
+
+export function personDisplayName(mailId: string, name: string | null | undefined, initials: string | null | undefined): string {
+  return clean(name) ?? clean(initials) ?? personPlaceholderName(mailId);
+}
+
+export function analyzePersonNameCandidate(input: {
+  candidate: string | null;
+  initials: string | null;
+  subject: string | null;
+  skills: string[];
+}): {
+  acceptedName: string | null;
+  rejectedNameCandidate: string | null;
+  nameConfidence: PersonExtraction["nameConfidence"];
+  nameSource: PersonExtraction["nameSource"];
+  reviewReasons: string[];
+} {
+  const candidate = clean(input.candidate);
+  const subject = clean(input.subject);
+  const reviewReasons: string[] = [];
+
+  if (!candidate) {
+    if (input.initials) {
+      return {
+        acceptedName: null,
+        rejectedNameCandidate: null,
+        nameConfidence: "MEDIUM",
+        nameSource: "initials",
+        reviewReasons: ["PERSON_NAME_INITIALS_ONLY"],
+      };
+    }
+
+    return {
+      acceptedName: null,
+      rejectedNameCandidate: null,
+      nameConfidence: "LOW",
+      nameSource: "none",
+      reviewReasons: ["PERSON_NAME_LOW_CONFIDENCE"],
+    };
+  }
+
+  const candidateSkills = extractSkills(candidate);
+  const looksLikeSubject =
+    Boolean(subject && candidate.length >= 20 && (subject.includes(candidate) || candidate.includes(subject.slice(0, 24)))) ||
+    lowConfidenceNamePattern.test(candidate) ||
+    candidate.length >= 40 ||
+    candidateSkills.length >= 3;
+
+  if (looksLikeSubject) {
+    reviewReasons.push("PERSON_NAME_LOW_CONFIDENCE", "PERSON_NAME_FROM_SUBJECT_REJECTED");
+    if (candidateSkills.length >= 3) reviewReasons.push("PERSON_SKILLS_OVER_EXTRACTED");
+    return {
+      acceptedName: null,
+      rejectedNameCandidate: candidate,
+      nameConfidence: "LOW",
+      nameSource: "none",
+      reviewReasons: unique(reviewReasons),
+    };
+  }
+
+  return {
+    acceptedName: candidate.slice(0, 160),
+    rejectedNameCandidate: null,
+    nameConfidence: "HIGH",
+    nameSource: "label",
+    reviewReasons: [],
+  };
+}
+
+function classificationWarningFromSubject(subject: string | null): string | null {
+  return projectLikeSubjectPattern.test(subject ?? "") ? "PERSON_SUBJECT_LOOKS_LIKE_PROJECT" : null;
 }
 
 function parseMoneyRange(text: string, labels: string[]): { min: number | null; max: number | null; text: string | null } {
@@ -422,30 +606,59 @@ export function extractProjectFromMail(mail: MailExtractionSource): ProjectExtra
 export function extractPersonFromMail(mail: MailExtractionSource): PersonExtraction {
   const text = mailText(mail);
   const subject = cleanSubject(mail.subject);
-  const name = valueAfterLabel(text, ["氏名", "名前", "要員名", "人材名"]);
-  const initials = valueAfterLabel(text, ["イニシャル", "initial"]) ?? clean(subject.match(/[（(]([A-Z]\.?[A-Z]?|[A-Z]\.[A-Z]\.)/)?.[1]);
-  const skills = extractSkills(text);
+  const nameCandidate = valueAfterLabel(text, ["氏名", "名前", "要員名", "人材名"]);
+  const initials = extractInitials(text, mail.subject);
+  const skillResult = extractPrioritizedPersonSkills(text);
+  const skills = skillResult.skills;
   const price = parseMoneyRange(text, ["希望単価", "単価", "金額"]);
   const preferredLocation = valueAfterLabel(text, ["希望勤務地", "勤務地", "最寄", "場所"]);
   const availableFrom = parseStartMonth(text);
-  const careerSummary = blockAfterLabel(text, ["経歴", "経験", "職務経歴", "スキル"]);
+  const careerSummaryBlock = blockAfterLabel(text, ["経歴", "経験", "職務経歴"]);
+  const roleHeadline = extractRoleHeadline(text, mail.subject);
+  const careerSummary = careerSummaryBlock ?? roleHeadline;
+  const classificationWarning = classificationWarningFromSubject(mail.subject);
+  const nameQuality = analyzePersonNameCandidate({
+    candidate: nameCandidate,
+    initials,
+    subject: mail.subject,
+    skills,
+  });
   const missingFields = [
-    name || initials ? null : "要員名",
+    nameQuality.acceptedName || initials ? null : "要員名",
     skills.length ? null : "スキル",
     price.max ? null : "希望単価",
     availableFrom ? null : "稼働開始",
   ].filter((value): value is string => Boolean(value));
+  const reviewReasons = unique([
+    ...nameQuality.reviewReasons,
+    classificationWarning,
+    roleHeadline && !careerSummaryBlock ? "PERSON_ROLE_FROM_SUBJECT_ONLY" : null,
+    skillResult.overExtraction ? "PERSON_SKILLS_OVER_EXTRACTED" : null,
+  ]);
+  const needsReview =
+    missingFields.length > 1 ||
+    nameQuality.nameConfidence !== "HIGH" ||
+    Boolean(classificationWarning) ||
+    skillResult.overExtraction;
+  const baseConfidence = confidenceFromMissing(4, missingFields.length);
 
   return {
     target: "person",
-    name,
+    name: nameQuality.acceptedName,
     initials,
-    ownerCompanyName: parseCompany(text, ["所属会社", "所属", "会社名", "会社"]),
+    nameConfidence: nameQuality.nameConfidence,
+    nameSource: nameQuality.nameSource,
+    rejectedNameCandidate: nameQuality.rejectedNameCandidate,
+    ownerCompanyName: parseCompany(text, ["所属会社", "所属"]),
     desiredUnitPrice: price.max,
     availableFrom,
     skills,
+    skillCountBeforeLimit: skillResult.rawSkillCount,
+    skillOverExtraction: skillResult.overExtraction,
     careerSummary,
     processText: valueAfterLabel(text, ["対応工程", "工程"]),
+    roleHeadline,
+    classificationWarning,
     preferredLocation,
     remotePreference: valueAfterLabel(text, ["リモート", "リモート可否"]) ?? (parseRemoteType(text) !== "UNKNOWN" ? parseRemoteType(text) : null),
     age: parseAge(text),
@@ -453,10 +666,22 @@ export function extractPersonFromMail(mail: MailExtractionSource): PersonExtract
     status: "AVAILABLE",
     contactName: parseContactName(mail, text),
     contactEmail: parseContactEmail(mail, text),
-    confidence: confidenceFromMissing(4, missingFields.length),
-    needsReview: missingFields.length > 1,
+    confidence: reviewConfidenceFromQuality(baseConfidence, nameQuality.nameConfidence, needsReview),
+    needsReview,
     missingFields,
-    raw: { subject: mail.subject, fallbackTitle: subject, unitPriceText: price.text },
+    reviewReasons,
+    raw: {
+      subject: mail.subject,
+      fallbackTitle: subject,
+      unitPriceText: price.text,
+      nameCandidate,
+      rejectedNameCandidate: nameQuality.rejectedNameCandidate,
+      nameConfidence: nameQuality.nameConfidence,
+      reviewReasons,
+      roleHeadline,
+      skillCountBeforeLimit: skillResult.rawSkillCount,
+      classificationWarning,
+    },
   };
 }
 

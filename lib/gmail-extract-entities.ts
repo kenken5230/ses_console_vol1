@@ -437,14 +437,20 @@ export async function createPersonFromExtraction(
   const missingFields = name || extraction.missingFields.includes(missingPersonName)
     ? extraction.missingFields
     : [...extraction.missingFields, missingPersonName];
+  const reviewReasons = unique([
+    ...extraction.reviewReasons,
+    !name ? "PERSON_NAME_LOW_CONFIDENCE" : "",
+    !name && initials ? "PERSON_NAME_INITIALS_ONLY" : "",
+  ]);
   const normalizedExtraction: PersonExtraction = {
     ...extraction,
     name,
     initials,
     remotePreference: nullableText(extraction.remotePreference, 120),
     nationality: nullableText(extraction.nationality, 80),
-    needsReview: extraction.needsReview || !name || extraction.missingFields.includes(missingPersonName),
+    needsReview: extraction.needsReview || !name || extraction.missingFields.includes(missingPersonName) || reviewReasons.length > 0,
     missingFields,
+    reviewReasons,
   };
 
   const existing = await findExistingPersonForMail(tx, mail.id);

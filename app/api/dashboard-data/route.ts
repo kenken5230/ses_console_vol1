@@ -270,10 +270,32 @@ function makeMailItem(mail: any): DetailItem {
 }
 
 function hasNeedsReviewExtraction(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
-  const extractionResults = sourceMail?.extractionResults || [];
-  return extractionResults.some((result: any) => {
+  return matchingExtractionResults(sourceMail, targetType, targetId).some((result: any) => {
     return result.targetType === targetType && result.targetId === targetId && result.reviewStatus === "NEEDS_REVIEW";
   });
+}
+
+function matchingExtractionResults(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
+  const extractionResults = sourceMail?.extractionResults || [];
+  return extractionResults.filter((result: any) => {
+    return result.targetType === targetType && result.targetId === targetId;
+  });
+}
+
+function latestNormalizedExtraction(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
+  const results = matchingExtractionResults(sourceMail, targetType, targetId);
+  return results[0]?.normalizedResult && typeof results[0].normalizedResult === "object"
+    ? results[0].normalizedResult
+    : {};
+}
+
+function normalizedStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+}
+
+function missingPersonDisplayName(person: any) {
+  const id = person.sourceMail?.id || person.sourceMailId || person.id;
+  return `氏名未取得（GMAIL-${String(id).slice(0, 8).toUpperCase()}）`;
 }
 
 function formatDateTime(value: Date | null | undefined) {
@@ -575,13 +597,19 @@ function mapPerson(person: any) {
   const unitPrice = person.desiredUnitPrice ? `${person.desiredUnitPrice}万円` : "未定";
   const ownerCompanyTradeStatus = person.ownerCompany?.tradeStatus || "UNKNOWN";
   const needsReview = hasNeedsReviewExtraction(person.sourceMail, "PERSON", person.id);
+  const normalizedExtraction = latestNormalizedExtraction(person.sourceMail, "PERSON", person.id);
+  const reviewReasons = normalizedStringArray(normalizedExtraction.reviewReasons);
+  const nameConfidence = typeof normalizedExtraction.nameConfidence === "string" ? normalizedExtraction.nameConfidence : "";
+  const roleHeadline = typeof normalizedExtraction.roleHeadline === "string" ? normalizedExtraction.roleHeadline : "";
+  const careerOrRole = person.careerSummary || roleHeadline || EMPTY_VALUE;
   const detailGroups: DetailGroup[] = [
     {
       title: "基本情報",
       items: [
         makeTextItem("状態", status, true),
         makeTextItem("年齢", person.age ? `${person.age}歳` : EMPTY_VALUE),
-        makeTextItem("国籍", person.nationality || EMPTY_VALUE)
+        makeTextItem("国籍", person.nationality || EMPTY_VALUE),
+        makeTextItem("人名confidence", nameConfidence || EMPTY_VALUE)
       ]
     },
     {
@@ -607,10 +635,17 @@ function mapPerson(person: any) {
     {
       title: "スキル",
       items: [
-        makeBlockItem("経験職種", person.careerSummary || person.summary),
+        makeBlockItem("経験職種", careerOrRole),
         makeTextItem("対応工程", EMPTY_VALUE),
         makeTagsItem("使用技術", skillNames),
-        makeBlockItem("得意領域", person.summary || person.careerSummary)
+        makeBlockItem("得意領域", roleHeadline || person.careerSummary || EMPTY_VALUE)
+      ]
+    },
+    {
+      title: "抽出品質",
+      items: [
+        makeTextItem("要確認", needsReview ? "要確認" : "通常"),
+        makeBlockItem("要確認理由", reviewReasons.join(" / ") || EMPTY_VALUE)
       ]
     },
     {
@@ -623,7 +658,7 @@ function mapPerson(person: any) {
     }
   ];
 
-  const displayName = person.name || person.initials || person.sourceMail?.subject || "未入力";
+  const displayName = person.name || person.initials || missingPersonDisplayName(person);
 
   return {
     id: person.personCode || person.id.slice(0, 8),
@@ -646,6 +681,9 @@ function mapPerson(person: any) {
     hasResult: ownerCompanyTradeStatus === "OK",
     hasTradeNg: ownerCompanyTradeStatus === "NG" || ownerCompanyTradeStatus === "SUSPENDED",
     needsReview,
+    nameConfidence,
+    reviewReasons,
+    roleHeadline,
     skills: skillsText,
     skillList: skillNames,
     createdAt,
@@ -766,7 +804,8 @@ export async function GET(request: Request) {
                 targetType: true,
                 targetId: true,
                 extractionType: true,
-                reviewStatus: true
+                reviewStatus: true,
+                normalizedResult: true
               }
             }
           }
@@ -802,7 +841,8 @@ export async function GET(request: Request) {
                 targetType: true,
                 targetId: true,
                 extractionType: true,
-                reviewStatus: true
+                reviewStatus: true,
+                normalizedResult: true
               }
             }
           }
@@ -838,7 +878,8 @@ export async function GET(request: Request) {
           select: {
             reviewStatus: true,
             targetType: true,
-            targetId: true
+            targetId: true,
+            normalizedResult: true
           }
         }
       }
