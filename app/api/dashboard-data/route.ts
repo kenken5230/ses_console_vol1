@@ -283,7 +283,11 @@ function matchingExtractionResults(sourceMail: any, targetType: "PROJECT" | "PER
 }
 
 function latestNormalizedExtraction(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
-  const results = matchingExtractionResults(sourceMail, targetType, targetId);
+  const results = matchingExtractionResults(sourceMail, targetType, targetId).sort((a: any, b: any) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
   return results[0]?.normalizedResult && typeof results[0].normalizedResult === "object"
     ? results[0].normalizedResult
     : {};
@@ -800,11 +804,13 @@ export async function GET(request: Request) {
             messageDate: true,
             receivedAt: true,
             extractionResults: {
+              orderBy: { createdAt: "desc" },
               select: {
                 targetType: true,
                 targetId: true,
                 extractionType: true,
                 reviewStatus: true,
+                createdAt: true,
                 normalizedResult: true
               }
             }
@@ -837,11 +843,13 @@ export async function GET(request: Request) {
             messageDate: true,
             receivedAt: true,
             extractionResults: {
+              orderBy: { createdAt: "desc" },
               select: {
                 targetType: true,
                 targetId: true,
                 extractionType: true,
                 reviewStatus: true,
+                createdAt: true,
                 normalizedResult: true
               }
             }
@@ -875,10 +883,12 @@ export async function GET(request: Request) {
         excludeReason: true,
         needsReview: true,
         extractionResults: {
+          orderBy: { createdAt: "desc" },
           select: {
             reviewStatus: true,
             targetType: true,
             targetId: true,
+            createdAt: true,
             normalizedResult: true
           }
         }
