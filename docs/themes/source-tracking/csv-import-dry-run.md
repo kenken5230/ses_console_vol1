@@ -255,7 +255,7 @@ Preview `SourceRecord`:
 - One preview record is built for each parsed CSV row.
 - `recordType` is `PROJECT` or `PERSON` for resolved rows, `UNKNOWN` for auto type conflicts, and `EXCLUDED` for skipped rows.
 - `recordHash` is a deterministic hash.
-- `rawRef` contains only a safe one-based CSV row index.
+- `rawRef` contains only safe row position metadata, including one-based CSV body row index and CSV row number.
 - `normalizedPayload` includes normalized field names, coverage, missing fields, and counts, but not raw values.
 - `redactedPreview` includes action, type signal, confidence, warning count, review reason count, and duplicate strength.
 - `status` is `NEW` for clean create rows, `NEEDS_REVIEW` for review rows, and `SKIPPED` for skipped rows.

@@ -229,6 +229,75 @@ function runCsvDryRunCliOutput(args: string[]) {
 }
 
 {
+  const csvText = [
+    "title,companyName,workContent,requiredSkills,unitPrice,startMonth,workLocation",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+  ].join("\n");
+  const report = buildCsvDryRunReport({
+    csvText,
+    type: "project",
+    fileIdentity: "synthetic-stable-hash.csv",
+    sourcePreview: true,
+  });
+  const preview = report.sourcePreview;
+  assert.ok(preview);
+  assert.equal(preview.sourceRecordSamples.length, 2);
+  assert.equal(preview.sourceRecordSamples[0].recordHash, preview.sourceRecordSamples[1].recordHash);
+  assert.deepEqual(preview.sourceRecordSamples.map((record) => record.rawRef), [
+    { rowIndex: 1, rowNumber: 2 },
+    { rowIndex: 2, rowNumber: 3 },
+  ]);
+
+  const output = JSON.stringify(report);
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Stable Project Alpha"), false);
+  assert.equal(output.includes("Stable Company One"), false);
+  assert.equal(output.includes("Stable work item"), false);
+}
+
+{
+  const original = [
+    "title,companyName,workContent,requiredSkills,unitPrice,startMonth,workLocation",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+    "Stable Project Beta,Stable Company Two,Stable build item,\"Java,SQL\",80,2026-08,Hybrid",
+  ].join("\n");
+  const reordered = [
+    "title,companyName,workContent,requiredSkills,unitPrice,startMonth,workLocation",
+    "Stable Project Beta,Stable Company Two,Stable build item,\"Java,SQL\",80,2026-08,Hybrid",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+  ].join("\n");
+  const originalPreview = buildCsvDryRunReport({
+    csvText: original,
+    type: "project",
+    fileIdentity: "synthetic-stable-hash.csv",
+    sourcePreview: true,
+  }).sourcePreview;
+  const reorderedPreview = buildCsvDryRunReport({
+    csvText: reordered,
+    type: "project",
+    fileIdentity: "synthetic-stable-hash.csv",
+    sourcePreview: true,
+  }).sourcePreview;
+  assert.ok(originalPreview);
+  assert.ok(reorderedPreview);
+
+  const originalHashes = originalPreview.sourceRecordSamples.map((record) => record.recordHash);
+  const reorderedHashes = reorderedPreview.sourceRecordSamples.map((record) => record.recordHash);
+  assert.deepEqual([...originalHashes].sort(), [...reorderedHashes].sort());
+  assert.equal(originalHashes[0], reorderedHashes[1]);
+  assert.equal(originalHashes[1], reorderedHashes[0]);
+  assert.deepEqual(originalPreview.sourceRecordSamples[0].rawRef, { rowIndex: 1, rowNumber: 2 });
+  assert.deepEqual(reorderedPreview.sourceRecordSamples[1].rawRef, { rowIndex: 2, rowNumber: 3 });
+
+  const output = JSON.stringify({ originalPreview, reorderedPreview });
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Stable Project Alpha"), false);
+  assert.equal(output.includes("Stable Project Beta"), false);
+  assert.equal(output.includes("Stable Company"), false);
+}
+
+{
   const report = buildCsvDryRunReport({ csvText: personCsv, type: "person", fileIdentity: "synthetic-persons.csv" });
   assert.equal(report.summary.effectiveTypes.person, 5);
   assert.ok(report.mappedColumns.some((column) => column.field === "name"));

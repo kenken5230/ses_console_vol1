@@ -234,6 +234,7 @@ type PreviewSourceRecord = {
   recordHash: string;
   rawRef: {
     rowIndex: number;
+    rowNumber: number;
   };
   normalizedPayload: {
     fieldNames: string[];
@@ -1029,9 +1030,10 @@ function buildPreviewSourceRecord(row: RowAssessment): PreviewSourceRecord {
 
   return {
     recordType: previewRecordType(row),
-    recordHash: fullHash(`csv-source-record:${row.rowNumber}:${row.rowHash}`),
+    recordHash: fullHash(`csv-source-record:${row.rowHash}`),
     rawRef: {
       rowIndex: Math.max(1, row.rowNumber - 1),
+      rowNumber: row.rowNumber,
     },
     normalizedPayload: {
       fieldNames,
