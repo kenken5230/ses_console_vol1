@@ -6,16 +6,26 @@ const maxRemediationLimit = 50;
 const defaultCountOnlyScanLimit = 1000;
 const maxScanLimit = 5000;
 const maxPreviewRows = 50;
+const maxBatchLimit = 500;
+const defaultChunkSize = maxRemediationLimit;
+const batchApplyConfirmation = "APPLY_GMAIL_PERSON_REMEDIATION";
 
 type PrismaClient = (typeof import("../lib/prisma"))["prisma"];
 
 let prismaClient: PrismaClient | null = null;
 
+type RunMode = "preview" | "scan-preview" | "count-only" | "apply" | "batch-preview" | "batch-apply";
+
 type Args = {
   apply: boolean;
   countOnly: boolean;
+  batchApply: boolean;
+  batchPreview: boolean;
   limit: number | null;
   scanLimit: number;
+  batchLimit: number | null;
+  chunkSize: number;
+  confirm: string | null;
 };
 
 type PersonForRemediation = {
@@ -42,7 +52,7 @@ type RemediationCandidate = {
 };
 
 type OutputRow = {
-  mode: "preview" | "scan-preview" | "count-only" | "apply";
+  mode: RunMode;
   status: "candidate" | "updated" | "skipped" | "failed";
   personId: string;
   personCode: string;
@@ -58,11 +68,30 @@ type OutputRow = {
   error?: string;
 };
 
+type PageCursor = {
+  createdAt: Date;
+  id: string;
+};
+
+type ChunkSummary = {
+  chunk: number;
+  scanned: number;
+  candidates: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+};
+
 function parseArgs(argv = process.argv.slice(2)): Args {
   let rawLimit: string | undefined;
   let rawScanLimit: string | undefined;
+  let rawBatchLimit: string | undefined;
+  let rawChunkSize: string | undefined;
+  let confirm: string | undefined;
   let apply = false;
   let countOnly = false;
+  let batchApply = false;
+  let batchPreview = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -73,6 +102,16 @@ function parseArgs(argv = process.argv.slice(2)): Args {
 
     if (arg === "--count-only") {
       countOnly = true;
+      continue;
+    }
+
+    if (arg === "--batch-apply") {
+      batchApply = true;
+      continue;
+    }
+
+    if (arg === "--batch-preview") {
+      batchPreview = true;
       continue;
     }
 
@@ -98,9 +137,89 @@ function parseArgs(argv = process.argv.slice(2)): Args {
       continue;
     }
 
+    if (arg === "--batch-limit") {
+      rawBatchLimit = argv[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--batch-limit=")) {
+      rawBatchLimit = arg.split("=")[1];
+      continue;
+    }
+
+    if (arg === "--chunk-size") {
+      rawChunkSize = argv[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--chunk-size=")) {
+      rawChunkSize = arg.split("=")[1];
+      continue;
+    }
+
+    if (arg === "--confirm") {
+      confirm = argv[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--confirm=")) {
+      confirm = arg.split("=")[1];
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${arg}`);
   }
 
+  const batchMode = batchApply || batchPreview;
+  if (batchApply && batchPreview) {
+    throw new Error("--batch-apply cannot be combined with --batch-preview.");
+  }
+  if (batchMode) {
+    if (apply || countOnly || rawLimit || rawScanLimit) {
+      throw new Error("--batch-preview/--batch-apply cannot be combined with --apply, --count-only, --limit, or --scan-limit.");
+    }
+
+    const batchLimit = rawBatchLimit ? Number(rawBatchLimit) : NaN;
+    if (!Number.isFinite(batchLimit) || batchLimit <= 0) {
+      throw new Error(`Missing required --batch-limit=N for batch mode. Max is ${maxBatchLimit}.`);
+    }
+    if (batchLimit > maxBatchLimit) {
+      throw new Error(`--batch-limit must be ${maxBatchLimit} or less for safe batch remediation.`);
+    }
+
+    const chunkSize = rawChunkSize ? Number(rawChunkSize) : defaultChunkSize;
+    if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
+      throw new Error(`--chunk-size must be a positive number. Max is ${maxRemediationLimit}.`);
+    }
+    if (chunkSize > maxRemediationLimit) {
+      throw new Error(`--chunk-size must be ${maxRemediationLimit} or less.`);
+    }
+    if (batchApply && confirm !== batchApplyConfirmation) {
+      throw new Error(`Missing required --confirm=${batchApplyConfirmation} for --batch-apply.`);
+    }
+
+    return {
+      apply: false,
+      countOnly: false,
+      batchApply,
+      batchPreview,
+      limit: null,
+      scanLimit: Math.trunc(batchLimit),
+      batchLimit: Math.trunc(batchLimit),
+      chunkSize: Math.trunc(chunkSize),
+      confirm: confirm ?? null,
+    };
+  }
+
+  if (rawBatchLimit || rawChunkSize) {
+    throw new Error("--batch-limit and --chunk-size require --batch-preview or --batch-apply.");
+  }
+  if (confirm) {
+    throw new Error("--confirm is only used with --batch-apply.");
+  }
   if (apply && countOnly) {
     throw new Error("--count-only cannot be combined with --apply.");
   }
@@ -117,7 +236,17 @@ function parseArgs(argv = process.argv.slice(2)): Args {
       throw new Error(`--limit must be ${maxRemediationLimit} or less for safe remediation apply.`);
     }
 
-    return { apply, countOnly, limit: Math.trunc(limit), scanLimit: Math.trunc(limit) };
+    return {
+      apply,
+      countOnly,
+      batchApply: false,
+      batchPreview: false,
+      limit: Math.trunc(limit),
+      scanLimit: Math.trunc(limit),
+      batchLimit: null,
+      chunkSize: defaultChunkSize,
+      confirm: null,
+    };
   }
 
   const scanLimit = rawScanLimit
@@ -142,8 +271,13 @@ function parseArgs(argv = process.argv.slice(2)): Args {
   return {
     apply,
     countOnly,
+    batchApply: false,
+    batchPreview: false,
     limit: Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : null,
     scanLimit: Math.trunc(scanLimit),
+    batchLimit: null,
+    chunkSize: defaultChunkSize,
+    confirm: null,
   };
 }
 
@@ -198,6 +332,69 @@ async function getPrisma(): Promise<PrismaClient> {
   return prismaClient;
 }
 
+async function fetchRemediationPersons(take: number, after?: PageCursor): Promise<PersonForRemediation[]> {
+  const db = await getPrisma();
+
+  return db.person.findMany({
+    where: {
+      sourceMailId: { not: null },
+      sourceMail: {
+        is: {
+          sourceAccount: {
+            is: {
+              provider: "GMAIL",
+            },
+          },
+        },
+      },
+      status: { not: "ARCHIVED" },
+      name: { not: null },
+      ...(after
+        ? {
+            OR: [
+              { createdAt: { lt: after.createdAt } },
+              {
+                createdAt: after.createdAt,
+                id: { lt: after.id },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take,
+    select: {
+      id: true,
+      personCode: true,
+      name: true,
+      initials: true,
+      createdAt: true,
+      sourceMail: {
+        select: {
+          id: true,
+          subject: true,
+          externalMessageId: true,
+          sourceAccount: {
+            select: {
+              provider: true,
+            },
+          },
+        },
+      },
+      skills: {
+        select: {
+          skillName: true,
+        },
+      },
+    },
+  });
+}
+
+function nextCursor(persons: PersonForRemediation[]): PageCursor | undefined {
+  const last = persons[persons.length - 1];
+  return last ? { createdAt: last.createdAt, id: last.id } : undefined;
+}
+
 function buildCandidate(person: PersonForRemediation): RemediationCandidate | null {
   if (!person.name?.trim()) return null;
   if (person.sourceMail?.sourceAccount.provider !== "GMAIL") return null;
@@ -225,7 +422,7 @@ function buildCandidate(person: PersonForRemediation): RemediationCandidate | nu
 
 function candidateRow(
   candidate: RemediationCandidate,
-  mode: OutputRow["mode"],
+  mode: RunMode,
   status: OutputRow["status"],
   error?: string,
 ): OutputRow {
@@ -328,53 +525,9 @@ async function applyCandidate(candidate: RemediationCandidate): Promise<"updated
   });
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs();
-  const mode = args.apply ? "apply" : args.countOnly ? "count-only" : args.limit ? "preview" : "scan-preview";
-  const db = await getPrisma();
-  const persons = await db.person.findMany({
-    where: {
-      sourceMailId: { not: null },
-      sourceMail: {
-        is: {
-          sourceAccount: {
-            is: {
-              provider: "GMAIL",
-            },
-          },
-        },
-      },
-      status: { not: "ARCHIVED" },
-      name: { not: null },
-    },
-    orderBy: { createdAt: "desc" },
-    take: args.scanLimit,
-    select: {
-      id: true,
-      personCode: true,
-      name: true,
-      initials: true,
-      createdAt: true,
-      sourceMail: {
-        select: {
-          id: true,
-          subject: true,
-          externalMessageId: true,
-          sourceAccount: {
-            select: {
-              provider: true,
-            },
-          },
-        },
-      },
-      skills: {
-        select: {
-          skillName: true,
-        },
-      },
-    },
-  });
-
+async function runSingle(args: Args): Promise<void> {
+  const mode: RunMode = args.apply ? "apply" : args.countOnly ? "count-only" : args.limit ? "preview" : "scan-preview";
+  const persons = await fetchRemediationPersons(args.scanLimit);
   const candidates: RemediationCandidate[] = [];
   const rows: OutputRow[] = [];
   let updated = 0;
@@ -433,6 +586,133 @@ async function main(): Promise<void> {
   if (!args.countOnly) {
     console.table(rows);
   }
+}
+
+async function runBatch(args: Args): Promise<void> {
+  const mode: RunMode = args.batchApply ? "batch-apply" : "batch-preview";
+  const batchLimit = args.batchLimit ?? 0;
+  const chunkSize = Math.min(args.chunkSize, maxRemediationLimit);
+  const rows: OutputRow[] = [];
+  const chunkSummaries: ChunkSummary[] = [];
+  let after: PageCursor | undefined;
+  let scannedTotal = 0;
+  let candidatesTotal = 0;
+  let updatedTotal = 0;
+  let skippedTotal = 0;
+  let failedTotal = 0;
+  let stoppedReason = "batch_limit_reached";
+
+  for (let chunk = 1; scannedTotal < batchLimit; chunk += 1) {
+    const take = Math.min(chunkSize, batchLimit - scannedTotal);
+    const persons = await fetchRemediationPersons(take, after);
+    if (persons.length === 0) {
+      stoppedReason = "no_more_persons";
+      break;
+    }
+
+    after = nextCursor(persons);
+    scannedTotal += persons.length;
+
+    const chunkSummary: ChunkSummary = {
+      chunk,
+      scanned: persons.length,
+      candidates: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+    };
+
+    for (const person of persons) {
+      let candidate: RemediationCandidate | null = null;
+      try {
+        candidate = buildCandidate(person);
+      } catch (error) {
+        failedTotal += 1;
+        chunkSummary.failed += 1;
+        stoppedReason = "failed_in_chunk";
+        break;
+      }
+
+      if (!candidate) {
+        skippedTotal += 1;
+        chunkSummary.skipped += 1;
+        continue;
+      }
+
+      candidatesTotal += 1;
+      chunkSummary.candidates += 1;
+
+      if (!args.batchApply) {
+        if (rows.length < maxPreviewRows) {
+          rows.push(candidateRow(candidate, mode, "candidate"));
+        }
+        continue;
+      }
+
+      try {
+        const result = await applyCandidate(candidate);
+        if (result === "updated") {
+          updatedTotal += 1;
+          chunkSummary.updated += 1;
+          if (rows.length < maxPreviewRows) {
+            rows.push(candidateRow(candidate, mode, "updated"));
+          }
+        } else {
+          skippedTotal += 1;
+          chunkSummary.skipped += 1;
+          if (rows.length < maxPreviewRows) {
+            rows.push(candidateRow(candidate, mode, "skipped"));
+          }
+        }
+      } catch (error) {
+        failedTotal += 1;
+        chunkSummary.failed += 1;
+        stoppedReason = "failed_in_chunk";
+        if (rows.length < maxPreviewRows) {
+          rows.push(candidateRow(candidate, mode, "failed", errorMessage(error)));
+        }
+        break;
+      }
+    }
+
+    chunkSummaries.push(chunkSummary);
+
+    if (chunkSummary.failed > 0) {
+      break;
+    }
+    if (args.batchApply && chunkSummary.updated === 0) {
+      stoppedReason = "no_updates_in_chunk";
+      break;
+    }
+    if (persons.length < take) {
+      stoppedReason = "no_more_persons";
+      break;
+    }
+  }
+
+  console.log(
+    args.batchApply
+      ? "Gmail person remediation batch apply. DB writes are limited to persons.name and extraction_results."
+      : "Gmail person remediation batch preview. DB writes are not performed.",
+  );
+  console.log(
+    `mode: ${mode}, batchLimit: ${batchLimit}, chunkSize: ${chunkSize}, scannedTotal: ${scannedTotal}, candidatesTotal: ${candidatesTotal}, updatedTotal: ${updatedTotal}, skippedTotal: ${skippedTotal}, failedTotal: ${failedTotal}, chunks: ${chunkSummaries.length}, stoppedReason: ${stoppedReason}, displayed: ${rows.length}`,
+  );
+  console.table(chunkSummaries);
+  if (candidatesTotal > rows.length) {
+    console.log(`candidate rows are limited to ${maxPreviewRows}.`);
+  }
+  console.table(rows);
+}
+
+async function main(): Promise<void> {
+  const args = parseArgs();
+  if (args.batchApply || args.batchPreview) {
+    await runBatch(args);
+    return;
+  }
+
+  await runSingle(args);
 }
 
 main()
