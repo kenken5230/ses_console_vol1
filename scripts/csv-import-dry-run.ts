@@ -1057,6 +1057,9 @@ export function buildCsvDryRunReport(params: {
 
 async function loadDbDuplicateInputs(args: CsvDryRunArgs): Promise<DuplicateInputs> {
   if (args.dbDuplicates === "off") return { dbReadOnlyEnabled: false };
+  if (process.env.CSV_DRY_RUN_DUPLICATE_FIXTURE === "synthetic") {
+    return syntheticDuplicateInputs(args);
+  }
   if (!process.env.DATABASE_URL) {
     if (args.dbDuplicates === "on") throw new Error("--db-duplicates=on requires DATABASE_URL, but its value will never be printed.");
     return { dbReadOnlyEnabled: false };
@@ -1140,6 +1143,41 @@ async function loadDbDuplicateInputs(args: CsvDryRunArgs): Promise<DuplicateInpu
       availableFrom: person.availableFrom,
       ownerCompany: person.ownerCompany?.name ?? null,
     })),
+  };
+}
+
+function syntheticDuplicateInputs(args: CsvDryRunArgs): DuplicateInputs {
+  const includeProject = args.type === "project" || args.type === "auto";
+  const includePerson = args.type === "person" || args.type === "auto";
+  const existingProjects: ExistingProjectCandidate[] = includeProject
+    ? [{
+        title: "Synthetic Clean Project",
+        companyName: "Synthetic Client Delta",
+        workContent: "Existing synthetic reporting workflow",
+        skills: ["TypeScript", "PostgreSQL"],
+        unitPrice: 90,
+        workLocation: "Hybrid",
+        startMonth: "2026-07",
+      }]
+    : [];
+  const existingPersons: ExistingPersonCandidate[] = includePerson
+    ? [{
+        name: "Synthetic Person Clean",
+        initials: "S.C",
+        roleHeadline: "Fullstack Engineer",
+        skills: ["TypeScript", "PostgreSQL"],
+        desiredUnitPrice: 80,
+        availableFrom: "2026-07",
+        ownerCompany: "Synthetic Partner Delta",
+      }]
+    : [];
+
+  return {
+    dbReadOnlyEnabled: true,
+    dbReadOnlyScannedProjects: existingProjects.length,
+    dbReadOnlyScannedPersons: existingPersons.length,
+    existingProjects,
+    existingPersons,
   };
 }
 

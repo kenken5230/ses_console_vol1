@@ -47,6 +47,14 @@ npm.cmd run csv:import:dry-run -- --file <path> --type=project --db-duplicates=a
 
 `--db-duplicates=auto` attempts read-only duplicate matching only when a database connection is already configured. `--db-duplicates=off` keeps the run fully fixture/local. `--db-duplicates=on` requires a configured database connection and still performs no writes.
 
+Local synthetic duplicate check:
+
+```powershell
+$env:CSV_DRY_RUN_DUPLICATE_FIXTURE="synthetic"; npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-projects.csv --type=project --db-duplicates=on; Remove-Item Env:CSV_DRY_RUN_DUPLICATE_FIXTURE
+```
+
+The synthetic fixture mode is for CI/PR verification when real DB credentials are not available. It exercises the same `--db-duplicates=on` CLI branch with bundled synthetic duplicate candidates and performs no DB connection or writes. Real DB duplicate verification should be owner-run separately only when a safe read-only environment is available.
+
 `--limit` defaults to `5000`. The command rejects `--apply`.
 
 ## Supported Input Types
@@ -148,6 +156,8 @@ Duplicate reason codes:
 - `CSV_DUPLICATE_STRONG_MATCH`
 
 The output includes duplicate counts and group hashes only. It never prints raw DB values or raw CSV values.
+
+The Prisma-backed path uses `findMany` reads only. It does not call create, update, delete, migrate, or push operations.
 
 ## Auto Type Detection
 

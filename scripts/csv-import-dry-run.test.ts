@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 import {
@@ -52,6 +53,30 @@ assert.throws(
   () => parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv", "--type=project", "--db-duplicates=write"]),
   /--db-duplicates must be auto, off, or on/,
 );
+
+function runCsvDryRunCli(args: string[]) {
+  const output = execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "scripts/csv-import-dry-run.ts", ...args], {
+    encoding: "utf8",
+    env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic" },
+  });
+  const jsonStart = output.indexOf("{");
+  const jsonEnd = output.lastIndexOf("}");
+  assert.ok(jsonStart >= 0 && jsonEnd > jsonStart);
+  return JSON.parse(output.slice(jsonStart, jsonEnd + 1));
+}
+
+{
+  const report = runCsvDryRunCli([
+    "--file=tests/fixtures/csv-import/synthetic-projects.csv",
+    "--type=project",
+    "--db-duplicates=on",
+  ]);
+  assert.equal(report.duplicateMatching.dbReadOnlyEnabled, true);
+  assert.equal(report.duplicateMatching.dbReadOnlyScannedProjects, 1);
+  assert.equal(report.duplicateMatching.duplicateReasonCounts.CSV_DUPLICATE_BY_PROJECT_TITLE_COMPANY, 1);
+  assert.equal(report.outcomes.wouldCreate, 0);
+  assertNoSensitiveCsvOutput(JSON.stringify(report));
+}
 
 {
   const table = parseCsv("title,skills\n\"Quoted, Title\",\"Java,SQL\"\n");
