@@ -1,0 +1,6 @@
+氏名,イニシャル,スキル,職種,稼働開始,希望単価,所属会社,最寄駅,未使用列
+Synthetic Person One,S.P,"Java,Spring",Backend Engineer,2026-04,75万,Synthetic Partner Alpha,Synthetic Station,fixture-only
+Synthetic Person One,S.P,"Java,Spring",Backend Engineer,2026-04,75万,Synthetic Partner Alpha,Synthetic Station,duplicate-fixture
+,A.B,"PM,SQL",Project Manager,bad-date,invalid-price,Synthetic Partner Beta,Synthetic Station,fixture-only
+Unknown,,,"",2026-06,65万,Synthetic Partner Gamma,Synthetic Station,missing-fields
+Synthetic Person Clean,S.C,"TypeScript,PostgreSQL",Fullstack Engineer,2026-07,80万,Synthetic Partner Delta,Synthetic Station,clean-fixture
