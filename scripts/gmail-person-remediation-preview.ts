@@ -3,6 +3,9 @@ import "dotenv/config";
 import { analyzePersonNameCandidate, personDisplayName } from "./gmail-extraction";
 
 const maxRemediationLimit = 50;
+const defaultCountOnlyScanLimit = 1000;
+const maxScanLimit = 5000;
+const maxPreviewRows = 50;
 
 type PrismaClient = (typeof import("../lib/prisma"))["prisma"];
 
@@ -10,7 +13,9 @@ let prismaClient: PrismaClient | null = null;
 
 type Args = {
   apply: boolean;
-  limit: number;
+  countOnly: boolean;
+  limit: number | null;
+  scanLimit: number;
 };
 
 type PersonForRemediation = {
@@ -37,7 +42,7 @@ type RemediationCandidate = {
 };
 
 type OutputRow = {
-  mode: "preview" | "apply";
+  mode: "preview" | "scan-preview" | "count-only" | "apply";
   status: "candidate" | "updated" | "skipped" | "failed";
   personId: string;
   personCode: string;
@@ -54,8 +59,10 @@ type OutputRow = {
 };
 
 function parseArgs(argv = process.argv.slice(2)): Args {
-  let raw: string | undefined;
+  let rawLimit: string | undefined;
+  let rawScanLimit: string | undefined;
   let apply = false;
+  let countOnly = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -64,29 +71,80 @@ function parseArgs(argv = process.argv.slice(2)): Args {
       continue;
     }
 
+    if (arg === "--count-only") {
+      countOnly = true;
+      continue;
+    }
+
     if (arg === "--limit") {
-      raw = argv[index + 1];
+      rawLimit = argv[index + 1];
       index += 1;
       continue;
     }
 
     if (arg.startsWith("--limit=")) {
-      raw = arg.split("=")[1];
+      rawLimit = arg.split("=")[1];
+      continue;
+    }
+
+    if (arg === "--scan-limit") {
+      rawScanLimit = argv[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--scan-limit=")) {
+      rawScanLimit = arg.split("=")[1];
       continue;
     }
 
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  const limit = raw ? Number(raw) : NaN;
-  if (!Number.isFinite(limit) || limit <= 0) {
-    throw new Error(`Missing required --limit=N. Use a small limit first, e.g. --limit=10. Max is ${maxRemediationLimit}.`);
+  if (apply && countOnly) {
+    throw new Error("--count-only cannot be combined with --apply.");
   }
-  if (limit > maxRemediationLimit) {
-    throw new Error(`--limit must be ${maxRemediationLimit} or less for safe remediation.`);
+  if (apply && rawScanLimit) {
+    throw new Error("--scan-limit cannot be combined with --apply. Use --limit=N for apply.");
   }
 
-  return { apply, limit: Math.trunc(limit) };
+  const limit = rawLimit ? Number(rawLimit) : NaN;
+  if (apply) {
+    if (!Number.isFinite(limit) || limit <= 0) {
+      throw new Error(`Missing required --limit=N for apply. Use a small limit first, e.g. --limit=5. Max is ${maxRemediationLimit}.`);
+    }
+    if (limit > maxRemediationLimit) {
+      throw new Error(`--limit must be ${maxRemediationLimit} or less for safe remediation apply.`);
+    }
+
+    return { apply, countOnly, limit: Math.trunc(limit), scanLimit: Math.trunc(limit) };
+  }
+
+  const scanLimit = rawScanLimit
+    ? Number(rawScanLimit)
+    : Number.isFinite(limit) && limit > 0
+      ? limit
+      : countOnly
+        ? defaultCountOnlyScanLimit
+        : NaN;
+  if (!Number.isFinite(scanLimit) || scanLimit <= 0) {
+    throw new Error(
+      `Missing required --limit=N or --scan-limit=N. For whole preview, use --scan-limit=${defaultCountOnlyScanLimit} or --count-only.`,
+    );
+  }
+  if (scanLimit > maxScanLimit) {
+    throw new Error(`--scan-limit must be ${maxScanLimit} or less for safe read-only scanning.`);
+  }
+  if (Number.isFinite(limit) && limit > maxRemediationLimit) {
+    throw new Error(`--limit must be ${maxRemediationLimit} or less. Use --scan-limit=N for larger read-only scans.`);
+  }
+
+  return {
+    apply,
+    countOnly,
+    limit: Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : null,
+    scanLimit: Math.trunc(scanLimit),
+  };
 }
 
 function shortId(value: string | null | undefined): string {
@@ -272,7 +330,7 @@ async function applyCandidate(candidate: RemediationCandidate): Promise<"updated
 
 async function main(): Promise<void> {
   const args = parseArgs();
-  const mode = args.apply ? "apply" : "preview";
+  const mode = args.apply ? "apply" : args.countOnly ? "count-only" : args.limit ? "preview" : "scan-preview";
   const db = await getPrisma();
   const persons = await db.person.findMany({
     where: {
@@ -290,7 +348,7 @@ async function main(): Promise<void> {
       name: { not: null },
     },
     orderBy: { createdAt: "desc" },
-    take: args.limit,
+    take: args.scanLimit,
     select: {
       id: true,
       personCode: true,
@@ -317,17 +375,32 @@ async function main(): Promise<void> {
     },
   });
 
-  const candidates = persons
-    .map((person) => buildCandidate(person))
-    .filter((candidate): candidate is RemediationCandidate => Boolean(candidate));
+  const candidates: RemediationCandidate[] = [];
   const rows: OutputRow[] = [];
   let updated = 0;
-  let skipped = persons.length - candidates.length;
+  let skipped = 0;
   let failed = 0;
 
-  for (const candidate of candidates) {
+  for (const person of persons) {
+    let candidate: RemediationCandidate | null = null;
+    try {
+      candidate = buildCandidate(person);
+    } catch (error) {
+      failed += 1;
+      continue;
+    }
+
+    if (!candidate) {
+      skipped += 1;
+      continue;
+    }
+
+    candidates.push(candidate);
+
     if (!args.apply) {
-      rows.push(candidateRow(candidate, mode, "candidate"));
+      if (!args.countOnly && rows.length < maxPreviewRows) {
+        rows.push(candidateRow(candidate, mode, "candidate"));
+      }
       continue;
     }
 
@@ -352,9 +425,14 @@ async function main(): Promise<void> {
       : "Gmail person remediation preview. DB writes are not performed.",
   );
   console.log(
-    `mode: ${mode}, limit: ${args.limit}, scanned: ${persons.length}, candidates: ${candidates.length}, updated: ${updated}, skipped: ${skipped}, failed: ${failed}`,
+    `mode: ${mode}, scanLimit: ${args.scanLimit}, scanned: ${persons.length}, candidates: ${candidates.length}, updated: ${updated}, skipped: ${skipped}, failed: ${failed}, displayed: ${rows.length}`,
   );
-  console.table(rows);
+  if (!args.apply && !args.countOnly && candidates.length > rows.length) {
+    console.log(`candidate rows are limited to ${maxPreviewRows}. Use --count-only to hide rows.`);
+  }
+  if (!args.countOnly) {
+    console.table(rows);
+  }
 }
 
 main()
