@@ -12,9 +12,11 @@ type DuplicateStrength = "none" | "weak" | "strong";
 type DbDuplicateMode = "auto" | "off" | "on";
 
 const MAX_LIMIT = 5000;
+const MAX_APPLY_LIMIT = 50;
 const MAX_SAMPLE_ROWS = 20;
 const MAX_DB_DUPLICATE_SCAN = 1000;
 const SKILL_REVIEW_THRESHOLD = 15;
+const CSV_SOURCE_APPLY_CONFIRM = "APPLY_CSV_SOURCE_RECORDS";
 
 const WARNING_CODES = {
   missingRequiredField: "CSV_MISSING_REQUIRED_FIELD",
@@ -51,6 +53,14 @@ type CsvDryRunArgs = {
   limit: number;
   dbDuplicates: DbDuplicateMode;
   sourcePreview: boolean;
+};
+
+export type CsvSourceApplyArgs = {
+  file: string;
+  type: CsvImportType;
+  limit: number;
+  confirm: typeof CSV_SOURCE_APPLY_CONFIRM;
+  sourcePreview: true;
 };
 
 type CsvTable = {
@@ -196,6 +206,7 @@ export type CsvDryRunReport = {
   reviewReasonCounts: Record<string, number>;
   sampleRows: RowAssessment[];
   sourcePreview?: CsvSourceTrackingPreview;
+  sourcePreviewInternal?: CsvSourceTrackingPreviewInternal;
   notes: string[];
 };
 
@@ -284,6 +295,48 @@ export type CsvSourceTrackingPreview = {
   entitySourceLinkSamples: PreviewEntitySourceLink[];
 };
 
+type CsvSourceTrackingPreviewInternal = {
+  sourceRecords: PreviewSourceRecord[];
+  entityLinks: PreviewEntitySourceLink[];
+};
+
+export type CsvSourceApplySummary = {
+  mode: "apply";
+  limit: number;
+  fileRows: number;
+  parsedRows: number;
+  sourceRecordsCreated: number;
+  sourceRecordsSkippedExisting: number;
+  entityLinksCreated: number;
+  entityLinksSkippedExisting: number;
+  importRunStatus: "SUCCEEDED" | "PARTIAL" | "FAILED";
+  failed: boolean;
+  warningCounts: Record<string, number>;
+  reviewReasonCounts: Record<string, number>;
+  sampleRedactedRecords: PreviewSourceRecord[];
+  errorSummary?: {
+    code: "CSV_SOURCE_APPLY_FAILED";
+    message: "A sanitized CSV source apply error occurred.";
+    errorHash: string;
+  };
+};
+
+type CsvApplyModel<TRecord extends { id: string }> = {
+  findFirst(args: { where: Record<string, unknown> }): Promise<TRecord | null>;
+  create(args: { data: Record<string, unknown> }): Promise<TRecord>;
+};
+
+export type CsvSourceApplyDb = {
+  importSource: CsvApplyModel<{ id: string }>;
+  importRun: {
+    create(args: { data: Record<string, unknown> }): Promise<{ id: string }>;
+    update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<{ id: string }>;
+  };
+  sourceRecord: CsvApplyModel<{ id: string }>;
+  entitySourceLink: CsvApplyModel<{ id: string }>;
+  $transaction?<T>(fn: (tx: CsvSourceApplyDb) => Promise<T>): Promise<T>;
+};
+
 const projectFieldDefinitions: FieldDefinition[] = [
   { field: "companyName", synonyms: ["companyname", "company", "client", "clientcompany", "customer", "会社名", "企業名", "顧客", "クライアント"] },
   { field: "clientCompany", synonyms: ["clientcompany", "client", "customercompany", "顧客会社", "クライアント会社"] },
@@ -344,6 +397,20 @@ function fullHash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function deterministicUuid(value: string): string {
+  const hash = fullHash(value);
+  const chars = hash.split("");
+  chars[12] = "5";
+  chars[16] = (8 + (Number.parseInt(chars[16], 16) % 4)).toString(16);
+  return [
+    chars.slice(0, 8).join(""),
+    chars.slice(8, 12).join(""),
+    chars.slice(12, 16).join(""),
+    chars.slice(16, 20).join(""),
+    chars.slice(20, 32).join(""),
+  ].join("-");
+}
+
 function parseArgValue(argv: string[], name: string): string | null {
   const prefix = `--${name}=`;
   const inline = argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
@@ -392,6 +459,56 @@ export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
   }
 
   return { file, type, limit, dbDuplicates: duplicateMode, sourcePreview: parseBooleanFlag(argv, "source-preview") };
+}
+
+export function parseCsvSourceApplyArgs(argv = process.argv): CsvSourceApplyArgs {
+  const file = parseArgValue(argv, "file");
+  if (!file) throw new Error("Missing required --file=<path>.");
+
+  const type = parseArgValue(argv, "type");
+  if (type !== "project" && type !== "person" && type !== "auto") {
+    throw new Error("--type must be project, person, or auto.");
+  }
+
+  if (!parseBooleanFlag(argv, "source-preview")) {
+    throw new Error("csv:import:apply requires --source-preview.");
+  }
+
+  const rawLimit = parseArgValue(argv, "limit");
+  if (!rawLimit) throw new Error("csv:import:apply requires --limit.");
+  const limit = Number(rawLimit);
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isInteger(limit)) {
+    throw new Error("--limit must be a positive integer when provided.");
+  }
+  if (limit > MAX_APPLY_LIMIT) throw new Error(`--limit must be <= ${MAX_APPLY_LIMIT} for csv:import:apply.`);
+
+  const confirm = parseArgValue(argv, "confirm");
+  if (confirm !== CSV_SOURCE_APPLY_CONFIRM) {
+    throw new Error(`csv:import:apply requires --confirm=${CSV_SOURCE_APPLY_CONFIRM}.`);
+  }
+
+  return { file, type, limit, confirm, sourcePreview: true };
+}
+
+export function csvSourceApplyHelpText(): string {
+  return [
+    "CSV source-record apply writes source tracking tables only.",
+    "",
+    "Required:",
+    "  --file=<path>",
+    "  --type=project|person|auto",
+    "  --source-preview",
+    `  --limit=<1-${MAX_APPLY_LIMIT}>`,
+    `  --confirm=${CSV_SOURCE_APPLY_CONFIRM}`,
+    "",
+    "Example:",
+    `  npm.cmd run csv:import:apply -- --file tests\\fixtures\\csv-import\\synthetic-projects.csv --type=project --source-preview --limit=50 --confirm=${CSV_SOURCE_APPLY_CONFIRM}`,
+    "",
+    "Safety:",
+    "  Writes ImportSource, ImportRun, SourceRecord, and EntitySourceLink only.",
+    "  Does not create, update, or delete Project or Person records.",
+    "  Output is anonymized and does not include raw CSV values or local file paths.",
+  ].join("\n");
 }
 
 function normalizeHeader(header: string): string {
@@ -1098,10 +1215,12 @@ function buildCsvSourceTrackingPreview(params: {
   report: Omit<CsvDryRunReport, "sourcePreview">;
   rows: RowAssessment[];
   fileIdentity?: string;
+  sourceRecords?: PreviewSourceRecord[];
+  entityLinks?: PreviewEntitySourceLink[];
 }): CsvSourceTrackingPreview {
   const { report, rows } = params;
-  const sourceRecords = rows.map(buildPreviewSourceRecord);
-  const entityLinks = rows
+  const sourceRecords = params.sourceRecords ?? rows.map(buildPreviewSourceRecord);
+  const entityLinks = params.entityLinks ?? rows
     .map((row, index) => buildPreviewEntitySourceLink(row, sourceRecords[index].recordHash))
     .filter((link): link is PreviewEntitySourceLink => Boolean(link));
   const runSummary = {
@@ -1319,15 +1438,307 @@ export function buildCsvDryRunReport(params: {
   };
 
   if (params.sourcePreview) {
+    const sourceRecords = assessedRows.map(buildPreviewSourceRecord);
+    const entityLinks = assessedRows
+      .map((row, index) => buildPreviewEntitySourceLink(row, sourceRecords[index].recordHash))
+      .filter((link): link is PreviewEntitySourceLink => Boolean(link));
     report.sourcePreview = buildCsvSourceTrackingPreview({
       report,
       rows: assessedRows,
       fileIdentity: params.fileIdentity,
+      sourceRecords,
+      entityLinks,
+    });
+    Object.defineProperty(report, "sourcePreviewInternal", {
+      value: { sourceRecords, entityLinks },
+      enumerable: false,
     });
   }
 
   assertNoSensitiveCsvOutput(JSON.stringify(report));
   return report;
+}
+
+function buildBaseApplySummary(report: CsvDryRunReport, limit: number): CsvSourceApplySummary {
+  return {
+    mode: "apply",
+    limit,
+    fileRows: report.summary.fileRows,
+    parsedRows: report.summary.parsedRows,
+    sourceRecordsCreated: 0,
+    sourceRecordsSkippedExisting: 0,
+    entityLinksCreated: 0,
+    entityLinksSkippedExisting: 0,
+    importRunStatus: "FAILED",
+    failed: true,
+    warningCounts: report.warningCounts,
+    reviewReasonCounts: report.reviewReasonCounts,
+    sampleRedactedRecords: report.sourcePreview?.sourceRecordSamples.slice(0, MAX_SAMPLE_ROWS) ?? [],
+  };
+}
+
+function sanitizedApplyError(error: unknown): CsvSourceApplySummary["errorSummary"] {
+  const detail = error instanceof Error ? `${error.name}:${error.message}` : String(error);
+  return {
+    code: "CSV_SOURCE_APPLY_FAILED",
+    message: "A sanitized CSV source apply error occurred.",
+    errorHash: shortHash(detail),
+  };
+}
+
+function applyRunStatusFromPreview(preview: CsvSourceTrackingPreview): "SUCCEEDED" | "PARTIAL" {
+  return preview.previewImportRun.status === "SUCCEEDED" ? "SUCCEEDED" : "PARTIAL";
+}
+
+function sourceRecordCreateData(params: {
+  sourceId: string;
+  importRunId: string;
+  record: PreviewSourceRecord;
+}): Record<string, unknown> {
+  const { sourceId, importRunId, record } = params;
+  return {
+    sourceId,
+    importRunId,
+    providerRecordId: `csv:${record.recordHash.slice(0, 16)}:${record.rawRef.rowIndex}`,
+    recordType: record.recordType,
+    recordHash: record.recordHash,
+    rawRef: record.rawRef,
+    normalizedPayload: record.normalizedPayload,
+    redactedPreview: record.redactedPreview,
+    status: record.status,
+    reviewReasons: record.reviewReasons,
+    warnings: record.warnings,
+  };
+}
+
+function entitySourceLinkCreateData(params: {
+  sourceRecordId: string;
+  link: PreviewEntitySourceLink;
+}): Record<string, unknown> {
+  const { sourceRecordId, link } = params;
+  return {
+    sourceRecordId,
+    entityType: link.entityType,
+    entityId: deterministicUuid(`csv-source-link:${link.sourceRecordHash}:${link.entityType}:${link.linkType}:${link.reasons.join("|")}`),
+    linkType: link.linkType,
+    confidence: link.confidence.toFixed(4),
+    reasons: [
+      ...link.reasons,
+      "CSV_SOURCE_RECORD_ONLY_NO_PROJECT_OR_PERSON_WRITTEN",
+    ],
+  };
+}
+
+async function writeCsvSourceApplyRecords(params: {
+  db: CsvSourceApplyDb;
+  sourceId: string;
+  importRunId: string;
+  sourceRecords: PreviewSourceRecord[];
+  entityLinks: PreviewEntitySourceLink[];
+}): Promise<Pick<CsvSourceApplySummary,
+  "sourceRecordsCreated"
+  | "sourceRecordsSkippedExisting"
+  | "entityLinksCreated"
+  | "entityLinksSkippedExisting"
+>> {
+  const { db, sourceId, importRunId, sourceRecords, entityLinks } = params;
+  const sourceRecordIdsByHash = new Map<string, string>();
+  const entityLinkKeys = new Set<string>();
+  const counts = {
+    sourceRecordsCreated: 0,
+    sourceRecordsSkippedExisting: 0,
+    entityLinksCreated: 0,
+    entityLinksSkippedExisting: 0,
+  };
+
+  for (const record of sourceRecords) {
+    const existingInRun = sourceRecordIdsByHash.get(record.recordHash);
+    if (existingInRun) {
+      counts.sourceRecordsSkippedExisting += 1;
+      continue;
+    }
+
+    const existing = await db.sourceRecord.findFirst({
+      where: {
+        sourceId,
+        recordHash: record.recordHash,
+        recordType: record.recordType,
+      },
+    });
+    if (existing) {
+      sourceRecordIdsByHash.set(record.recordHash, existing.id);
+      counts.sourceRecordsSkippedExisting += 1;
+      continue;
+    }
+
+    const created = await db.sourceRecord.create({
+      data: sourceRecordCreateData({ sourceId, importRunId, record }),
+    });
+    sourceRecordIdsByHash.set(record.recordHash, created.id);
+    counts.sourceRecordsCreated += 1;
+  }
+
+  for (const link of entityLinks) {
+    const sourceRecordId = sourceRecordIdsByHash.get(link.sourceRecordHash);
+    if (!sourceRecordId) continue;
+
+    const data = entitySourceLinkCreateData({ sourceRecordId, link });
+    const key = [sourceRecordId, data.entityType, data.entityId, data.linkType].join(":");
+    if (entityLinkKeys.has(key)) {
+      counts.entityLinksSkippedExisting += 1;
+      continue;
+    }
+    entityLinkKeys.add(key);
+
+    const existing = await db.entitySourceLink.findFirst({
+      where: {
+        sourceRecordId,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        linkType: data.linkType,
+      },
+    });
+    if (existing) {
+      counts.entityLinksSkippedExisting += 1;
+      continue;
+    }
+
+    await db.entitySourceLink.create({ data });
+    counts.entityLinksCreated += 1;
+  }
+
+  return counts;
+}
+
+function getSourcePreviewInternal(report: CsvDryRunReport): CsvSourceTrackingPreviewInternal {
+  return report.sourcePreviewInternal ?? {
+    sourceRecords: report.sourcePreview?.sourceRecordSamples ?? [],
+    entityLinks: report.sourcePreview?.entitySourceLinkSamples ?? [],
+  };
+}
+
+export async function applyCsvSourcePreviewReport(params: {
+  report: CsvDryRunReport;
+  db: CsvSourceApplyDb;
+  limit: number;
+  now?: Date;
+}): Promise<CsvSourceApplySummary> {
+  const { report, db, limit } = params;
+  if (!report.sourcePreview) throw new Error("csv:import:apply requires a source-preview report.");
+  if (limit <= 0 || limit > MAX_APPLY_LIMIT || !Number.isInteger(limit)) {
+    throw new Error(`--limit must be <= ${MAX_APPLY_LIMIT} for csv:import:apply.`);
+  }
+  if (report.summary.parsedRows > limit) {
+    throw new Error("csv:import:apply report parsed rows exceed --limit.");
+  }
+
+  const preview = report.sourcePreview;
+  const now = params.now ?? new Date();
+  const summary = buildBaseApplySummary(report, limit);
+  let importRunId: string | null = null;
+
+  try {
+    const existingSource = await db.importSource.findFirst({
+      where: {
+        type: "CSV",
+        name: preview.previewImportSource.nameRedacted,
+        status: "ACTIVE",
+      },
+    });
+    const importSource = existingSource ?? await db.importSource.create({
+      data: {
+        type: "CSV",
+        name: preview.previewImportSource.nameRedacted,
+        status: "ACTIVE",
+        configSummary: preview.previewImportSource.configSummary,
+      },
+    });
+
+    const importRun = await db.importRun.create({
+      data: {
+        sourceId: importSource.id,
+        mode: "APPLY",
+        status: "RUNNING",
+        startedAt: now,
+        summary: {
+          mode: "apply",
+          limit,
+          fileRows: report.summary.fileRows,
+          parsedRows: report.summary.parsedRows,
+          warningCounts: report.warningCounts,
+          reviewReasonCounts: report.reviewReasonCounts,
+        },
+      },
+    });
+    importRunId = importRun.id;
+
+    const writeCounts = db.$transaction
+      ? await db.$transaction((tx) => writeCsvSourceApplyRecords({
+          db: tx,
+          sourceId: importSource.id,
+          importRunId: importRun.id,
+          ...getSourcePreviewInternal(report),
+        }))
+      : await writeCsvSourceApplyRecords({
+          db,
+          sourceId: importSource.id,
+          importRunId: importRun.id,
+          ...getSourcePreviewInternal(report),
+        });
+
+    Object.assign(summary, writeCounts, {
+      importRunStatus: applyRunStatusFromPreview(preview),
+      failed: false,
+    });
+
+    await db.importRun.update({
+      where: { id: importRun.id },
+      data: {
+        status: summary.importRunStatus,
+        finishedAt: now,
+        summary,
+        errorSummary: null,
+      },
+    });
+  } catch (error) {
+    summary.importRunStatus = "FAILED";
+    summary.failed = true;
+    summary.errorSummary = sanitizedApplyError(error);
+    if (importRunId) {
+      await db.importRun.update({
+        where: { id: importRunId },
+        data: {
+          status: "FAILED",
+          finishedAt: now,
+          summary,
+          errorSummary: summary.errorSummary,
+        },
+      });
+    }
+  }
+
+  assertNoSensitiveCsvOutput(JSON.stringify(summary));
+  return summary;
+}
+
+export async function runCsvSourceApply(argv = process.argv): Promise<CsvSourceApplySummary> {
+  const args = parseCsvSourceApplyArgs(argv);
+  const csvText = await readFile(args.file, "utf8");
+  const fileStats = statSync(args.file);
+  const report = buildCsvDryRunReport({
+    csvText,
+    type: args.type,
+    limit: args.limit,
+    fileIdentity: args.file,
+    fileBytes: fileStats.size,
+    sourcePreview: true,
+  });
+  const { prisma } = await import("../lib/prisma");
+  return applyCsvSourcePreviewReport({
+    report,
+    db: prisma as unknown as CsvSourceApplyDb,
+    limit: args.limit,
+  });
 }
 
 async function loadDbDuplicateInputs(args: CsvDryRunArgs): Promise<DuplicateInputs> {

@@ -5,17 +5,20 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 import {
+  applyCsvSourcePreviewReport,
   assertNoSensitiveCsvOutput,
   buildCsvDryRunReport,
   parseCsv,
   parseCsvDryRunArgs,
+  parseCsvSourceApplyArgs,
 } from "./csv-import-dry-run";
-import type { ExistingPersonCandidate, ExistingProjectCandidate } from "./csv-import-dry-run";
+import type { CsvSourceApplyDb, ExistingPersonCandidate, ExistingProjectCandidate } from "./csv-import-dry-run";
 
 const projectCsv = readFileSync("tests/fixtures/csv-import/synthetic-projects.csv", "utf8");
 const personCsv = readFileSync("tests/fixtures/csv-import/synthetic-persons.csv", "utf8");
 const requireFromTest = createRequire(import.meta.url);
 const tsxCli = requireFromTest.resolve("tsx/cli");
+const asyncTestPromises: Promise<void>[] = [];
 
 assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv", "--type=project"]), {
   file: "synthetic.csv",
@@ -69,6 +72,42 @@ assert.throws(
   /--db-duplicates must be auto, off, or on/,
 );
 
+assert.deepEqual(parseCsvSourceApplyArgs([
+  "node",
+  "csv-import-apply",
+  "--file=synthetic.csv",
+  "--type=project",
+  "--source-preview",
+  "--limit=50",
+  "--confirm=APPLY_CSV_SOURCE_RECORDS",
+]), {
+  file: "synthetic.csv",
+  type: "project",
+  limit: 50,
+  confirm: "APPLY_CSV_SOURCE_RECORDS",
+  sourcePreview: true,
+});
+
+assert.throws(
+  () => parseCsvSourceApplyArgs(["node", "csv-import-apply", "--file=synthetic.csv", "--type=project", "--source-preview", "--limit=50"]),
+  /requires --confirm=APPLY_CSV_SOURCE_RECORDS/,
+);
+
+assert.throws(
+  () => parseCsvSourceApplyArgs(["node", "csv-import-apply", "--file=synthetic.csv", "--type=project", "--source-preview", "--confirm=APPLY_CSV_SOURCE_RECORDS"]),
+  /requires --limit/,
+);
+
+assert.throws(
+  () => parseCsvSourceApplyArgs(["node", "csv-import-apply", "--file=synthetic.csv", "--type=project", "--source-preview", "--limit=51", "--confirm=APPLY_CSV_SOURCE_RECORDS"]),
+  /--limit must be <= 50/,
+);
+
+assert.throws(
+  () => parseCsvSourceApplyArgs(["node", "csv-import-apply", "--file=synthetic.csv", "--type=project", "--limit=50", "--confirm=APPLY_CSV_SOURCE_RECORDS"]),
+  /requires --source-preview/,
+);
+
 function runCsvDryRunCli(args: string[]) {
   const output = execFileSync(process.execPath, [tsxCli, "scripts/csv-import-dry-run.ts", ...args], {
     encoding: "utf8",
@@ -85,6 +124,74 @@ function runCsvDryRunCliOutput(args: string[]) {
     encoding: "utf8",
     env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic" },
   });
+}
+
+type MockRecord = { id: string; [key: string]: unknown };
+
+function matchesWhere(record: MockRecord, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([key, value]) => record[key] === value);
+}
+
+function createMockApplyDb(options: { failSourceRecordCreate?: boolean } = {}) {
+  let nextId = 1;
+  const calls: string[] = [];
+  const state = {
+    importSources: [] as MockRecord[],
+    importRuns: [] as MockRecord[],
+    sourceRecords: [] as MockRecord[],
+    entitySourceLinks: [] as MockRecord[],
+  };
+
+  function id(prefix: string) {
+    const value = `${prefix}-${nextId}`;
+    nextId += 1;
+    return value;
+  }
+
+  function model(table: keyof Omit<typeof state, "importRuns">, prefix: string) {
+    return {
+      async findFirst({ where }: { where: Record<string, unknown> }) {
+        calls.push(`${table}.findFirst`);
+        return state[table].find((record) => matchesWhere(record, where)) ?? null;
+      },
+      async create({ data }: { data: Record<string, unknown> }) {
+        calls.push(`${table}.create`);
+        if (table === "sourceRecords" && options.failSourceRecordCreate) {
+          throw new Error("unsafe detail Synthetic Project Alpha DB_CONNECTION_SENTINEL");
+        }
+        const record = { id: id(prefix), ...data };
+        state[table].push(record);
+        return record;
+      },
+    };
+  }
+
+  const db: CsvSourceApplyDb = {
+    importSource: model("importSources", "source"),
+    importRun: {
+      async create({ data }: { data: Record<string, unknown> }) {
+        calls.push("importRuns.create");
+        const record = { id: id("run"), ...data };
+        state.importRuns.push(record);
+        return record;
+      },
+      async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+        calls.push("importRuns.update");
+        const record = state.importRuns.find((item) => item.id === where.id);
+        assert.ok(record);
+        Object.assign(record, data);
+        return record;
+      },
+    },
+    sourceRecord: model("sourceRecords", "record"),
+    entitySourceLink: model("entitySourceLinks", "link"),
+    async $transaction<T>(fn: (tx: CsvSourceApplyDb) => Promise<T>) {
+      calls.push("$transaction");
+      return fn(db);
+    },
+  };
+
+  return { db, calls, state };
 }
 
 {
@@ -296,6 +403,146 @@ function runCsvDryRunCliOutput(args: string[]) {
   assert.equal(output.includes("Stable Project Beta"), false);
   assert.equal(output.includes("Stable Company"), false);
 }
+
+{
+  const mock = createMockApplyDb();
+  const beforeCalls = mock.calls.length;
+  const report = buildCsvDryRunReport({
+    csvText: projectCsv,
+    type: "project",
+    fileIdentity: "tests/fixtures/csv-import/synthetic-projects.csv",
+    sourcePreview: true,
+  });
+  assert.equal(mock.calls.length, beforeCalls);
+  assertNoSensitiveCsvOutput(JSON.stringify(report));
+}
+
+asyncTestPromises.push((async () => {
+  const mock = createMockApplyDb();
+  const report = buildCsvDryRunReport({
+    csvText: projectCsv,
+    type: "project",
+    fileIdentity: "tests/fixtures/csv-import/synthetic-projects.csv",
+    sourcePreview: true,
+  });
+  const summary = await applyCsvSourcePreviewReport({
+    report,
+    db: mock.db,
+    limit: 5,
+    now: new Date("2026-06-04T00:00:00.000Z"),
+  });
+
+  assert.equal(summary.mode, "apply");
+  assert.equal(summary.limit, 5);
+  assert.equal(summary.fileRows, 5);
+  assert.equal(summary.parsedRows, 5);
+  assert.equal(summary.sourceRecordsCreated, 5);
+  assert.equal(summary.sourceRecordsSkippedExisting, 0);
+  assert.equal(summary.entityLinksCreated, 5);
+  assert.equal(summary.entityLinksSkippedExisting, 0);
+  assert.equal(summary.importRunStatus, "PARTIAL");
+  assert.equal(summary.failed, false);
+  assert.equal(summary.sampleRedactedRecords.length, 5);
+  assert.equal(mock.state.importSources.length, 1);
+  assert.equal(mock.state.importRuns.length, 1);
+  assert.equal(mock.state.sourceRecords.length, 5);
+  assert.equal(mock.state.entitySourceLinks.length, 5);
+  assert.ok(mock.calls.includes("$transaction"));
+  assert.ok(mock.calls.includes("importSources.create"));
+  assert.ok(mock.calls.includes("importRuns.create"));
+  assert.ok(mock.calls.includes("sourceRecords.create"));
+  assert.ok(mock.calls.includes("entitySourceLinks.create"));
+  assert.equal(mock.calls.some((call) => call.includes("project")), false);
+  assert.equal(mock.calls.some((call) => call.includes("person")), false);
+  assert.ok(mock.state.sourceRecords.every((record) => record.sourceId === mock.state.importSources[0].id));
+  assert.ok(mock.state.sourceRecords.every((record) => record.importRunId === mock.state.importRuns[0].id));
+  assert.ok(mock.state.sourceRecords.every((record) => typeof record.recordHash === "string" && String(record.recordHash).length === 64));
+  assert.ok(mock.state.sourceRecords.every((record) => {
+    const rawRef = record.rawRef as { rowIndex?: unknown; rowNumber?: unknown };
+    return Number.isInteger(rawRef.rowIndex) && Number.isInteger(rawRef.rowNumber);
+  }));
+  assert.equal(JSON.stringify(mock.state.sourceRecords).includes("Synthetic Alpha Project"), false);
+  assert.equal(JSON.stringify(mock.state.sourceRecords).includes("Synthetic Client Alpha"), false);
+  assertNoSensitiveCsvOutput(JSON.stringify(summary));
+
+  const secondSummary = await applyCsvSourcePreviewReport({
+    report,
+    db: mock.db,
+    limit: 5,
+    now: new Date("2026-06-04T00:00:01.000Z"),
+  });
+  assert.equal(secondSummary.sourceRecordsCreated, 0);
+  assert.equal(secondSummary.sourceRecordsSkippedExisting, 5);
+  assert.equal(secondSummary.entityLinksCreated, 0);
+  assert.equal(secondSummary.entityLinksSkippedExisting, 5);
+  assert.equal(mock.state.sourceRecords.length, 5);
+  assert.equal(mock.state.entitySourceLinks.length, 5);
+  assertNoSensitiveCsvOutput(JSON.stringify(secondSummary));
+})());
+
+asyncTestPromises.push((async () => {
+  const rows = Array.from({ length: 25 }, (_item, index) => [
+    `Stable Project ${index}`,
+    `Stable Company ${index}`,
+    `Stable work ${index}`,
+    "TypeScript",
+    "90",
+    "2026-07",
+    "Remote",
+  ].join(","));
+  const report = buildCsvDryRunReport({
+    csvText: [
+      "title,companyName,workContent,requiredSkills,unitPrice,startMonth,workLocation",
+      ...rows,
+    ].join("\n"),
+    type: "project",
+    fileIdentity: "synthetic-apply-limit.csv",
+    sourcePreview: true,
+    limit: 25,
+  });
+  const mock = createMockApplyDb();
+  const summary = await applyCsvSourcePreviewReport({
+    report,
+    db: mock.db,
+    limit: 25,
+    now: new Date("2026-06-04T00:00:00.000Z"),
+  });
+  assert.equal(report.sourcePreview?.sourceRecordSamples.length, 20);
+  assert.equal(summary.sourceRecordsCreated, 25);
+  assert.equal(summary.sampleRedactedRecords.length, 20);
+  assert.equal(mock.state.sourceRecords.length, 25);
+
+  const output = JSON.stringify(summary);
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Stable Project 1"), false);
+  assert.equal(output.includes("Stable Company 1"), false);
+  assert.equal(output.includes("Stable work 1"), false);
+})());
+
+asyncTestPromises.push((async () => {
+  const mock = createMockApplyDb({ failSourceRecordCreate: true });
+  const report = buildCsvDryRunReport({
+    csvText: projectCsv,
+    type: "project",
+    fileIdentity: "tests/fixtures/csv-import/synthetic-projects.csv",
+    sourcePreview: true,
+  });
+  const summary = await applyCsvSourcePreviewReport({
+    report,
+    db: mock.db,
+    limit: 5,
+    now: new Date("2026-06-04T00:00:00.000Z"),
+  });
+  assert.equal(summary.failed, true);
+  assert.equal(summary.importRunStatus, "FAILED");
+  assert.equal(summary.sourceRecordsCreated, 0);
+  assert.equal(summary.errorSummary?.code, "CSV_SOURCE_APPLY_FAILED");
+  assert.equal(summary.errorSummary?.message, "A sanitized CSV source apply error occurred.");
+  assert.equal(JSON.stringify(summary).includes("Synthetic Project Alpha"), false);
+  assert.equal(JSON.stringify(summary).includes("DB_CONNECTION_SENTINEL"), false);
+  assertNoSensitiveCsvOutput(JSON.stringify(summary));
+  assert.equal(mock.state.importRuns[0].status, "FAILED");
+})());
 
 {
   const report = buildCsvDryRunReport({ csvText: personCsv, type: "person", fileIdentity: "synthetic-persons.csv" });
@@ -529,9 +776,19 @@ assert.throws(
 
 {
   const importerSource = readFileSync("scripts/csv-import-dry-run.ts", "utf8");
-  assert.equal(/\bprisma\.\w+\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/.test(importerSource), false);
-  assert.equal(/\bfetch\s*\(/.test(importerSource), false);
-  assert.equal(/\b(?:openai|anthropic)\b/i.test(importerSource), false);
+  const applySource = readFileSync("scripts/csv-import-apply.ts", "utf8");
+  const csvImportSources = `${importerSource}\n${applySource}`;
+  assert.equal(/\bprisma\.(?:project|person)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/.test(csvImportSources), false);
+  assert.equal(/\b(?:project|person)\s*:\s*\{/.test(csvImportSources), false);
+  assert.equal(/\bfetch\s*\(/.test(csvImportSources), false);
+  assert.equal(/\b(?:openai|anthropic)\b/i.test(csvImportSources), false);
+  assert.equal(/\b(?:nodemailer|sendMail)\b/i.test(csvImportSources), false);
 }
 
-console.log("csv import dry-run tests passed");
+Promise.all(asyncTestPromises)
+  .then(() => {
+    console.log("csv import dry-run tests passed");
+  })
+  .catch((error) => {
+    throw error;
+  });
