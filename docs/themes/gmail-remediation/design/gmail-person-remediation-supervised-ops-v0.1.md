@@ -202,4 +202,4 @@ Ownerに頼らずCodexが確認する項目:
 - read-only出力
 - TypeScript/build
 - PR差分
-- secretやDATABASE_URLが出ていないこと
+- secretやDB接続URLが出ていないこと

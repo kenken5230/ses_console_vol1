@@ -15,7 +15,7 @@
 | テーマ | フォルダ | 渡す場面 |
 |---|---|---|
 | SES営業統合console | `docs/themes/ses-sales-console/` | Notion移行、案件/要員DB、AIマッチング、提案、メール、統計、KPI、会社/商流の全体設計 |
-| Gmail要員remediation | `docs/themes/gmail-remediation/` | Gmail由来要員name汚れ、remediation apply、データ品質、安全運用 |
+| Gmail要員remediation / 抽出品質 | `docs/themes/gmail-remediation/` | Gmail由来要員name汚れ、remediation apply、Gmail未リンク抽出品質、Research-to-PR、安全運用 |
 
 ## 共通docs
 
@@ -40,4 +40,3 @@ GPTへ渡す最小単位:
 - Gmail tokenやSMTP password
 - 長大なメール本文全文
 - 個人情報を含む実データの無加工コピー
-

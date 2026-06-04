@@ -16,7 +16,7 @@
 - テストは1周目で機能確認、2周目で再現性確認を行う。
 - 2周目で失敗した場合は、1周目成功扱いにしない。
 - ユーザーだけが確認できる項目は `Owner確認` として残す。
-- secret、DATABASE_URL、connection stringはログ、PR本文、mdに書かない。
+- secret、DB接続URL、connection stringはログ、PR本文、mdに書かない。
 
 ## 3. 2周テストの定義
 
