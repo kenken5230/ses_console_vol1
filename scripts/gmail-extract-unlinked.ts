@@ -12,6 +12,7 @@ import {
 } from "../lib/gmail-extract-entities";
 import { buildExtractionBodyText } from "../lib/gmail-message-body";
 import { extractFromMail, formatDate, personDisplayName, type MailExtraction, type MailExtractionSource } from "./gmail-extraction";
+import { qualityScoreSummary, shortHash } from "./gmail-extraction-quality-report";
 
 type ExtractTarget = "all" | "project" | "person";
 type EntityTarget = "project" | "person";
@@ -189,45 +190,79 @@ function safeLogText(value: string | null | undefined, maxLength: number): strin
 }
 
 function safeSubject(subject: string | null | undefined): string {
-  return safeLogText(subject || "(no subject)", 120);
+  const value = subject || "";
+  return value ? `[redacted-subject len=${value.length} hash=${shortHash(value)}]` : "(no subject)";
 }
 
 function shortId(value: string | null | undefined): string {
   return value ? value.slice(0, 8) : "";
 }
 
+function redactedNameSummary(extraction: MailExtraction, mail: CandidateMail): string {
+  if (extraction.target !== "person") return "[redacted-project-title]";
+  if (extraction.name) return "[redacted-name]";
+  if (extraction.initials) return "[initials]";
+  return personDisplayName(mail.id, null, null);
+}
+
+function scoreSummary(extraction: MailExtraction): string {
+  const score = qualityScoreSummary(extraction);
+  return `project=${score.projectScore};person=${score.personScore};margin=${score.conflictMargin};predicted=${score.predictedType}`;
+}
+
 function qualityColumns(extraction: MailExtraction, mail: CandidateMail) {
+  const score = qualityScoreSummary(extraction);
   if (extraction.target === "person") {
     return {
-      extractedName: extraction.name ?? extraction.initials ?? "",
-      finalName: personDisplayName(mail.id, extraction.name, extraction.initials),
+      extractedName: extraction.name ? "[redacted-name]" : extraction.initials ? "[initials]" : "",
+      finalName: redactedNameSummary(extraction, mail),
       nameConfidence: extraction.nameConfidence,
+      nameSource: extraction.nameSource,
       needsReview: extraction.needsReview,
       reviewReasons: extraction.reviewReasons.join(", "),
-      roleHeadline: extraction.roleHeadline ?? "",
+      roleHeadline: extraction.roleHeadline ? "[redacted-role-label]" : "",
+      roleHeadlineSource: extraction.roleHeadlineSource,
       age: extraction.age ?? "",
       price: extraction.desiredUnitPrice ?? "",
       availableFrom: formatDate(extraction.availableFrom) ?? "",
       skillCount: extraction.skills.length,
-      skills: extraction.skills.slice(0, 6).join(", "),
+      skills: `[redacted-skills count=${extraction.skills.length}]`,
       classificationWarning: extraction.classificationWarning ?? "",
+      classificationScoreSummary: scoreSummary(extraction),
+      predictedType: score.predictedType,
+      projectScore: score.projectScore,
+      personScore: score.personScore,
+      conflictMargin: score.conflictMargin,
+      subjectOnlyFallback: score.subjectOnlyFallback ? "yes" : "",
+      bodyDerived: score.bodyDerived ? "yes" : "",
+      skillOverExtraction: extraction.skillOverExtraction ? "yes" : "",
       wouldNeedsReview: extraction.needsReview ? "yes" : "",
     };
   }
 
   return {
     extractedName: "",
-    finalName: extraction.title,
+    finalName: redactedNameSummary(extraction, mail),
     nameConfidence: "",
+    nameSource: "",
     needsReview: extraction.needsReview,
-    reviewReasons: extraction.needsReview ? extraction.missingFields.join(", ") : "",
+    reviewReasons: extraction.reviewReasons.join(", "),
     roleHeadline: "",
+    roleHeadlineSource: "",
     age: "",
     price: extraction.unitPriceMax ?? "",
     availableFrom: formatDate(extraction.startMonth) ?? "",
     skillCount: extraction.requiredSkills.length + extraction.preferredSkills.length + extraction.usedTechnologies.length,
-    skills: extraction.requiredSkills.slice(0, 6).join(", "),
-    classificationWarning: "",
+    skills: `[redacted-skills count=${extraction.requiredSkills.length + extraction.preferredSkills.length + extraction.usedTechnologies.length}]`,
+    classificationWarning: extraction.classificationWarning ?? "",
+    classificationScoreSummary: scoreSummary(extraction),
+    predictedType: score.predictedType,
+    projectScore: score.projectScore,
+    personScore: score.personScore,
+    conflictMargin: score.conflictMargin,
+    subjectOnlyFallback: score.subjectOnlyFallback ? "yes" : "",
+    bodyDerived: score.bodyDerived ? "yes" : "",
+    skillOverExtraction: extraction.skillOverExtraction ? "yes" : "",
     wouldNeedsReview: extraction.needsReview ? "yes" : "",
   };
 }
