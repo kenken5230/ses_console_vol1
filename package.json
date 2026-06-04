@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "npm run test:gmail-extraction-quality && npm run gmail:extract:quality-eval",
+    "test": "npm run test:gmail-extraction-quality && npm run test:source-inventory && npm run gmail:extract:quality-eval",
     "postinstall": "prisma generate",
     "start": "next start",
     "seed": "tsx prisma/seed.ts",
@@ -26,7 +26,9 @@
     "gmail:extract:person-remediation": "tsx scripts/gmail-person-remediation-preview.ts",
     "gmail:extract:quality-audit": "tsx scripts/gmail-extraction-quality-audit.ts",
     "gmail:extract:quality-eval": "tsx scripts/gmail-extraction-quality-eval.ts",
-    "test:gmail-extraction-quality": "tsx scripts/gmail-extraction-quality.test.ts"
+    "source:inventory": "tsx scripts/source-inventory.ts",
+    "test:gmail-extraction-quality": "tsx scripts/gmail-extraction-quality.test.ts",
+    "test:source-inventory": "tsx scripts/source-inventory.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
