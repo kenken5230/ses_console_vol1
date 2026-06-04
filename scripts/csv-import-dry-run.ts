@@ -1,14 +1,19 @@
 import "dotenv/config";
 
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 
 type CsvImportType = "project" | "person" | "auto";
 type ResolvedCsvImportType = "project" | "person";
+type DetectedCsvType = ResolvedCsvImportType | "review";
+type RowAction = "would_create" | "would_need_review" | "would_skip";
+type DuplicateStrength = "none" | "weak" | "strong";
+type DbDuplicateMode = "auto" | "off" | "on";
 
 const MAX_LIMIT = 5000;
 const MAX_SAMPLE_ROWS = 20;
+const MAX_DB_DUPLICATE_SCAN = 1000;
 const SKILL_REVIEW_THRESHOLD = 15;
 
 const WARNING_CODES = {
@@ -16,6 +21,13 @@ const WARNING_CODES = {
   unmappedColumns: "CSV_UNMAPPED_COLUMNS",
   lowFieldCoverage: "CSV_LOW_FIELD_COVERAGE",
   duplicateCandidate: "CSV_DUPLICATE_CANDIDATE",
+  duplicateBySourceRow: "CSV_DUPLICATE_BY_SOURCE_ROW",
+  duplicateByProjectTitleCompany: "CSV_DUPLICATE_BY_PROJECT_TITLE_COMPANY",
+  duplicateByProjectSkillLocationPrice: "CSV_DUPLICATE_BY_PROJECT_SKILL_LOCATION_PRICE",
+  duplicateByPersonNameOwner: "CSV_DUPLICATE_BY_PERSON_NAME_OWNER",
+  duplicateByPersonSkillRateAvailability: "CSV_DUPLICATE_BY_PERSON_SKILL_RATE_AVAILABILITY",
+  duplicateWeakMatch: "CSV_DUPLICATE_WEAK_MATCH",
+  duplicateStrongMatch: "CSV_DUPLICATE_STRONG_MATCH",
   invalidPrice: "CSV_INVALID_PRICE",
   invalidDate: "CSV_INVALID_DATE",
   skillOverExtraction: "CSV_SKILL_OVER_EXTRACTION",
@@ -37,6 +49,7 @@ type CsvDryRunArgs = {
   file: string;
   type: CsvImportType;
   limit: number;
+  dbDuplicates: DbDuplicateMode;
 };
 
 type CsvTable = {
@@ -51,25 +64,76 @@ type HeaderMapping = {
   unmappedColumns: Array<{ headerHash: string }>;
 };
 
-type RowAssessment = {
+export type ExistingProjectCandidate = {
+  title?: string | null;
+  companyName?: string | null;
+  workContent?: string | null;
+  skills?: string[];
+  unitPrice?: string | number | null;
+  workLocation?: string | null;
+  startMonth?: string | Date | null;
+};
+
+export type ExistingPersonCandidate = {
+  name?: string | null;
+  initials?: string | null;
+  roleHeadline?: string | null;
+  skills?: string[];
+  nearestStation?: string | null;
+  desiredUnitPrice?: string | number | null;
+  availableFrom?: string | Date | null;
+  ownerCompany?: string | null;
+};
+
+type DuplicateInputs = {
+  existingProjects?: ExistingProjectCandidate[];
+  existingPersons?: ExistingPersonCandidate[];
+  dbReadOnlyEnabled?: boolean;
+  dbReadOnlyScannedProjects?: number;
+  dbReadOnlyScannedPersons?: number;
+};
+
+type TypeDetection = {
+  detectedType: DetectedCsvType;
+  effectiveType: ResolvedCsvImportType;
+  typeConfidence: number;
+  projectScore: number;
+  personScore: number;
+  conflictMargin: number;
+  typeReasons: string[];
+};
+
+export type RowAssessment = {
   rowNumber: number;
   rowHash: string;
   type: ResolvedCsvImportType;
-  action: "would_create" | "would_need_review" | "would_skip";
+  detectedType: DetectedCsvType;
+  typeConfidence: number;
+  projectScore: number;
+  personScore: number;
+  conflictMargin: number;
+  typeReasons: string[];
+  action: RowAction;
   mappedFieldCount: number;
   fieldCoverageRatio: number;
+  fieldCoverageScore: number;
+  weakFieldCount: number;
   requiredFieldCoverage: Record<string, boolean>;
   missingRequiredFields: string[];
+  missingFields: string[];
   warningCodes: WarningCode[];
   reviewReasonCodes: WarningCode[];
   duplicateCandidate: boolean;
+  duplicateStrength: DuplicateStrength;
   duplicateGroupHash: string | null;
+  duplicateReasons: WarningCode[];
   skillCount: number;
   piiRedactedInOutput: true;
 };
 
 type InternalRowAssessment = RowAssessment & {
   duplicateKey: string | null;
+  values: Record<string, string>;
 };
 
 export type CsvDryRunReport = {
@@ -82,7 +146,9 @@ export type CsvDryRunReport = {
     fileRows: number;
     parsedRows: number;
     type: CsvImportType;
+    requestedType: CsvImportType;
     effectiveTypes: Record<ResolvedCsvImportType, number>;
+    detectedTypes: Record<DetectedCsvType, number>;
     limit: number;
     maxSampleRows: number;
     piiSafe: true;
@@ -94,11 +160,35 @@ export type CsvDryRunReport = {
     headerHashes: string[];
   };
   requiredFieldCoverage: Record<string, { presentRows: number; missingRows: number; coverage: number }>;
+  fieldCoverage: {
+    averageScore: number;
+    lowCoverageCount: number;
+    missingFieldCounts: Record<string, number>;
+  };
+  typeDetection: {
+    requestedType: CsvImportType;
+    detectedTypes: Record<DetectedCsvType, number>;
+    typeReasonCounts: Record<string, number>;
+    typeConflictCount: number;
+  };
+  duplicateMatching: {
+    dbReadOnlyEnabled: boolean;
+    dbReadOnlyScannedProjects: number;
+    dbReadOnlyScannedPersons: number;
+    sourceRowDuplicateCount: number;
+    strongDuplicateCandidateCount: number;
+    weakDuplicateCandidateCount: number;
+    duplicateReasonCounts: Record<string, number>;
+  };
   outcomes: {
     wouldCreate: number;
     wouldNeedReview: number;
     wouldSkip: number;
     duplicateCandidateCount: number;
+    strongDuplicateCandidateCount: number;
+    weakDuplicateCandidateCount: number;
+    typeConflictCount: number;
+    lowCoverageCount: number;
     invalidRowCount: number;
   };
   warningCounts: Record<string, number>;
@@ -108,7 +198,7 @@ export type CsvDryRunReport = {
 };
 
 const projectFieldDefinitions: FieldDefinition[] = [
-  { field: "companyName", synonyms: ["companyname", "company", "client", "clientcompany", "customer", "会社名", "企業", "顧客", "クライアント"] },
+  { field: "companyName", synonyms: ["companyname", "company", "client", "clientcompany", "customer", "会社名", "企業名", "顧客", "クライアント"] },
   { field: "clientCompany", synonyms: ["clientcompany", "client", "customercompany", "顧客会社", "クライアント会社"] },
   { field: "upperCompany", synonyms: ["uppercompany", "vendor", "上位会社", "上位", "商流会社"] },
   { field: "title", synonyms: ["title", "project", "projectname", "案件名", "件名", "案件", "プロジェクト名"] },
@@ -125,7 +215,7 @@ const projectFieldDefinitions: FieldDefinition[] = [
   { field: "interviewCount", synonyms: ["interview", "interviewcount", "面談", "面談回数"] },
   { field: "contractType", synonyms: ["contract", "contracttype", "契約形態", "契約"] },
   { field: "commercialFlow", synonyms: ["commercialflow", "flow", "商流"] },
-  { field: "endClient", synonyms: ["endclient", "end", "エンド", "エンド企業"] },
+  { field: "endClient", synonyms: ["endclient", "end", "エンド", "エンドユーザー", "エンド企業"] },
   { field: "prime", synonyms: ["prime", "primecontractor", "元請", "元請け"] },
   { field: "accountManager", synonyms: ["accountmanager", "am", "salesowner", "営業担当", "am担当", "担当"] },
   { field: "upperContactName", synonyms: ["uppercontact", "uppercontactname", "contactname", "上位担当", "上位担当者"] },
@@ -146,9 +236,9 @@ const personFieldDefinitions: FieldDefinition[] = [
   { field: "nationality", synonyms: ["nationality", "国籍"] },
   { field: "availableFrom", synonyms: ["availablefrom", "available", "start", "稼働", "稼働開始", "稼働開始日"] },
   { field: "desiredUnitPrice", synonyms: ["desiredunitprice", "unitprice", "price", "rate", "希望単価", "単価", "金額"] },
-  { field: "skills", synonyms: ["skills", "skill", "technologies", "technology", "スキル", "使用技術", "経験スキル"] },
+  { field: "skills", synonyms: ["skills", "skill", "technologies", "technology", "スキル", "使用技術", "スキルシート", "経験スキル"] },
   { field: "roleHeadline", synonyms: ["role", "roleheadline", "position", "jobtype", "職種", "ポジション", "役割"] },
-  { field: "careerSummary", synonyms: ["careersummary", "career", "summary", "profile", "経歴", "経歴概要", "職務経歴"] },
+  { field: "careerSummary", synonyms: ["careersummary", "career", "summary", "profile", "経歴", "職務経歴", "経験", "得意領域"] },
   { field: "remotePreference", synonyms: ["remote", "remotepreference", "リモート", "希望リモート"] },
   { field: "workLocationPreference", synonyms: ["worklocation", "worklocationpreference", "location", "希望勤務地", "勤務地"] },
   { field: "ownerCompany", synonyms: ["ownercompany", "company", "所属会社", "会社名", "所属"] },
@@ -178,9 +268,7 @@ export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
   }
 
   const file = parseArgValue(argv, "file");
-  if (!file) {
-    throw new Error("Missing required --file=<path>.");
-  }
+  if (!file) throw new Error("Missing required --file=<path>.");
 
   const type = parseArgValue(argv, "type");
   if (type !== "project" && type !== "person" && type !== "auto") {
@@ -192,22 +280,34 @@ export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
   if (!Number.isFinite(limit) || limit <= 0 || !Number.isInteger(limit)) {
     throw new Error("--limit must be a positive integer when provided.");
   }
-  if (limit > MAX_LIMIT) {
-    throw new Error(`--limit must be <= ${MAX_LIMIT}.`);
+  if (limit > MAX_LIMIT) throw new Error(`--limit must be <= ${MAX_LIMIT}.`);
+
+  const duplicateMode = parseArgValue(argv, "db-duplicates") ?? "auto";
+  if (duplicateMode !== "auto" && duplicateMode !== "off" && duplicateMode !== "on") {
+    throw new Error("--db-duplicates must be auto, off, or on.");
   }
 
-  return { file, type, limit };
+  return { file, type, limit, dbDuplicates: duplicateMode };
 }
 
 function normalizeHeader(header: string): string {
   return header
     .trim()
     .toLowerCase()
-    .replace(/[\s_\-‐ー・/／\\|:：,，.．()（）［\]\[\]【】{}]/g, "");
+    .normalize("NFKC")
+    .replace(/[\s_\-ー・･/／|:：()（）［］\[\]【】「」『』,，.．]/g, "");
 }
 
-function normalizeText(value: string | undefined): string {
-  return (value ?? "").trim();
+function normalizeText(value: string | number | Date | null | undefined): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value ?? "").trim();
+}
+
+function normalizedToken(value: string | number | Date | null | undefined): string {
+  return normalizeText(value)
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[\s_\-ー・･/／|:：()（）［］\[\]【】「」『』,，.．]/g, "");
 }
 
 function isBlank(value: string | undefined): boolean {
@@ -222,6 +322,13 @@ function increment(map: Record<string, number>, key: string): void {
   map[key] = (map[key] ?? 0) + 1;
 }
 
+function numericPriceToken(value: string | number | null | undefined): number | null {
+  const raw = normalizeText(value).normalize("NFKC").replace(/[,，\s]/g, "");
+  const match = raw.match(/\d+(?:\.\d+)?/);
+  if (!match) return null;
+  return Number(match[0]);
+}
+
 export function parseCsv(text: string): CsvTable {
   const rows: string[][] = [];
   let current = "";
@@ -231,23 +338,20 @@ export function parseCsv(text: string): CsvTable {
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
     const next = text[index + 1];
-
-    if (char === '"') {
-      if (inQuotes && next === '"') {
-        current += '"';
+    if (char === "\"") {
+      if (inQuotes && next === "\"") {
+        current += "\"";
         index += 1;
       } else {
         inQuotes = !inQuotes;
       }
       continue;
     }
-
     if (char === "," && !inQuotes) {
       row.push(current);
       current = "";
       continue;
     }
-
     if ((char === "\n" || char === "\r") && !inQuotes) {
       if (char === "\r" && next === "\n") index += 1;
       row.push(current);
@@ -256,7 +360,6 @@ export function parseCsv(text: string): CsvTable {
       current = "";
       continue;
     }
-
     current += char;
   }
 
@@ -278,9 +381,7 @@ function buildSynonymMap(definitions: FieldDefinition[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const definition of definitions) {
     map.set(normalizeHeader(definition.field), definition.field);
-    for (const synonym of definition.synonyms) {
-      map.set(normalizeHeader(synonym), definition.field);
-    }
+    for (const synonym of definition.synonyms) map.set(normalizeHeader(synonym), definition.field);
   }
   return map;
 }
@@ -313,9 +414,10 @@ function rowToObject(row: string[], mapping: HeaderMapping): Record<string, stri
   return values;
 }
 
-function splitSkills(value: string | undefined): string[] {
-  return normalizeText(value)
-    .split(/[,\n;；、/／|]+/)
+function splitSkills(value: string | string[] | undefined): string[] {
+  const text = Array.isArray(value) ? value.join(",") : normalizeText(value);
+  return text
+    .split(/[,\n;、，／/・|]+/)
     .map((skill) => skill.trim())
     .filter(Boolean);
 }
@@ -331,28 +433,44 @@ function combinedSkills(values: Record<string, string>, type: ResolvedCsvImportT
   return splitSkills(values.skills);
 }
 
+function skillTokenSet(skills: string[]): Set<string> {
+  return new Set(skills.map(normalizedToken).filter((token) => token.length >= 2));
+}
+
+function skillOverlap(left: string[], right: string[]): number {
+  const leftSet = skillTokenSet(left);
+  const rightSet = skillTokenSet(right);
+  let overlap = 0;
+  for (const skill of leftSet) {
+    if (rightSet.has(skill)) overlap += 1;
+  }
+  return overlap;
+}
+
 function hasValidPrice(value: string | undefined): boolean {
   const text = normalizeText(value);
   if (!text) return true;
-  if (/応相談|相談|スキル見合|要相談/i.test(text)) return true;
-  if (!/\d/.test(text)) return false;
-  return /^[0-9０-９,\s万万円円～〜\-_.]+$/.test(text);
+  if (/応相談|相談|スキル見合|要相談|asap/i.test(text)) return true;
+  const normalized = text.normalize("NFKC").replace(/[,，\s]/g, "");
+  if (!/\d/.test(normalized)) return false;
+  return /^[0-9.万万円円kK~〜\-－から以上以下前後税込税別月/]+$/.test(normalized);
 }
 
 function hasValidDate(value: string | undefined): boolean {
   const text = normalizeText(value);
   if (!text) return true;
-  if (/即日|随時|調整|未定|asap/i.test(text)) return true;
-  if (/^\d{4}[-/年]\d{1,2}(?:[-/月]\d{1,2}日?)?$/.test(text)) return true;
-  if (/^\d{1,2}月(?:\d{1,2}日)?$/.test(text)) return true;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return true;
+  if (/即日|随時|調整|未定|応相談|asap/i.test(text)) return true;
+  const normalized = text.normalize("NFKC").trim();
+  if (/^\d{4}[-/]\d{1,2}(?:[-/]\d{1,2})?$/.test(normalized)) return true;
+  if (/^\d{4}年\d{1,2}月(?:\d{1,2}日)?$/.test(normalized)) return true;
+  if (/^\d{1,2}月(?:\d{1,2}日)?$/.test(normalized)) return true;
   return false;
 }
 
 function lowConfidenceTitle(value: string | undefined): boolean {
   const text = normalizeText(value);
   if (!text) return true;
-  return text.length < 4 || /未定|不明|確認|案件$/.test(text);
+  return text.length < 4 || /未定|不明|確認|unknown|tbd/i.test(text);
 }
 
 function lowConfidencePersonName(values: Record<string, string>): boolean {
@@ -361,40 +479,139 @@ function lowConfidencePersonName(values: Record<string, string>): boolean {
   if (!name && /^[A-Za-z]{1,3}(?:[.\s][A-Za-z]{1,3})?$/.test(initials)) return false;
   if (!name) return true;
   if (name.length < 2) return true;
-  if (/@|案件|要員|エンジニア|未定|不明|調整|unknown|tbd|^\d+$/i.test(name)) return true;
-  return false;
+  return /@|案件|要員|エンジニア|未定|不明|調整|unknown|tbd|^\d+$/i.test(name);
 }
 
 function isEmptyRow(row: string[]): boolean {
   return row.every((cell) => isBlank(cell));
 }
 
-function inferType(projectValues: Record<string, string>, personValues: Record<string, string>): {
-  type: ResolvedCsvImportType;
-  conflict: boolean;
-} {
-  const projectSignals = ["title", "workContent", "businessContent", "requiredSkills", "unitPrice", "startMonth"]
-    .filter((field) => !isBlank(projectValues[field])).length;
-  const personSignals = ["name", "initials", "skills", "roleHeadline", "careerSummary", "desiredUnitPrice", "availableFrom"]
-    .filter((field) => !isBlank(personValues[field])).length;
+function mappingFieldCount(mapping: HeaderMapping): number {
+  return new Set(mapping.mappedColumns.map((column) => column.field)).size;
+}
+
+function typeDetectionFor(
+  requestedType: CsvImportType,
+  projectValues: Record<string, string>,
+  personValues: Record<string, string>,
+  projectMapping: HeaderMapping,
+  personMapping: HeaderMapping,
+): TypeDetection {
+  const projectHeaderScore = mappingFieldCount(projectMapping);
+  const personHeaderScore = mappingFieldCount(personMapping);
+  const projectRowScore = [
+    "title",
+    "workContent",
+    "businessContent",
+    "requiredSkills",
+    "niceToHaveSkills",
+    "unitPrice",
+    "startMonth",
+    "workLocation",
+    "companyName",
+    "clientCompany",
+    "upperCompany",
+  ].filter((field) => !isBlank(projectValues[field])).length;
+  const personRowScore = [
+    "name",
+    "initials",
+    "skills",
+    "roleHeadline",
+    "careerSummary",
+    "desiredUnitPrice",
+    "availableFrom",
+    "nearestStation",
+    "ownerCompany",
+  ].filter((field) => !isBlank(personValues[field])).length;
+  const projectScore = projectHeaderScore + projectRowScore;
+  const personScore = personHeaderScore + personRowScore;
+  const conflictMargin = Math.abs(projectScore - personScore);
+  const effectiveType = projectScore >= personScore ? "project" : "person";
+  const reasons = [
+    `PROJECT_HEADER_SIGNAL:${projectHeaderScore}`,
+    `PERSON_HEADER_SIGNAL:${personHeaderScore}`,
+    `PROJECT_ROW_SIGNAL:${projectRowScore}`,
+    `PERSON_ROW_SIGNAL:${personRowScore}`,
+  ];
+
+  if (requestedType !== "auto") {
+    return {
+      detectedType: requestedType,
+      effectiveType: requestedType,
+      typeConfidence: 1,
+      projectScore,
+      personScore,
+      conflictMargin,
+      typeReasons: [`REQUESTED_TYPE:${requestedType}`, ...reasons],
+    };
+  }
+
+  const total = projectScore + personScore;
+  const typeConfidence = total === 0 ? 0 : Number((Math.max(projectScore, personScore) / total).toFixed(4));
+  const conflict = projectScore > 0 && personScore > 0 && conflictMargin <= 2;
   return {
-    type: projectSignals >= personSignals ? "project" : "person",
-    conflict: projectSignals > 0 && personSignals > 0 && Math.abs(projectSignals - personSignals) <= 1,
+    detectedType: conflict ? "review" : effectiveType,
+    effectiveType,
+    typeConfidence,
+    projectScore,
+    personScore,
+    conflictMargin,
+    typeReasons: [conflict ? "AUTO_TYPE_CONFLICT" : `AUTO_TYPE:${effectiveType}`, ...reasons],
+  };
+}
+
+function projectCoverage(values: Record<string, string>): Record<string, boolean> {
+  return {
+    title: !isBlank(values.title),
+    workContent: !isBlank(values.workContent) || !isBlank(values.businessContent),
+    skills: combinedSkills(values, "project").length > 0,
+    unitPrice: !isBlank(values.unitPrice),
+    startMonth: !isBlank(values.startMonth),
+    workLocation: !isBlank(values.workLocation),
+    company: !isBlank(values.companyName) || !isBlank(values.clientCompany) || !isBlank(values.upperCompany),
+  };
+}
+
+function personCoverage(values: Record<string, string>): Record<string, boolean> {
+  return {
+    identity: !isBlank(values.name) || !isBlank(values.initials),
+    skills: combinedSkills(values, "person").length > 0,
+    roleHeadline: !isBlank(values.roleHeadline),
+    availableFrom: !isBlank(values.availableFrom),
+    desiredUnitPrice: !isBlank(values.desiredUnitPrice),
+    nearestStation: !isBlank(values.nearestStation),
+    ownerCompany: !isBlank(values.ownerCompany),
+  };
+}
+
+function coverageDetails(values: Record<string, string>, type: ResolvedCsvImportType): {
+  fieldCoverageScore: number;
+  weakFieldCount: number;
+  missingFields: string[];
+} {
+  const coverage = type === "project" ? projectCoverage(values) : personCoverage(values);
+  const missingFields = Object.entries(coverage)
+    .filter(([, present]) => !present)
+    .map(([field]) => field);
+  const present = Object.keys(coverage).length - missingFields.length;
+  return {
+    fieldCoverageScore: Number((present / Object.keys(coverage).length).toFixed(4)),
+    weakFieldCount: missingFields.length,
+    missingFields,
   };
 }
 
 function duplicateKey(values: Record<string, string>, type: ResolvedCsvImportType): string | null {
-  const skills = combinedSkills(values, type).slice(0, 8).join("|").toLowerCase();
+  const skills = combinedSkills(values, type).slice(0, 8).map(normalizedToken).join("|");
   if (type === "project") {
-    const title = normalizeText(values.title).toLowerCase();
-    const start = normalizeText(values.startMonth).toLowerCase();
-    const company = normalizeText(values.companyName || values.clientCompany || values.upperCompany).toLowerCase();
+    const title = normalizedToken(values.title);
+    const start = normalizedToken(values.startMonth);
+    const company = normalizedToken(projectCompany(values));
     if (!title && !skills) return null;
     return shortHash(["project", title, start, company, skills].join("\n"));
   }
-
-  const identity = normalizeText(values.name || values.initials).toLowerCase();
-  const available = normalizeText(values.availableFrom).toLowerCase();
+  const identity = normalizedToken(personIdentity(values));
+  const available = normalizedToken(values.availableFrom);
   if (!identity && !skills) return null;
   return shortHash(["person", identity, available, skills].join("\n"));
 }
@@ -404,6 +621,26 @@ function fieldCoverage(values: Record<string, string>, mapping: HeaderMapping): 
   if (mappedFields.size === 0) return 0;
   const present = [...mappedFields].filter((field) => !isBlank(values[field])).length;
   return Number((present / mappedFields.size).toFixed(4));
+}
+
+function addDuplicate(row: InternalRowAssessment, strength: "weak" | "strong", reason: WarningCode, groupHash: string): void {
+  row.duplicateCandidate = true;
+  row.duplicateStrength = row.duplicateStrength === "strong" || strength === "strong" ? "strong" : "weak";
+  row.duplicateGroupHash = row.duplicateGroupHash ?? groupHash;
+  pushUnique(row.duplicateReasons, reason);
+  pushUnique(row.warningCodes, WARNING_CODES.duplicateCandidate);
+  pushUnique(row.warningCodes, reason);
+  pushUnique(row.reviewReasonCodes, reason);
+  pushUnique(row.warningCodes, strength === "strong" ? WARNING_CODES.duplicateStrongMatch : WARNING_CODES.duplicateWeakMatch);
+  pushUnique(row.reviewReasonCodes, strength === "strong" ? WARNING_CODES.duplicateStrongMatch : WARNING_CODES.duplicateWeakMatch);
+}
+
+function projectCompany(values: Record<string, string>): string {
+  return values.companyName || values.clientCompany || values.upperCompany || "";
+}
+
+function personIdentity(values: Record<string, string>): string {
+  return values.name || values.initials || "";
 }
 
 function assessRow(params: {
@@ -424,20 +661,17 @@ function assessRow(params: {
 
   const projectValues = rowToObject(row, projectMapping);
   const personValues = rowToObject(row, personMapping);
-  const inferred = requestedType === "auto"
-    ? inferType(projectValues, personValues)
-    : { type: requestedType, conflict: false };
-  const type = inferred.type;
+  const detection = typeDetectionFor(requestedType, projectValues, personValues, projectMapping, personMapping);
+  const type = detection.effectiveType;
   const mapping = type === "project" ? projectMapping : personMapping;
   const values = type === "project" ? projectValues : personValues;
   const skills = combinedSkills(values, type);
+  const coverage = coverageDetails(values, type);
   const missingRequiredFields: string[] = [];
   const requiredFieldCoverage: Record<string, boolean> = {};
 
-  if (mapping.unmappedColumns.length > 0) {
-    warningCodes.push(WARNING_CODES.unmappedColumns);
-  }
-  if (inferred.conflict) {
+  if (mapping.unmappedColumns.length > 0) warningCodes.push(WARNING_CODES.unmappedColumns);
+  if (detection.detectedType === "review") {
     warningCodes.push(WARNING_CODES.typeConflict);
     reviewReasonCodes.push(WARNING_CODES.typeConflict);
   }
@@ -456,8 +690,8 @@ function assessRow(params: {
     reviewReasonCodes.push(WARNING_CODES.missingRequiredField);
   }
 
-  const coverageRatio = fieldCoverage(values, mapping);
-  if (coverageRatio < 0.4) {
+  const mappedCoverageRatio = fieldCoverage(values, mapping);
+  if (coverage.fieldCoverageScore < 0.5) {
     warningCodes.push(WARNING_CODES.lowFieldCoverage);
     reviewReasonCodes.push(WARNING_CODES.lowFieldCoverage);
   }
@@ -508,48 +742,128 @@ function assessRow(params: {
     rowNumber,
     rowHash: shortHash(row.join("\u001f")),
     type,
+    detectedType: detection.detectedType,
+    typeConfidence: detection.typeConfidence,
+    projectScore: detection.projectScore,
+    personScore: detection.personScore,
+    conflictMargin: detection.conflictMargin,
+    typeReasons: detection.typeReasons,
     action,
     mappedFieldCount: Object.keys(values).length,
-    fieldCoverageRatio: coverageRatio,
+    fieldCoverageRatio: mappedCoverageRatio,
+    fieldCoverageScore: coverage.fieldCoverageScore,
+    weakFieldCount: coverage.weakFieldCount,
     requiredFieldCoverage,
     missingRequiredFields,
+    missingFields: coverage.missingFields,
     warningCodes: [...new Set(warningCodes)],
     reviewReasonCodes: [...new Set(reviewReasonCodes)],
     duplicateCandidate: false,
+    duplicateStrength: "none",
     duplicateGroupHash: null,
+    duplicateReasons: [],
     duplicateKey: duplicateKey(values, type),
     skillCount: skills.length,
     piiRedactedInOutput: true,
+    values,
   };
 }
 
-function finalizeDuplicates(rows: InternalRowAssessment[]): RowAssessment[] {
+function applySourceRowDuplicates(rows: InternalRowAssessment[]): void {
   const counts = new Map<string, number>();
   for (const row of rows) {
     if (!row.duplicateKey || row.action === "would_skip") continue;
     counts.set(row.duplicateKey, (counts.get(row.duplicateKey) ?? 0) + 1);
   }
 
-  return rows.map(({ duplicateKey: key, ...row }) => {
-    if (key && (counts.get(key) ?? 0) > 1) {
-      pushUnique(row.warningCodes, WARNING_CODES.duplicateCandidate);
-      pushUnique(row.reviewReasonCodes, WARNING_CODES.duplicateCandidate);
-      return {
-        ...row,
-        action: row.action === "would_create" ? "would_need_review" : row.action,
-        duplicateCandidate: true,
-        duplicateGroupHash: key,
-      };
+  for (const row of rows) {
+    if (row.duplicateKey && (counts.get(row.duplicateKey) ?? 0) > 1) {
+      addDuplicate(row, "strong", WARNING_CODES.duplicateBySourceRow, row.duplicateKey);
     }
+  }
+}
+
+function applyProjectDbDuplicates(row: InternalRowAssessment, existingProjects: ExistingProjectCandidate[]): void {
+  if (row.type !== "project") return;
+  const title = normalizedToken(row.values.title);
+  const company = normalizedToken(projectCompany(row.values));
+  const skills = combinedSkills(row.values, "project");
+  const location = normalizedToken(row.values.workLocation);
+  const price = numericPriceToken(row.values.unitPrice);
+
+  for (const existing of existingProjects) {
+    const existingTitle = normalizedToken(existing.title);
+    const existingCompany = normalizedToken(existing.companyName);
+    if (title && company && existingTitle === title && existingCompany === company) {
+      addDuplicate(row, "strong", WARNING_CODES.duplicateByProjectTitleCompany, shortHash(`project-title-company:${title}:${company}`));
+      continue;
+    }
+
+    const overlap = skillOverlap(skills, existing.skills ?? []);
+    const locationMatch = Boolean(location && normalizedToken(existing.workLocation) === location);
+    const existingPrice = numericPriceToken(existing.unitPrice);
+    const priceMatch = price !== null && existingPrice !== null && Math.abs(price - existingPrice) <= 5;
+    if (overlap >= 2 && (locationMatch || priceMatch)) {
+      addDuplicate(
+        row,
+        locationMatch && priceMatch ? "strong" : "weak",
+        WARNING_CODES.duplicateByProjectSkillLocationPrice,
+        shortHash(`project-skill-location-price:${overlap}:${location}:${price ?? ""}`),
+      );
+    }
+  }
+}
+
+function applyPersonDbDuplicates(row: InternalRowAssessment, existingPersons: ExistingPersonCandidate[]): void {
+  if (row.type !== "person") return;
+  const identity = normalizedToken(personIdentity(row.values));
+  const owner = normalizedToken(row.values.ownerCompany);
+  const skills = combinedSkills(row.values, "person");
+  const price = numericPriceToken(row.values.desiredUnitPrice);
+  const available = normalizedToken(row.values.availableFrom);
+
+  for (const existing of existingPersons) {
+    const existingIdentity = normalizedToken(existing.name || existing.initials);
+    const existingOwner = normalizedToken(existing.ownerCompany);
+    if (identity && owner && existingIdentity === identity && existingOwner === owner) {
+      addDuplicate(row, "strong", WARNING_CODES.duplicateByPersonNameOwner, shortHash(`person-name-owner:${identity}:${owner}`));
+      continue;
+    }
+
+    const overlap = skillOverlap(skills, existing.skills ?? []);
+    const existingPrice = numericPriceToken(existing.desiredUnitPrice);
+    const priceMatch = price !== null && existingPrice !== null && Math.abs(price - existingPrice) <= 5;
+    const availableMatch = Boolean(available && normalizedToken(existing.availableFrom) === available);
+    if (overlap >= 2 && (priceMatch || availableMatch)) {
+      addDuplicate(
+        row,
+        priceMatch && availableMatch ? "strong" : "weak",
+        WARNING_CODES.duplicateByPersonSkillRateAvailability,
+        shortHash(`person-skill-rate-availability:${overlap}:${price ?? ""}:${available}`),
+      );
+    }
+  }
+}
+
+function finalizeRows(rows: InternalRowAssessment[], duplicates: DuplicateInputs): RowAssessment[] {
+  applySourceRowDuplicates(rows);
+  for (const row of rows) {
+    applyProjectDbDuplicates(row, duplicates.existingProjects ?? []);
+    applyPersonDbDuplicates(row, duplicates.existingPersons ?? []);
+  }
+
+  return rows.map(({ duplicateKey: _duplicateKey, values: _values, ...row }) => {
+    if (row.duplicateCandidate && row.action === "would_create") row.action = "would_need_review";
+    row.warningCodes = [...new Set(row.warningCodes)];
+    row.reviewReasonCodes = [...new Set(row.reviewReasonCodes)];
+    row.duplicateReasons = [...new Set(row.duplicateReasons)];
     return row;
   });
 }
 
 function coverageSummary(rows: RowAssessment[]): CsvDryRunReport["requiredFieldCoverage"] {
   const fields = new Set<string>();
-  for (const row of rows) {
-    Object.keys(row.requiredFieldCoverage).forEach((field) => fields.add(field));
-  }
+  for (const row of rows) Object.keys(row.requiredFieldCoverage).forEach((field) => fields.add(field));
 
   const summary: CsvDryRunReport["requiredFieldCoverage"] = {};
   for (const field of [...fields].sort()) {
@@ -564,12 +878,61 @@ function coverageSummary(rows: RowAssessment[]): CsvDryRunReport["requiredFieldC
   return summary;
 }
 
-function countCodes(rows: RowAssessment[], key: "warningCodes" | "reviewReasonCodes"): Record<string, number> {
+function countCodes(rows: RowAssessment[], key: "warningCodes" | "reviewReasonCodes" | "duplicateReasons"): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const row of rows) {
     for (const code of row[key]) increment(counts, code);
   }
   return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function fieldCoverageSummary(rows: RowAssessment[]): CsvDryRunReport["fieldCoverage"] {
+  const missingFieldCounts: Record<string, number> = {};
+  for (const row of rows) {
+    for (const field of row.missingFields) increment(missingFieldCounts, field);
+  }
+  const averageScore = rows.length === 0
+    ? 0
+    : Number((rows.reduce((sum, row) => sum + row.fieldCoverageScore, 0) / rows.length).toFixed(4));
+  return {
+    averageScore,
+    lowCoverageCount: rows.filter((row) => row.reviewReasonCodes.includes(WARNING_CODES.lowFieldCoverage)).length,
+    missingFieldCounts: Object.fromEntries(Object.entries(missingFieldCounts).sort(([left], [right]) => left.localeCompare(right))),
+  };
+}
+
+function typeDetectionSummary(rows: RowAssessment[], requestedType: CsvImportType): CsvDryRunReport["typeDetection"] {
+  const detectedTypes: Record<DetectedCsvType, number> = { project: 0, person: 0, review: 0 };
+  const typeReasonCounts: Record<string, number> = {};
+  for (const row of rows) {
+    detectedTypes[row.detectedType] += 1;
+    for (const reason of row.typeReasons) increment(typeReasonCounts, reason);
+  }
+  return {
+    requestedType,
+    detectedTypes,
+    typeReasonCounts: Object.fromEntries(Object.entries(typeReasonCounts).sort(([left], [right]) => left.localeCompare(right))),
+    typeConflictCount: rows.filter((row) => row.reviewReasonCodes.includes(WARNING_CODES.typeConflict)).length,
+  };
+}
+
+function mergeMappedColumns(type: CsvImportType, projectMapping: HeaderMapping, personMapping: HeaderMapping): Array<{ field: string; headerHash: string }> {
+  const columns = type === "person"
+    ? personMapping.mappedColumns
+    : type === "project"
+      ? projectMapping.mappedColumns
+      : [...projectMapping.mappedColumns, ...personMapping.mappedColumns];
+  return columns
+    .filter((column, index, all) => all.findIndex((item) => item.field === column.field && item.headerHash === column.headerHash) === index)
+    .sort((left, right) => left.field.localeCompare(right.field));
+}
+
+function mergeUnmappedColumns(type: CsvImportType, projectMapping: HeaderMapping, personMapping: HeaderMapping): Array<{ headerHash: string }> {
+  if (type === "person") return personMapping.unmappedColumns;
+  if (type === "project") return projectMapping.unmappedColumns;
+
+  const personUnmappedHashes = new Set(personMapping.unmappedColumns.map((column) => column.headerHash));
+  return projectMapping.unmappedColumns.filter((column) => personUnmappedHashes.has(column.headerHash));
 }
 
 export function assertNoSensitiveCsvOutput(text: string): void {
@@ -584,6 +947,7 @@ export function assertNoSensitiveCsvOutput(text: string): void {
     /"subject"\s*:/i,
     /"body(?:Text|Html|Raw|Normalized)?"\s*:/i,
     /"email"\s*:/i,
+    /"values"\s*:/i,
   ];
   const matched = forbiddenPatterns.find((pattern) => pattern.test(text));
   if (matched) throw new Error(`Sensitive CSV dry-run output matched ${matched}`);
@@ -595,30 +959,39 @@ export function buildCsvDryRunReport(params: {
   limit?: number;
   fileIdentity?: string;
   fileBytes?: number;
+  existingProjects?: ExistingProjectCandidate[];
+  existingPersons?: ExistingPersonCandidate[];
+  dbReadOnlyScannedProjects?: number;
+  dbReadOnlyScannedPersons?: number;
+  dbReadOnlyEnabled?: boolean;
 }): CsvDryRunReport {
   const limit = params.limit ?? MAX_LIMIT;
   const table = parseCsv(params.csvText);
   const projectMapping = mapHeaders(table.headers, "project");
   const personMapping = mapHeaders(table.headers, "person");
   const rowsToAssess = table.rows.slice(0, limit);
-  const assessedRows = finalizeDuplicates(rowsToAssess.map((row, index) => assessRow({
+  const assessedRows = finalizeRows(rowsToAssess.map((row, index) => assessRow({
     row,
     rowNumber: index + 2,
     requestedType: params.type,
     projectMapping,
     personMapping,
-  })));
+  })), params);
 
   const effectiveTypes: Record<ResolvedCsvImportType, number> = { project: 0, person: 0 };
-  for (const row of assessedRows) effectiveTypes[row.type] += 1;
+  const detectedTypes: Record<DetectedCsvType, number> = { project: 0, person: 0, review: 0 };
+  for (const row of assessedRows) {
+    effectiveTypes[row.type] += 1;
+    detectedTypes[row.detectedType] += 1;
+  }
 
-  const mapping = params.type === "person" ? personMapping : projectMapping;
-  const mappedColumns = params.type === "auto"
-    ? [...projectMapping.mappedColumns, ...personMapping.mappedColumns]
-    : mapping.mappedColumns;
-  const unmappedColumns = params.type === "auto"
-    ? [...projectMapping.unmappedColumns, ...personMapping.unmappedColumns]
-    : mapping.unmappedColumns;
+  const mappedColumns = mergeMappedColumns(params.type, projectMapping, personMapping);
+  const unmappedColumns = mergeUnmappedColumns(params.type, projectMapping, personMapping);
+  const duplicateReasonCounts = countCodes(assessedRows, "duplicateReasons");
+  const strongDuplicateCandidateCount = assessedRows.filter((row) => row.duplicateStrength === "strong").length;
+  const weakDuplicateCandidateCount = assessedRows.filter((row) => row.duplicateStrength === "weak").length;
+  const lowCoverageCount = assessedRows.filter((row) => row.reviewReasonCodes.includes(WARNING_CODES.lowFieldCoverage)).length;
+  const typeConflictCount = assessedRows.filter((row) => row.reviewReasonCodes.includes(WARNING_CODES.typeConflict)).length;
 
   const report: CsvDryRunReport = {
     summary: {
@@ -630,25 +1003,40 @@ export function buildCsvDryRunReport(params: {
       fileRows: table.fileRows,
       parsedRows: assessedRows.length,
       type: params.type,
+      requestedType: params.type,
       effectiveTypes,
+      detectedTypes,
       limit,
       maxSampleRows: MAX_SAMPLE_ROWS,
       piiSafe: true,
       secretsRedacted: true,
     },
-    mappedColumns: mappedColumns
-      .filter((column, index, all) => all.findIndex((item) => item.field === column.field && item.headerHash === column.headerHash) === index)
-      .sort((left, right) => left.field.localeCompare(right.field)),
+    mappedColumns,
     unmappedColumns: {
       count: unmappedColumns.length,
       headerHashes: [...new Set(unmappedColumns.map((column) => column.headerHash))].sort(),
     },
     requiredFieldCoverage: coverageSummary(assessedRows),
+    fieldCoverage: fieldCoverageSummary(assessedRows),
+    typeDetection: typeDetectionSummary(assessedRows, params.type),
+    duplicateMatching: {
+      dbReadOnlyEnabled: params.dbReadOnlyEnabled ?? false,
+      dbReadOnlyScannedProjects: params.dbReadOnlyScannedProjects ?? 0,
+      dbReadOnlyScannedPersons: params.dbReadOnlyScannedPersons ?? 0,
+      sourceRowDuplicateCount: assessedRows.filter((row) => row.duplicateReasons.includes(WARNING_CODES.duplicateBySourceRow)).length,
+      strongDuplicateCandidateCount,
+      weakDuplicateCandidateCount,
+      duplicateReasonCounts,
+    },
     outcomes: {
       wouldCreate: assessedRows.filter((row) => row.action === "would_create").length,
       wouldNeedReview: assessedRows.filter((row) => row.action === "would_need_review").length,
       wouldSkip: assessedRows.filter((row) => row.action === "would_skip").length,
       duplicateCandidateCount: assessedRows.filter((row) => row.duplicateCandidate).length,
+      strongDuplicateCandidateCount,
+      weakDuplicateCandidateCount,
+      typeConflictCount,
+      lowCoverageCount,
       invalidRowCount: assessedRows.filter((row) => row.warningCodes.includes(WARNING_CODES.emptyRow)).length,
     },
     warningCounts: countCodes(assessedRows, "warningCodes"),
@@ -659,7 +1047,7 @@ export function buildCsvDryRunReport(params: {
       "CSV values are mapped and validated locally",
       "raw CSV rows and raw values are not printed",
       "subjects, bodies, emails, customer names, company names, person names, and secrets are not printed",
-      "duplicate candidates are detected within the CSV input only in this MVP",
+      "duplicate candidates include source-row duplicates and optional read-only DB duplicate matches",
     ],
   };
 
@@ -667,16 +1055,106 @@ export function buildCsvDryRunReport(params: {
   return report;
 }
 
+async function loadDbDuplicateInputs(args: CsvDryRunArgs): Promise<DuplicateInputs> {
+  if (args.dbDuplicates === "off") return { dbReadOnlyEnabled: false };
+  if (!process.env.DATABASE_URL) {
+    if (args.dbDuplicates === "on") throw new Error("--db-duplicates=on requires DATABASE_URL, but its value will never be printed.");
+    return { dbReadOnlyEnabled: false };
+  }
+
+  const { prisma } = await import("../lib/prisma");
+  const take = Math.min(args.limit, MAX_DB_DUPLICATE_SCAN);
+  const includeProject = args.type === "project" || args.type === "auto";
+  const includePerson = args.type === "person" || args.type === "auto";
+  const [projects, persons] = await Promise.all([
+    includeProject
+      ? prisma.project.findMany({
+          where: { status: { not: "ARCHIVED" } },
+          take,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: {
+            title: true,
+            workDescription: true,
+            summary: true,
+            companyRoles: {
+              take: 2,
+              select: { company: { select: { name: true } } },
+            },
+            condition: {
+              select: {
+                unitPriceMin: true,
+                unitPriceMax: true,
+                workLocationText: true,
+                startMonth: true,
+              },
+            },
+            skills: {
+              take: 20,
+              select: { skillName: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    includePerson
+      ? prisma.person.findMany({
+          where: { status: { not: "ARCHIVED" } },
+          take,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: {
+            name: true,
+            initials: true,
+            summary: true,
+            desiredUnitPrice: true,
+            availableFrom: true,
+            preferredLocation: true,
+            ownerCompany: { select: { name: true } },
+            skills: {
+              take: 20,
+              select: { skillName: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    dbReadOnlyEnabled: true,
+    dbReadOnlyScannedProjects: projects.length,
+    dbReadOnlyScannedPersons: persons.length,
+    existingProjects: projects.map((project) => ({
+      title: project.title,
+      companyName: project.companyRoles?.[0]?.company?.name ?? null,
+      workContent: project.workDescription ?? project.summary ?? null,
+      skills: project.skills?.map((skill) => skill.skillName) ?? [],
+      unitPrice: project.condition?.unitPriceMin ?? project.condition?.unitPriceMax ?? null,
+      workLocation: project.condition?.workLocationText ?? null,
+      startMonth: project.condition?.startMonth ?? null,
+    })),
+    existingPersons: persons.map((person) => ({
+      name: person.name,
+      initials: person.initials,
+      roleHeadline: person.summary,
+      skills: person.skills?.map((skill) => skill.skillName) ?? [],
+      nearestStation: person.preferredLocation,
+      desiredUnitPrice: person.desiredUnitPrice,
+      availableFrom: person.availableFrom,
+      ownerCompany: person.ownerCompany?.name ?? null,
+    })),
+  };
+}
+
 export async function runCsvDryRun(argv = process.argv): Promise<CsvDryRunReport> {
   const args = parseCsvDryRunArgs(argv);
   const csvText = await readFile(args.file, "utf8");
   const fileStats = statSync(args.file);
+  const duplicateInputs = await loadDbDuplicateInputs(args);
   return buildCsvDryRunReport({
     csvText,
     type: args.type,
     limit: args.limit,
     fileIdentity: args.file,
     fileBytes: fileStats.size,
+    ...duplicateInputs,
   });
 }
 

@@ -1,10 +1,10 @@
-# CSV Import Dry-run MVP
+# CSV Import Dry-run
 
 ## Purpose
 
-The CSV import dry-run MVP checks whether SES project/person CSV files can be mapped into the console's normalized data shape before any database write path exists.
+The CSV import dry-run checks whether SES project/person CSV files can be mapped into the console's normalized data shape before any database write path exists.
 
-This PR is intentionally safe:
+This command is intentionally safe:
 
 - No DB writes.
 - No `--apply`.
@@ -23,22 +23,31 @@ This PR is intentionally safe:
 Project dry-run:
 
 ```powershell
-npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-projects.csv --type=project
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-projects.csv --type=project --db-duplicates=off
 ```
 
 Person dry-run:
 
 ```powershell
-npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-persons.csv --type=person
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-persons.csv --type=person --db-duplicates=off
 ```
 
-Optional:
+Auto type preview:
 
 ```powershell
-npm.cmd run csv:import:dry-run -- --file <path> --type=auto --limit=500
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-projects.csv --type=auto --db-duplicates=off
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-persons.csv --type=auto --db-duplicates=off
 ```
 
-`--limit` defaults to the safe maximum used by the CLI. The command rejects `--apply`.
+Read-only DB duplicate matching:
+
+```powershell
+npm.cmd run csv:import:dry-run -- --file <path> --type=project --db-duplicates=auto --limit=500
+```
+
+`--db-duplicates=auto` attempts read-only duplicate matching only when a database connection is already configured. `--db-duplicates=off` keeps the run fully fixture/local. `--db-duplicates=on` requires a configured database connection and still performs no writes.
+
+`--limit` defaults to `5000`. The command rejects `--apply`.
 
 ## Supported Input Types
 
@@ -46,11 +55,11 @@ npm.cmd run csv:import:dry-run -- --file <path> --type=auto --limit=500
 - `person`
 - `auto`
 
-`auto` is intended only for early preview. Production import design should prefer explicit source type selection unless owner-approved mapping rules are in place.
+`auto` uses both header signals and row-value presence signals. If project and person signals conflict, the row is marked for review with `CSV_TYPE_CONFLICT`; it is not treated as a clean create candidate.
 
 ## Header Mapping Policy
 
-The mapper supports Japanese and common English variants. Headers are normalized by trimming, lowercasing, and removing common separators.
+The mapper supports Japanese and common English variants. Headers are normalized by trimming, lowercasing, Unicode NFKC normalization, and removing common separators.
 
 Project mapping examples:
 
@@ -103,6 +112,105 @@ Person mapping examples:
 
 CLI output does not print raw headers. It prints mapped field names and header hashes only.
 
+## Duplicate Matching Policy
+
+The dry-run detects duplicate-like candidates in two safe ways:
+
+- Source-row duplicates inside the CSV file.
+- Optional read-only DB duplicate matching against existing projects/persons.
+
+Project matching uses normalized combinations of:
+
+- title/project name
+- company/client/upper company
+- skills
+- unit price
+- work location
+- start month
+
+Person matching uses normalized combinations of:
+
+- name or initials
+- owner company
+- skills
+- desired unit price
+- available date
+- nearest station
+
+Duplicate reason codes:
+
+- `CSV_DUPLICATE_BY_SOURCE_ROW`
+- `CSV_DUPLICATE_BY_PROJECT_TITLE_COMPANY`
+- `CSV_DUPLICATE_BY_PROJECT_SKILL_LOCATION_PRICE`
+- `CSV_DUPLICATE_BY_PERSON_NAME_OWNER`
+- `CSV_DUPLICATE_BY_PERSON_SKILL_RATE_AVAILABILITY`
+- `CSV_DUPLICATE_WEAK_MATCH`
+- `CSV_DUPLICATE_STRONG_MATCH`
+
+The output includes duplicate counts and group hashes only. It never prints raw DB values or raw CSV values.
+
+## Auto Type Detection
+
+Auto detection reports:
+
+- `detectedType`
+- `typeConfidence`
+- `projectScore`
+- `personScore`
+- `conflictMargin`
+- type reason counts
+
+Project signals include title, work content, business content, required skills, desired skills, unit price, start month, work location, and company-like fields.
+
+Person signals include name, initials, skills, role headline, career summary, desired unit price, available date, nearest station, and owner company.
+
+When both sides are close, the row is marked for review with `CSV_TYPE_CONFLICT`.
+
+## Field Coverage Scoring
+
+Project coverage checks:
+
+- title/project name
+- work content
+- required skills or skills
+- unit price
+- start month
+- work location
+- company/client
+
+Person coverage checks:
+
+- name or initials
+- skills
+- role headline
+- available from
+- desired unit price
+- nearest station
+- owner company
+
+Rows below the coverage threshold are counted with `CSV_LOW_FIELD_COVERAGE` and are sent to review.
+
+## Review Summary
+
+The report is designed for owner review without exposing PII:
+
+- file rows and parsed rows
+- requested type and detected/effective type counts
+- mapped columns and unmapped column hashes
+- `wouldCreate`
+- `wouldNeedReview`
+- `wouldSkip`
+- invalid row count
+- duplicate candidate counts
+- strong/weak duplicate counts
+- type conflict count
+- low coverage count
+- warning counts by code
+- review reason counts by code
+- max 20 anonymized sample row summaries
+
+Sample rows include row hashes, action, type signals, coverage scores, warning codes, review reason codes, duplicate strength, duplicate group hash, and counts. They never include raw values.
+
 ## Validation Policy
 
 Project required checks:
@@ -134,25 +242,6 @@ Validation warnings:
 
 Rows with review reasons are counted as `wouldNeedReview`. Empty rows are counted as `wouldSkip`.
 
-## Duplicate Detection Policy
-
-This MVP detects duplicate-like candidates only within the CSV input. It does not query or update the database.
-
-Project duplicate key inputs:
-
-- title
-- start month
-- company-like field
-- skill summary
-
-Person duplicate key inputs:
-
-- name or initials
-- available date
-- skill summary
-
-The output prints only duplicate group hashes, never raw source values.
-
 ## PII And Secret Redaction Policy
 
 The dry-run report is aggregate and anonymized:
@@ -170,7 +259,7 @@ CSV dry-run is a bridge from current Gmail-focused tracking to future generic so
 
 Future integration should map each CSV row into a `source_records`-like payload, then link approved rows to entities through `entity_source_links`.
 
-This PR does not create those tables. It validates the mapping and review surface first.
+This PR does not create those tables. It validates mapping, review, duplicate, and type-detection behavior first.
 
 ## Future Apply Flow Design
 
@@ -204,9 +293,10 @@ The CSV dry-run report already exposes the data needed for that design:
 - row hashes
 - mapped fields
 - required field coverage
+- field coverage scores
 - warning counts
 - review reason counts
-- duplicate group hashes
+- duplicate reason counts
 - anonymized samples
 
 ## Non-goals In This PR
