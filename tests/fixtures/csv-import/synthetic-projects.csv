@@ -3,3 +3,4 @@ Synthetic Alpha Project,Synthetic Client Alpha,Build an internal batch workflow,
 Synthetic Alpha Project,Synthetic Client Alpha,Build an internal batch workflow,"Java,Spring,AWS",85万,2026-04,Remote,duplicate-fixture
 Synthetic Beta Project,Synthetic Client Beta,Support internal operations,"Linux,SQL",invalid-price,not-a-date,Tokyo,fixture-only
 ,Synthetic Client Gamma,,"",70万,2026-05,Osaka,missing-fields
+Synthetic Clean Project,Synthetic Client Delta,Build a reporting workflow,"TypeScript,PostgreSQL",90万,2026-07,Hybrid,clean-fixture
