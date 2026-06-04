@@ -20,3 +20,4 @@ Current files:
 
 - `source-tracking-inventory.md`: current-state inventory and CLI output contract.
 - `source-tracking-design.md`: future source tracking design and migration proposal notes.
+- `csv-import-dry-run.md`: CSV import dry-run MVP design, validation policy, and future apply path.

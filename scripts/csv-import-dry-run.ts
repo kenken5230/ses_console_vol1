@@ -1,0 +1,692 @@
+import "dotenv/config";
+
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { statSync } from "node:fs";
+
+type CsvImportType = "project" | "person" | "auto";
+type ResolvedCsvImportType = "project" | "person";
+
+const MAX_LIMIT = 5000;
+const MAX_SAMPLE_ROWS = 20;
+const SKILL_REVIEW_THRESHOLD = 15;
+
+const WARNING_CODES = {
+  missingRequiredField: "CSV_MISSING_REQUIRED_FIELD",
+  unmappedColumns: "CSV_UNMAPPED_COLUMNS",
+  lowFieldCoverage: "CSV_LOW_FIELD_COVERAGE",
+  duplicateCandidate: "CSV_DUPLICATE_CANDIDATE",
+  invalidPrice: "CSV_INVALID_PRICE",
+  invalidDate: "CSV_INVALID_DATE",
+  skillOverExtraction: "CSV_SKILL_OVER_EXTRACTION",
+  personNameLowConfidence: "CSV_PERSON_NAME_LOW_CONFIDENCE",
+  projectTitleLowConfidence: "CSV_PROJECT_TITLE_LOW_CONFIDENCE",
+  typeConflict: "CSV_TYPE_CONFLICT",
+  emptyRow: "CSV_EMPTY_ROW",
+  piiRedacted: "CSV_PII_REDACTED_IN_OUTPUT",
+} as const;
+
+type WarningCode = typeof WARNING_CODES[keyof typeof WARNING_CODES];
+
+type FieldDefinition = {
+  field: string;
+  synonyms: string[];
+};
+
+type CsvDryRunArgs = {
+  file: string;
+  type: CsvImportType;
+  limit: number;
+};
+
+type CsvTable = {
+  headers: string[];
+  rows: string[][];
+  fileRows: number;
+};
+
+type HeaderMapping = {
+  fieldByIndex: Map<number, string>;
+  mappedColumns: Array<{ field: string; headerHash: string }>;
+  unmappedColumns: Array<{ headerHash: string }>;
+};
+
+type RowAssessment = {
+  rowNumber: number;
+  rowHash: string;
+  type: ResolvedCsvImportType;
+  action: "would_create" | "would_need_review" | "would_skip";
+  mappedFieldCount: number;
+  fieldCoverageRatio: number;
+  requiredFieldCoverage: Record<string, boolean>;
+  missingRequiredFields: string[];
+  warningCodes: WarningCode[];
+  reviewReasonCodes: WarningCode[];
+  duplicateCandidate: boolean;
+  duplicateGroupHash: string | null;
+  skillCount: number;
+  piiRedactedInOutput: true;
+};
+
+type InternalRowAssessment = RowAssessment & {
+  duplicateKey: string | null;
+};
+
+export type CsvDryRunReport = {
+  summary: {
+    mode: "csv-import-dry-run";
+    readOnly: true;
+    applySupported: false;
+    fileHash: string;
+    fileBytes: number;
+    fileRows: number;
+    parsedRows: number;
+    type: CsvImportType;
+    effectiveTypes: Record<ResolvedCsvImportType, number>;
+    limit: number;
+    maxSampleRows: number;
+    piiSafe: true;
+    secretsRedacted: true;
+  };
+  mappedColumns: Array<{ field: string; headerHash: string }>;
+  unmappedColumns: {
+    count: number;
+    headerHashes: string[];
+  };
+  requiredFieldCoverage: Record<string, { presentRows: number; missingRows: number; coverage: number }>;
+  outcomes: {
+    wouldCreate: number;
+    wouldNeedReview: number;
+    wouldSkip: number;
+    duplicateCandidateCount: number;
+    invalidRowCount: number;
+  };
+  warningCounts: Record<string, number>;
+  reviewReasonCounts: Record<string, number>;
+  sampleRows: RowAssessment[];
+  notes: string[];
+};
+
+const projectFieldDefinitions: FieldDefinition[] = [
+  { field: "companyName", synonyms: ["companyname", "company", "client", "clientcompany", "customer", "会社名", "企業", "顧客", "クライアント"] },
+  { field: "clientCompany", synonyms: ["clientcompany", "client", "customercompany", "顧客会社", "クライアント会社"] },
+  { field: "upperCompany", synonyms: ["uppercompany", "vendor", "上位会社", "上位", "商流会社"] },
+  { field: "title", synonyms: ["title", "project", "projectname", "案件名", "件名", "案件", "プロジェクト名"] },
+  { field: "workContent", synonyms: ["workcontent", "content", "description", "jobdescription", "作業内容", "業務内容", "仕事内容"] },
+  { field: "businessContent", synonyms: ["businesscontent", "businessdescription", "業務内容", "業務概要", "案件概要"] },
+  { field: "requiredSkills", synonyms: ["requiredskills", "mustskills", "skills", "skill", "technology", "technologies", "使用技術", "スキル", "必須スキル", "必要スキル"] },
+  { field: "niceToHaveSkills", synonyms: ["nicetohaveskills", "wantskills", "preferredskills", "尚可スキル", "尚良スキル", "歓迎スキル"] },
+  { field: "technologies", synonyms: ["technologies", "technology", "techstack", "技術", "開発環境"] },
+  { field: "unitPrice", synonyms: ["unitprice", "price", "rate", "amount", "単価", "金額", "月額", "予算"] },
+  { field: "startMonth", synonyms: ["startmonth", "start", "startdate", "開始月", "開始", "開始時期", "稼働開始"] },
+  { field: "workLocation", synonyms: ["worklocation", "location", "place", "作業場所", "勤務地", "場所"] },
+  { field: "remotePreference", synonyms: ["remote", "remotepreference", "remotetype", "リモート", "勤務形態"] },
+  { field: "settlementRange", synonyms: ["settlement", "settlementrange", "精算", "精算幅"] },
+  { field: "interviewCount", synonyms: ["interview", "interviewcount", "面談", "面談回数"] },
+  { field: "contractType", synonyms: ["contract", "contracttype", "契約形態", "契約"] },
+  { field: "commercialFlow", synonyms: ["commercialflow", "flow", "商流"] },
+  { field: "endClient", synonyms: ["endclient", "end", "エンド", "エンド企業"] },
+  { field: "prime", synonyms: ["prime", "primecontractor", "元請", "元請け"] },
+  { field: "accountManager", synonyms: ["accountmanager", "am", "salesowner", "営業担当", "am担当", "担当"] },
+  { field: "upperContactName", synonyms: ["uppercontact", "uppercontactname", "contactname", "上位担当", "上位担当者"] },
+  { field: "contact", synonyms: ["contact", "contactinfo", "連絡先", "担当者連絡先"] },
+  { field: "recruitmentCount", synonyms: ["recruitmentcount", "count", "募集人数", "人数"] },
+  { field: "foreignNationalityAccepted", synonyms: ["foreignnationality", "foreignnationalityaccepted", "外国籍", "外国籍可否"] },
+  { field: "ageLimit", synonyms: ["agelimit", "age", "年齢", "年齢制限", "年齢条件"] },
+  { field: "dressCode", synonyms: ["dresscode", "dress", "服装", "ドレスコード"] },
+  { field: "focusProject", synonyms: ["focus", "focusproject", "注力", "注力案件"] },
+];
+
+const personFieldDefinitions: FieldDefinition[] = [
+  { field: "name", synonyms: ["name", "personname", "engineername", "氏名", "名前", "要員名"] },
+  { field: "initials", synonyms: ["initials", "initial", "イニシャル"] },
+  { field: "nearestStation", synonyms: ["neareststation", "station", "最寄", "最寄駅", "最寄り駅"] },
+  { field: "age", synonyms: ["age", "年齢"] },
+  { field: "gender", synonyms: ["gender", "性別"] },
+  { field: "nationality", synonyms: ["nationality", "国籍"] },
+  { field: "availableFrom", synonyms: ["availablefrom", "available", "start", "稼働", "稼働開始", "稼働開始日"] },
+  { field: "desiredUnitPrice", synonyms: ["desiredunitprice", "unitprice", "price", "rate", "希望単価", "単価", "金額"] },
+  { field: "skills", synonyms: ["skills", "skill", "technologies", "technology", "スキル", "使用技術", "経験スキル"] },
+  { field: "roleHeadline", synonyms: ["role", "roleheadline", "position", "jobtype", "職種", "ポジション", "役割"] },
+  { field: "careerSummary", synonyms: ["careersummary", "career", "summary", "profile", "経歴", "経歴概要", "職務経歴"] },
+  { field: "remotePreference", synonyms: ["remote", "remotepreference", "リモート", "希望リモート"] },
+  { field: "workLocationPreference", synonyms: ["worklocation", "worklocationpreference", "location", "希望勤務地", "勤務地"] },
+  { field: "ownerCompany", synonyms: ["ownercompany", "company", "所属会社", "会社名", "所属"] },
+  { field: "contact", synonyms: ["contact", "contactinfo", "連絡先"] },
+  { field: "salesOwner", synonyms: ["salesowner", "sales", "営業担当", "担当"] },
+];
+
+const requiredProjectFields = ["title", "workContent", "requiredSkills"];
+const requiredPersonFields = ["identity", "skills", "roleHeadline"];
+
+function shortHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
+function parseArgValue(argv: string[], name: string): string | null {
+  const prefix = `--${name}=`;
+  const inline = argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+  if (inline) return inline;
+  const index = argv.findIndex((arg) => arg === `--${name}`);
+  if (index >= 0) return argv[index + 1] ?? null;
+  return null;
+}
+
+export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
+  if (argv.some((arg) => arg === "--apply" || arg.startsWith("--apply="))) {
+    throw new Error("csv:import:dry-run is read-only and does not accept --apply.");
+  }
+
+  const file = parseArgValue(argv, "file");
+  if (!file) {
+    throw new Error("Missing required --file=<path>.");
+  }
+
+  const type = parseArgValue(argv, "type");
+  if (type !== "project" && type !== "person" && type !== "auto") {
+    throw new Error("--type must be project, person, or auto.");
+  }
+
+  const rawLimit = parseArgValue(argv, "limit");
+  const limit = rawLimit ? Number(rawLimit) : MAX_LIMIT;
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isInteger(limit)) {
+    throw new Error("--limit must be a positive integer when provided.");
+  }
+  if (limit > MAX_LIMIT) {
+    throw new Error(`--limit must be <= ${MAX_LIMIT}.`);
+  }
+
+  return { file, type, limit };
+}
+
+function normalizeHeader(header: string): string {
+  return header
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-‐ー・/／\\|:：,，.．()（）［\]\[\]【】{}]/g, "");
+}
+
+function normalizeText(value: string | undefined): string {
+  return (value ?? "").trim();
+}
+
+function isBlank(value: string | undefined): boolean {
+  return normalizeText(value).length === 0;
+}
+
+function pushUnique<T>(items: T[], item: T): void {
+  if (!items.includes(item)) items.push(item);
+}
+
+function increment(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+
+export function parseCsv(text: string): CsvTable {
+  const rows: string[][] = [];
+  let current = "";
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(current);
+      current = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(current);
+      rows.push(row);
+      row = [];
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current.length > 0 || row.length > 0) {
+    row.push(current);
+    rows.push(row);
+  }
+
+  const nonEmptyRows = rows.filter((candidate) => candidate.some((cell) => normalizeText(cell).length > 0));
+  const [headers = [], ...bodyRows] = nonEmptyRows;
+  return {
+    headers: headers.map((header) => header.trim()),
+    rows: bodyRows,
+    fileRows: bodyRows.length,
+  };
+}
+
+function buildSynonymMap(definitions: FieldDefinition[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const definition of definitions) {
+    map.set(normalizeHeader(definition.field), definition.field);
+    for (const synonym of definition.synonyms) {
+      map.set(normalizeHeader(synonym), definition.field);
+    }
+  }
+  return map;
+}
+
+function mapHeaders(headers: string[], type: ResolvedCsvImportType): HeaderMapping {
+  const synonymMap = buildSynonymMap(type === "project" ? projectFieldDefinitions : personFieldDefinitions);
+  const fieldByIndex = new Map<number, string>();
+  const mappedColumns: Array<{ field: string; headerHash: string }> = [];
+  const unmappedColumns: Array<{ headerHash: string }> = [];
+
+  headers.forEach((header, index) => {
+    const field = synonymMap.get(normalizeHeader(header));
+    if (field) {
+      fieldByIndex.set(index, field);
+      mappedColumns.push({ field, headerHash: shortHash(header) });
+    } else if (!isBlank(header)) {
+      unmappedColumns.push({ headerHash: shortHash(header) });
+    }
+  });
+
+  return { fieldByIndex, mappedColumns, unmappedColumns };
+}
+
+function rowToObject(row: string[], mapping: HeaderMapping): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const [index, field] of mapping.fieldByIndex.entries()) {
+    const value = normalizeText(row[index]);
+    if (!isBlank(value) && !values[field]) values[field] = value;
+  }
+  return values;
+}
+
+function splitSkills(value: string | undefined): string[] {
+  return normalizeText(value)
+    .split(/[,\n;；、/／|]+/)
+    .map((skill) => skill.trim())
+    .filter(Boolean);
+}
+
+function combinedSkills(values: Record<string, string>, type: ResolvedCsvImportType): string[] {
+  if (type === "project") {
+    return [
+      ...splitSkills(values.requiredSkills),
+      ...splitSkills(values.niceToHaveSkills),
+      ...splitSkills(values.technologies),
+    ];
+  }
+  return splitSkills(values.skills);
+}
+
+function hasValidPrice(value: string | undefined): boolean {
+  const text = normalizeText(value);
+  if (!text) return true;
+  if (/応相談|相談|スキル見合|要相談/i.test(text)) return true;
+  if (!/\d/.test(text)) return false;
+  return /^[0-9０-９,\s万万円円～〜\-_.]+$/.test(text);
+}
+
+function hasValidDate(value: string | undefined): boolean {
+  const text = normalizeText(value);
+  if (!text) return true;
+  if (/即日|随時|調整|未定|asap/i.test(text)) return true;
+  if (/^\d{4}[-/年]\d{1,2}(?:[-/月]\d{1,2}日?)?$/.test(text)) return true;
+  if (/^\d{1,2}月(?:\d{1,2}日)?$/.test(text)) return true;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return true;
+  return false;
+}
+
+function lowConfidenceTitle(value: string | undefined): boolean {
+  const text = normalizeText(value);
+  if (!text) return true;
+  return text.length < 4 || /未定|不明|確認|案件$/.test(text);
+}
+
+function lowConfidencePersonName(values: Record<string, string>): boolean {
+  const name = normalizeText(values.name);
+  const initials = normalizeText(values.initials);
+  if (!name && /^[A-Za-z]{1,3}(?:[.\s][A-Za-z]{1,3})?$/.test(initials)) return false;
+  if (!name) return true;
+  if (name.length < 2) return true;
+  if (/@|案件|要員|エンジニア|未定|不明|調整|unknown|tbd|^\d+$/i.test(name)) return true;
+  return false;
+}
+
+function isEmptyRow(row: string[]): boolean {
+  return row.every((cell) => isBlank(cell));
+}
+
+function inferType(projectValues: Record<string, string>, personValues: Record<string, string>): {
+  type: ResolvedCsvImportType;
+  conflict: boolean;
+} {
+  const projectSignals = ["title", "workContent", "businessContent", "requiredSkills", "unitPrice", "startMonth"]
+    .filter((field) => !isBlank(projectValues[field])).length;
+  const personSignals = ["name", "initials", "skills", "roleHeadline", "careerSummary", "desiredUnitPrice", "availableFrom"]
+    .filter((field) => !isBlank(personValues[field])).length;
+  return {
+    type: projectSignals >= personSignals ? "project" : "person",
+    conflict: projectSignals > 0 && personSignals > 0 && Math.abs(projectSignals - personSignals) <= 1,
+  };
+}
+
+function duplicateKey(values: Record<string, string>, type: ResolvedCsvImportType): string | null {
+  const skills = combinedSkills(values, type).slice(0, 8).join("|").toLowerCase();
+  if (type === "project") {
+    const title = normalizeText(values.title).toLowerCase();
+    const start = normalizeText(values.startMonth).toLowerCase();
+    const company = normalizeText(values.companyName || values.clientCompany || values.upperCompany).toLowerCase();
+    if (!title && !skills) return null;
+    return shortHash(["project", title, start, company, skills].join("\n"));
+  }
+
+  const identity = normalizeText(values.name || values.initials).toLowerCase();
+  const available = normalizeText(values.availableFrom).toLowerCase();
+  if (!identity && !skills) return null;
+  return shortHash(["person", identity, available, skills].join("\n"));
+}
+
+function fieldCoverage(values: Record<string, string>, mapping: HeaderMapping): number {
+  const mappedFields = new Set(mapping.mappedColumns.map((column) => column.field));
+  if (mappedFields.size === 0) return 0;
+  const present = [...mappedFields].filter((field) => !isBlank(values[field])).length;
+  return Number((present / mappedFields.size).toFixed(4));
+}
+
+function assessRow(params: {
+  row: string[];
+  rowNumber: number;
+  requestedType: CsvImportType;
+  projectMapping: HeaderMapping;
+  personMapping: HeaderMapping;
+}): InternalRowAssessment {
+  const { row, rowNumber, requestedType, projectMapping, personMapping } = params;
+  const warningCodes: WarningCode[] = [];
+  const reviewReasonCodes: WarningCode[] = [];
+
+  if (isEmptyRow(row)) {
+    warningCodes.push(WARNING_CODES.emptyRow);
+    reviewReasonCodes.push(WARNING_CODES.emptyRow);
+  }
+
+  const projectValues = rowToObject(row, projectMapping);
+  const personValues = rowToObject(row, personMapping);
+  const inferred = requestedType === "auto"
+    ? inferType(projectValues, personValues)
+    : { type: requestedType, conflict: false };
+  const type = inferred.type;
+  const mapping = type === "project" ? projectMapping : personMapping;
+  const values = type === "project" ? projectValues : personValues;
+  const skills = combinedSkills(values, type);
+  const missingRequiredFields: string[] = [];
+  const requiredFieldCoverage: Record<string, boolean> = {};
+
+  if (mapping.unmappedColumns.length > 0) {
+    warningCodes.push(WARNING_CODES.unmappedColumns);
+  }
+  if (inferred.conflict) {
+    warningCodes.push(WARNING_CODES.typeConflict);
+    reviewReasonCodes.push(WARNING_CODES.typeConflict);
+  }
+
+  const requiredFields = type === "project" ? requiredProjectFields : requiredPersonFields;
+  for (const field of requiredFields) {
+    const present = field === "identity"
+      ? !isBlank(values.name) || !isBlank(values.initials)
+      : !isBlank(values[field]);
+    requiredFieldCoverage[field] = present;
+    if (!present) missingRequiredFields.push(field);
+  }
+
+  if (missingRequiredFields.length > 0) {
+    warningCodes.push(WARNING_CODES.missingRequiredField);
+    reviewReasonCodes.push(WARNING_CODES.missingRequiredField);
+  }
+
+  const coverageRatio = fieldCoverage(values, mapping);
+  if (coverageRatio < 0.4) {
+    warningCodes.push(WARNING_CODES.lowFieldCoverage);
+    reviewReasonCodes.push(WARNING_CODES.lowFieldCoverage);
+  }
+
+  if (type === "project") {
+    if (!hasValidPrice(values.unitPrice)) {
+      warningCodes.push(WARNING_CODES.invalidPrice);
+      reviewReasonCodes.push(WARNING_CODES.invalidPrice);
+    }
+    if (!hasValidDate(values.startMonth)) {
+      warningCodes.push(WARNING_CODES.invalidDate);
+      reviewReasonCodes.push(WARNING_CODES.invalidDate);
+    }
+    if (lowConfidenceTitle(values.title)) {
+      warningCodes.push(WARNING_CODES.projectTitleLowConfidence);
+      reviewReasonCodes.push(WARNING_CODES.projectTitleLowConfidence);
+    }
+  } else {
+    if (!hasValidPrice(values.desiredUnitPrice)) {
+      warningCodes.push(WARNING_CODES.invalidPrice);
+      reviewReasonCodes.push(WARNING_CODES.invalidPrice);
+    }
+    if (!hasValidDate(values.availableFrom)) {
+      warningCodes.push(WARNING_CODES.invalidDate);
+      reviewReasonCodes.push(WARNING_CODES.invalidDate);
+    }
+    if (lowConfidencePersonName(values)) {
+      warningCodes.push(WARNING_CODES.personNameLowConfidence);
+      reviewReasonCodes.push(WARNING_CODES.personNameLowConfidence);
+    }
+  }
+
+  if (skills.length > SKILL_REVIEW_THRESHOLD) {
+    warningCodes.push(WARNING_CODES.skillOverExtraction);
+    reviewReasonCodes.push(WARNING_CODES.skillOverExtraction);
+  }
+
+  warningCodes.push(WARNING_CODES.piiRedacted);
+
+  const empty = warningCodes.includes(WARNING_CODES.emptyRow);
+  const action = empty
+    ? "would_skip"
+    : reviewReasonCodes.length > 0
+      ? "would_need_review"
+      : "would_create";
+
+  return {
+    rowNumber,
+    rowHash: shortHash(row.join("\u001f")),
+    type,
+    action,
+    mappedFieldCount: Object.keys(values).length,
+    fieldCoverageRatio: coverageRatio,
+    requiredFieldCoverage,
+    missingRequiredFields,
+    warningCodes: [...new Set(warningCodes)],
+    reviewReasonCodes: [...new Set(reviewReasonCodes)],
+    duplicateCandidate: false,
+    duplicateGroupHash: null,
+    duplicateKey: duplicateKey(values, type),
+    skillCount: skills.length,
+    piiRedactedInOutput: true,
+  };
+}
+
+function finalizeDuplicates(rows: InternalRowAssessment[]): RowAssessment[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.duplicateKey || row.action === "would_skip") continue;
+    counts.set(row.duplicateKey, (counts.get(row.duplicateKey) ?? 0) + 1);
+  }
+
+  return rows.map(({ duplicateKey: key, ...row }) => {
+    if (key && (counts.get(key) ?? 0) > 1) {
+      pushUnique(row.warningCodes, WARNING_CODES.duplicateCandidate);
+      pushUnique(row.reviewReasonCodes, WARNING_CODES.duplicateCandidate);
+      return {
+        ...row,
+        action: row.action === "would_create" ? "would_need_review" : row.action,
+        duplicateCandidate: true,
+        duplicateGroupHash: key,
+      };
+    }
+    return row;
+  });
+}
+
+function coverageSummary(rows: RowAssessment[]): CsvDryRunReport["requiredFieldCoverage"] {
+  const fields = new Set<string>();
+  for (const row of rows) {
+    Object.keys(row.requiredFieldCoverage).forEach((field) => fields.add(field));
+  }
+
+  const summary: CsvDryRunReport["requiredFieldCoverage"] = {};
+  for (const field of [...fields].sort()) {
+    const presentRows = rows.filter((row) => row.requiredFieldCoverage[field]).length;
+    const missingRows = rows.length - presentRows;
+    summary[field] = {
+      presentRows,
+      missingRows,
+      coverage: rows.length === 0 ? 0 : Number((presentRows / rows.length).toFixed(4)),
+    };
+  }
+  return summary;
+}
+
+function countCodes(rows: RowAssessment[], key: "warningCodes" | "reviewReasonCodes"): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    for (const code of row[key]) increment(counts, code);
+  }
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+export function assertNoSensitiveCsvOutput(text: string): void {
+  const forbiddenPatterns = [
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
+    /\b(?:postgres(?:ql)?|mysql|sqlserver):\/\//i,
+    /\b(?:DATABASE_URL|DIRECT_URL|SMTP_PASSWORD|GMAIL_REFRESH_TOKEN|API[_-]?KEY|TOKEN|PASSWORD)\s*[:=]\s*["']?[^"',\s}]+/i,
+    /\bBearer\s+[A-Za-z0-9._-]+/i,
+    /-----BEGIN [A-Z ]+KEY-----/,
+    /"rawRow"\s*:/i,
+    /"rawValue"\s*:/i,
+    /"subject"\s*:/i,
+    /"body(?:Text|Html|Raw|Normalized)?"\s*:/i,
+    /"email"\s*:/i,
+  ];
+  const matched = forbiddenPatterns.find((pattern) => pattern.test(text));
+  if (matched) throw new Error(`Sensitive CSV dry-run output matched ${matched}`);
+}
+
+export function buildCsvDryRunReport(params: {
+  csvText: string;
+  type: CsvImportType;
+  limit?: number;
+  fileIdentity?: string;
+  fileBytes?: number;
+}): CsvDryRunReport {
+  const limit = params.limit ?? MAX_LIMIT;
+  const table = parseCsv(params.csvText);
+  const projectMapping = mapHeaders(table.headers, "project");
+  const personMapping = mapHeaders(table.headers, "person");
+  const rowsToAssess = table.rows.slice(0, limit);
+  const assessedRows = finalizeDuplicates(rowsToAssess.map((row, index) => assessRow({
+    row,
+    rowNumber: index + 2,
+    requestedType: params.type,
+    projectMapping,
+    personMapping,
+  })));
+
+  const effectiveTypes: Record<ResolvedCsvImportType, number> = { project: 0, person: 0 };
+  for (const row of assessedRows) effectiveTypes[row.type] += 1;
+
+  const mapping = params.type === "person" ? personMapping : projectMapping;
+  const mappedColumns = params.type === "auto"
+    ? [...projectMapping.mappedColumns, ...personMapping.mappedColumns]
+    : mapping.mappedColumns;
+  const unmappedColumns = params.type === "auto"
+    ? [...projectMapping.unmappedColumns, ...personMapping.unmappedColumns]
+    : mapping.unmappedColumns;
+
+  const report: CsvDryRunReport = {
+    summary: {
+      mode: "csv-import-dry-run",
+      readOnly: true,
+      applySupported: false,
+      fileHash: shortHash(params.fileIdentity ?? params.csvText),
+      fileBytes: params.fileBytes ?? Buffer.byteLength(params.csvText, "utf8"),
+      fileRows: table.fileRows,
+      parsedRows: assessedRows.length,
+      type: params.type,
+      effectiveTypes,
+      limit,
+      maxSampleRows: MAX_SAMPLE_ROWS,
+      piiSafe: true,
+      secretsRedacted: true,
+    },
+    mappedColumns: mappedColumns
+      .filter((column, index, all) => all.findIndex((item) => item.field === column.field && item.headerHash === column.headerHash) === index)
+      .sort((left, right) => left.field.localeCompare(right.field)),
+    unmappedColumns: {
+      count: unmappedColumns.length,
+      headerHashes: [...new Set(unmappedColumns.map((column) => column.headerHash))].sort(),
+    },
+    requiredFieldCoverage: coverageSummary(assessedRows),
+    outcomes: {
+      wouldCreate: assessedRows.filter((row) => row.action === "would_create").length,
+      wouldNeedReview: assessedRows.filter((row) => row.action === "would_need_review").length,
+      wouldSkip: assessedRows.filter((row) => row.action === "would_skip").length,
+      duplicateCandidateCount: assessedRows.filter((row) => row.duplicateCandidate).length,
+      invalidRowCount: assessedRows.filter((row) => row.warningCodes.includes(WARNING_CODES.emptyRow)).length,
+    },
+    warningCounts: countCodes(assessedRows, "warningCodes"),
+    reviewReasonCounts: countCodes(assessedRows, "reviewReasonCodes"),
+    sampleRows: assessedRows.slice(0, MAX_SAMPLE_ROWS),
+    notes: [
+      "dry-run only; no DB writes",
+      "CSV values are mapped and validated locally",
+      "raw CSV rows and raw values are not printed",
+      "subjects, bodies, emails, customer names, company names, person names, and secrets are not printed",
+      "duplicate candidates are detected within the CSV input only in this MVP",
+    ],
+  };
+
+  assertNoSensitiveCsvOutput(JSON.stringify(report));
+  return report;
+}
+
+export async function runCsvDryRun(argv = process.argv): Promise<CsvDryRunReport> {
+  const args = parseCsvDryRunArgs(argv);
+  const csvText = await readFile(args.file, "utf8");
+  const fileStats = statSync(args.file);
+  return buildCsvDryRunReport({
+    csvText,
+    type: args.type,
+    limit: args.limit,
+    fileIdentity: args.file,
+    fileBytes: fileStats.size,
+  });
+}
+
+if (require.main === module) {
+  runCsvDryRun()
+    .then((report) => {
+      console.log(JSON.stringify(report, null, 2));
+    })
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    });
+}
