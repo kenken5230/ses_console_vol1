@@ -89,19 +89,21 @@ The existing Gmail flow remains unchanged.
 
 The new source tracking foundation is for future CSV, Notion, Manual, API, and later Gmail bridging. A future Gmail bridge should first run read-only inventory/count-only checks, then create `source_records` only after owner-approved supervised apply.
 
-## CSV Dry-run To Source Records Future Flow
+## CSV Dry-run To Source Records Preview Flow
 
-Future CSV integration can use this shape:
+The CSV dry-run can now build this shape in memory with `--source-preview`:
 
 ```text
 CSV file
-  -> import_sources(type=CSV)
-  -> import_runs(mode=DRY_RUN)
-  -> source_records(recordHash, rawRef, redactedPreview, normalizedPayload)
-  -> entity_source_links(linkType=REVIEW_CANDIDATE or DUPLICATE_OF)
+  -> preview ImportSource(type=CSV, status=ACTIVE)
+  -> preview ImportRun(mode=DRY_RUN, status=SUCCEEDED or PARTIAL)
+  -> preview SourceRecord(recordHash, rawRef.rowIndex, redactedPreview, normalizedPayload)
+  -> preview EntitySourceLink(linkType=CREATED_FROM, REVIEW_CANDIDATE, or DUPLICATE_OF)
 ```
 
-The current CSV dry-run remains read-only. Future source record writes must be a separate PR with explicit apply gates.
+The preview uses safe metadata only. It does not print raw CSV values, real customer/company/person names, emails, local file paths, subjects, bodies, tokens, connection strings, or secrets.
+
+The current CSV dry-run remains read-only. `--source-preview` does not insert into `import_sources`, `import_runs`, `source_records`, or `entity_source_links`. Future source record writes must be a separate supervised apply PR with explicit apply gates.
 
 ## Notion Read-only Sync Future Flow
 

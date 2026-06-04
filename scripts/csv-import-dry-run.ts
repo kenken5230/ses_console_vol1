@@ -50,6 +50,7 @@ type CsvDryRunArgs = {
   type: CsvImportType;
   limit: number;
   dbDuplicates: DbDuplicateMode;
+  sourcePreview: boolean;
 };
 
 type CsvTable = {
@@ -194,7 +195,93 @@ export type CsvDryRunReport = {
   warningCounts: Record<string, number>;
   reviewReasonCounts: Record<string, number>;
   sampleRows: RowAssessment[];
+  sourcePreview?: CsvSourceTrackingPreview;
   notes: string[];
+};
+
+type PreviewImportSource = {
+  type: "CSV";
+  nameRedacted: string;
+  status: "ACTIVE";
+  configSummary: {
+    fileHash: string;
+    fileBytes: number;
+    fileRows: number;
+    requestedType: CsvImportType;
+    dbReadOnlyEnabled: boolean;
+    piiSafe: true;
+    pathRedacted: true;
+  };
+};
+
+type PreviewImportRun = {
+  mode: "DRY_RUN";
+  status: "SUCCEEDED" | "PARTIAL";
+  summary: {
+    fileRows: number;
+    parsedRows: number;
+    wouldCreate: number;
+    wouldNeedReview: number;
+    wouldSkip: number;
+    duplicateCandidateCount: number;
+    typeConflictCount: number;
+    invalidRowCount: number;
+  };
+};
+
+type PreviewSourceRecord = {
+  recordType: "PROJECT" | "PERSON" | "OTHER" | "EXCLUDED" | "UNKNOWN";
+  recordHash: string;
+  rawRef: {
+    rowIndex: number;
+    rowNumber: number;
+  };
+  normalizedPayload: {
+    fieldNames: string[];
+    mappedFieldCount: number;
+    requiredFieldCoverage: Record<string, boolean>;
+    missingFields: string[];
+    fieldCoverageScore: number;
+    skillCount: number;
+    piiRedacted: true;
+  };
+  redactedPreview: {
+    action: RowAction;
+    detectedType: DetectedCsvType;
+    effectiveType: ResolvedCsvImportType;
+    typeConfidence: number;
+    warningCount: number;
+    reviewReasonCount: number;
+    duplicateCandidate: boolean;
+    duplicateStrength: DuplicateStrength;
+    piiSafe: true;
+  };
+  status: "NEW" | "NEEDS_REVIEW" | "SKIPPED";
+  reviewReasons: WarningCode[];
+  warnings: WarningCode[];
+};
+
+type PreviewEntitySourceLink = {
+  sourceRecordHash: string;
+  entityType: "PROJECT" | "PERSON";
+  linkType: "CREATED_FROM" | "DUPLICATE_OF" | "REVIEW_CANDIDATE";
+  confidence: number;
+  reasons: string[];
+};
+
+export type CsvSourceTrackingPreview = {
+  previewImportSource: PreviewImportSource;
+  previewImportRun: PreviewImportRun;
+  sourceRecordPreviewCount: number;
+  sourceRecordsByStatus: Record<string, number>;
+  sourceRecordsByType: Record<string, number>;
+  entitySourceLinkPreviewCount: number;
+  entityLinksByType: Record<string, number>;
+  entityLinksByLinkType: Record<string, number>;
+  warningCounts: Record<string, number>;
+  reviewReasonCounts: Record<string, number>;
+  sourceRecordSamples: PreviewSourceRecord[];
+  entitySourceLinkSamples: PreviewEntitySourceLink[];
 };
 
 const projectFieldDefinitions: FieldDefinition[] = [
@@ -253,6 +340,10 @@ function shortHash(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 12);
 }
 
+function fullHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 function parseArgValue(argv: string[], name: string): string | null {
   const prefix = `--${name}=`;
   const inline = argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
@@ -260,6 +351,19 @@ function parseArgValue(argv: string[], name: string): string | null {
   const index = argv.findIndex((arg) => arg === `--${name}`);
   if (index >= 0) return argv[index + 1] ?? null;
   return null;
+}
+
+function parseBooleanFlag(argv: string[], name: string): boolean {
+  const exact = argv.includes(`--${name}`);
+  const prefix = `--${name}=`;
+  const inline = argv.find((arg) => arg.startsWith(prefix));
+  if (exact) return true;
+  if (!inline) return false;
+
+  const value = inline.slice(prefix.length);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`--${name} must be a boolean flag when provided.`);
 }
 
 export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
@@ -287,7 +391,7 @@ export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
     throw new Error("--db-duplicates must be auto, off, or on.");
   }
 
-  return { file, type, limit, dbDuplicates: duplicateMode };
+  return { file, type, limit, dbDuplicates: duplicateMode, sourcePreview: parseBooleanFlag(argv, "source-preview") };
 }
 
 function normalizeHeader(header: string): string {
@@ -886,6 +990,166 @@ function countCodes(rows: RowAssessment[], key: "warningCodes" | "reviewReasonCo
   return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
 }
 
+function countBy<T>(items: T[], keyFor: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) increment(counts, keyFor(item));
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function safeCsvFileLabel(fileIdentity: string | undefined, fileHash: string): string {
+  if (!fileIdentity) return `csv-file-${fileHash}`;
+  const fileName = fileIdentity.split(/[\\/]/).filter(Boolean).pop() ?? "";
+  return /^synthetic-[a-z0-9-]+\.csv$/i.test(fileName) ? fileName : `csv-file-${fileHash}`;
+}
+
+function previewRecordType(row: RowAssessment): PreviewSourceRecord["recordType"] {
+  if (row.action === "would_skip") return "EXCLUDED";
+  if (row.detectedType === "review") return "UNKNOWN";
+  if (row.type === "project") return "PROJECT";
+  if (row.type === "person") return "PERSON";
+  return "OTHER";
+}
+
+function previewRecordStatus(row: RowAssessment): PreviewSourceRecord["status"] {
+  if (row.action === "would_create") return "NEW";
+  if (row.action === "would_skip") return "SKIPPED";
+  return "NEEDS_REVIEW";
+}
+
+function previewConfidence(row: RowAssessment): number {
+  if (row.duplicateStrength === "strong") return 0.95;
+  if (row.duplicateStrength === "weak") return 0.65;
+  return Number(Math.max(0.1, row.typeConfidence || 0.5).toFixed(4));
+}
+
+function buildPreviewSourceRecord(row: RowAssessment): PreviewSourceRecord {
+  const fieldNames = [...new Set([
+    ...Object.keys(row.requiredFieldCoverage),
+    ...row.missingFields,
+  ])].sort();
+
+  return {
+    recordType: previewRecordType(row),
+    recordHash: fullHash(`csv-source-record:${row.rowHash}`),
+    rawRef: {
+      rowIndex: Math.max(1, row.rowNumber - 1),
+      rowNumber: row.rowNumber,
+    },
+    normalizedPayload: {
+      fieldNames,
+      mappedFieldCount: row.mappedFieldCount,
+      requiredFieldCoverage: row.requiredFieldCoverage,
+      missingFields: row.missingFields,
+      fieldCoverageScore: row.fieldCoverageScore,
+      skillCount: row.skillCount,
+      piiRedacted: true,
+    },
+    redactedPreview: {
+      action: row.action,
+      detectedType: row.detectedType,
+      effectiveType: row.type,
+      typeConfidence: row.typeConfidence,
+      warningCount: row.warningCodes.length,
+      reviewReasonCount: row.reviewReasonCodes.length,
+      duplicateCandidate: row.duplicateCandidate,
+      duplicateStrength: row.duplicateStrength,
+      piiSafe: true,
+    },
+    status: previewRecordStatus(row),
+    reviewReasons: row.reviewReasonCodes,
+    warnings: row.warningCodes,
+  };
+}
+
+function buildPreviewEntitySourceLink(row: RowAssessment, sourceRecordHash: string): PreviewEntitySourceLink | null {
+  if (row.action === "would_skip" || row.detectedType === "review") return null;
+
+  const entityType = row.type === "project" ? "PROJECT" : "PERSON";
+  if (row.action === "would_create") {
+    return {
+      sourceRecordHash,
+      entityType,
+      linkType: "CREATED_FROM",
+      confidence: previewConfidence(row),
+      reasons: ["CSV_WOULD_CREATE", ...row.typeReasons],
+    };
+  }
+
+  if (row.duplicateCandidate) {
+    return {
+      sourceRecordHash,
+      entityType,
+      linkType: "DUPLICATE_OF",
+      confidence: previewConfidence(row),
+      reasons: row.duplicateReasons.length > 0 ? row.duplicateReasons : row.reviewReasonCodes,
+    };
+  }
+
+  return {
+    sourceRecordHash,
+    entityType,
+    linkType: "REVIEW_CANDIDATE",
+    confidence: previewConfidence(row),
+    reasons: row.reviewReasonCodes,
+  };
+}
+
+function buildCsvSourceTrackingPreview(params: {
+  report: Omit<CsvDryRunReport, "sourcePreview">;
+  rows: RowAssessment[];
+  fileIdentity?: string;
+}): CsvSourceTrackingPreview {
+  const { report, rows } = params;
+  const sourceRecords = rows.map(buildPreviewSourceRecord);
+  const entityLinks = rows
+    .map((row, index) => buildPreviewEntitySourceLink(row, sourceRecords[index].recordHash))
+    .filter((link): link is PreviewEntitySourceLink => Boolean(link));
+  const runSummary = {
+    fileRows: report.summary.fileRows,
+    parsedRows: report.summary.parsedRows,
+    wouldCreate: report.outcomes.wouldCreate,
+    wouldNeedReview: report.outcomes.wouldNeedReview,
+    wouldSkip: report.outcomes.wouldSkip,
+    duplicateCandidateCount: report.outcomes.duplicateCandidateCount,
+    typeConflictCount: report.outcomes.typeConflictCount,
+    invalidRowCount: report.outcomes.invalidRowCount,
+  };
+
+  return {
+    previewImportSource: {
+      type: "CSV",
+      nameRedacted: safeCsvFileLabel(params.fileIdentity, report.summary.fileHash),
+      status: "ACTIVE",
+      configSummary: {
+        fileHash: report.summary.fileHash,
+        fileBytes: report.summary.fileBytes,
+        fileRows: report.summary.fileRows,
+        requestedType: report.summary.requestedType,
+        dbReadOnlyEnabled: report.duplicateMatching.dbReadOnlyEnabled,
+        piiSafe: true,
+        pathRedacted: true,
+      },
+    },
+    previewImportRun: {
+      mode: "DRY_RUN",
+      status: report.outcomes.wouldNeedReview > 0 || report.outcomes.wouldSkip > 0 || report.outcomes.invalidRowCount > 0
+        ? "PARTIAL"
+        : "SUCCEEDED",
+      summary: runSummary,
+    },
+    sourceRecordPreviewCount: sourceRecords.length,
+    sourceRecordsByStatus: countBy(sourceRecords, (record) => record.status),
+    sourceRecordsByType: countBy(sourceRecords, (record) => record.recordType),
+    entitySourceLinkPreviewCount: entityLinks.length,
+    entityLinksByType: countBy(entityLinks, (link) => link.entityType),
+    entityLinksByLinkType: countBy(entityLinks, (link) => link.linkType),
+    warningCounts: report.warningCounts,
+    reviewReasonCounts: report.reviewReasonCounts,
+    sourceRecordSamples: sourceRecords.slice(0, MAX_SAMPLE_ROWS),
+    entitySourceLinkSamples: entityLinks.slice(0, MAX_SAMPLE_ROWS),
+  };
+}
+
 function fieldCoverageSummary(rows: RowAssessment[]): CsvDryRunReport["fieldCoverage"] {
   const missingFieldCounts: Record<string, number> = {};
   for (const row of rows) {
@@ -948,6 +1212,8 @@ export function assertNoSensitiveCsvOutput(text: string): void {
     /"body(?:Text|Html|Raw|Normalized)?"\s*:/i,
     /"email"\s*:/i,
     /"values"\s*:/i,
+    /[A-Z]:\\{1,2}/i,
+    /\\{1,2}Users\\{1,2}/i,
   ];
   const matched = forbiddenPatterns.find((pattern) => pattern.test(text));
   if (matched) throw new Error(`Sensitive CSV dry-run output matched ${matched}`);
@@ -964,6 +1230,7 @@ export function buildCsvDryRunReport(params: {
   dbReadOnlyScannedProjects?: number;
   dbReadOnlyScannedPersons?: number;
   dbReadOnlyEnabled?: boolean;
+  sourcePreview?: boolean;
 }): CsvDryRunReport {
   const limit = params.limit ?? MAX_LIMIT;
   const table = parseCsv(params.csvText);
@@ -1050,6 +1317,14 @@ export function buildCsvDryRunReport(params: {
       "duplicate candidates include source-row duplicates and optional read-only DB duplicate matches",
     ],
   };
+
+  if (params.sourcePreview) {
+    report.sourcePreview = buildCsvSourceTrackingPreview({
+      report,
+      rows: assessedRows,
+      fileIdentity: params.fileIdentity,
+    });
+  }
 
   assertNoSensitiveCsvOutput(JSON.stringify(report));
   return report;
@@ -1192,6 +1467,7 @@ export async function runCsvDryRun(argv = process.argv): Promise<CsvDryRunReport
     limit: args.limit,
     fileIdentity: args.file,
     fileBytes: fileStats.size,
+    sourcePreview: args.sourcePreview,
     ...duplicateInputs,
   });
 }

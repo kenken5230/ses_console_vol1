@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
 
 import {
   assertNoSensitiveCsvOutput,
@@ -12,12 +14,15 @@ import type { ExistingPersonCandidate, ExistingProjectCandidate } from "./csv-im
 
 const projectCsv = readFileSync("tests/fixtures/csv-import/synthetic-projects.csv", "utf8");
 const personCsv = readFileSync("tests/fixtures/csv-import/synthetic-persons.csv", "utf8");
+const requireFromTest = createRequire(import.meta.url);
+const tsxCli = requireFromTest.resolve("tsx/cli");
 
 assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv", "--type=project"]), {
   file: "synthetic.csv",
   type: "project",
   limit: 5000,
   dbDuplicates: "auto",
+  sourcePreview: false,
 });
 
 assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file", "synthetic.csv", "--type", "person", "--db-duplicates=off"]), {
@@ -25,6 +30,7 @@ assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file", "synthetic.
   type: "person",
   limit: 5000,
   dbDuplicates: "off",
+  sourcePreview: false,
 });
 
 assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv", "--type=auto", "--limit=25", "--db-duplicates", "on"]), {
@@ -32,6 +38,15 @@ assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv
   type: "auto",
   limit: 25,
   dbDuplicates: "on",
+  sourcePreview: false,
+});
+
+assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv", "--type=auto", "--source-preview"]), {
+  file: "synthetic.csv",
+  type: "auto",
+  limit: 5000,
+  dbDuplicates: "auto",
+  sourcePreview: true,
 });
 
 assert.throws(
@@ -55,7 +70,7 @@ assert.throws(
 );
 
 function runCsvDryRunCli(args: string[]) {
-  const output = execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "scripts/csv-import-dry-run.ts", ...args], {
+  const output = execFileSync(process.execPath, [tsxCli, "scripts/csv-import-dry-run.ts", ...args], {
     encoding: "utf8",
     env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic" },
   });
@@ -63,6 +78,13 @@ function runCsvDryRunCli(args: string[]) {
   const jsonEnd = output.lastIndexOf("}");
   assert.ok(jsonStart >= 0 && jsonEnd > jsonStart);
   return JSON.parse(output.slice(jsonStart, jsonEnd + 1));
+}
+
+function runCsvDryRunCliOutput(args: string[]) {
+  return execFileSync(process.execPath, [tsxCli, "scripts/csv-import-dry-run.ts", ...args], {
+    encoding: "utf8",
+    env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic" },
+  });
 }
 
 {
@@ -76,6 +98,32 @@ function runCsvDryRunCli(args: string[]) {
   assert.equal(report.duplicateMatching.duplicateReasonCounts.CSV_DUPLICATE_BY_PROJECT_TITLE_COMPANY, 1);
   assert.equal(report.outcomes.wouldCreate, 0);
   assertNoSensitiveCsvOutput(JSON.stringify(report));
+}
+
+{
+  const output = runCsvDryRunCliOutput([
+    "--file",
+    resolve("tests/fixtures/csv-import/synthetic-projects.csv"),
+    "--type=project",
+    "--db-duplicates=off",
+    "--source-preview",
+  ]);
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("C:\\Users"), false);
+  assert.equal(output.includes("OneDrive"), false);
+  assert.equal(output.includes("Synthetic Client Alpha"), false);
+  assert.equal(output.includes("Synthetic Alpha Project"), false);
+  assert.equal(output.includes("Build internal workflow"), false);
+  assert.equal(output.includes("DATABASE_URL"), false);
+  assert.equal(output.includes("DIRECT_URL"), false);
+  assert.equal(output.includes("SMTP_PASSWORD"), false);
+  assert.equal(output.includes("GMAIL_REFRESH_TOKEN"), false);
+  const jsonStart = output.indexOf("{");
+  const jsonEnd = output.lastIndexOf("}");
+  const report = JSON.parse(output.slice(jsonStart, jsonEnd + 1));
+  assert.equal(report.sourcePreview.previewImportSource.type, "CSV");
+  assert.equal(report.sourcePreview.previewImportSource.nameRedacted, "synthetic-projects.csv");
+  assert.equal(report.sourcePreview.sourceRecordPreviewCount, 5);
 }
 
 {
@@ -121,6 +169,135 @@ function runCsvDryRunCli(args: string[]) {
 }
 
 {
+  const report = buildCsvDryRunReport({
+    csvText: projectCsv,
+    type: "project",
+    fileIdentity: "tests/fixtures/csv-import/synthetic-projects.csv",
+    sourcePreview: true,
+  });
+  const preview = report.sourcePreview;
+  assert.ok(preview);
+  assert.deepEqual(preview.previewImportSource, {
+    type: "CSV",
+    nameRedacted: "synthetic-projects.csv",
+    status: "ACTIVE",
+    configSummary: {
+      fileHash: report.summary.fileHash,
+      fileBytes: report.summary.fileBytes,
+      fileRows: 5,
+      requestedType: "project",
+      dbReadOnlyEnabled: false,
+      piiSafe: true,
+      pathRedacted: true,
+    },
+  });
+  assert.equal(preview.previewImportRun.mode, "DRY_RUN");
+  assert.equal(preview.previewImportRun.status, "PARTIAL");
+  assert.deepEqual(preview.previewImportRun.summary, {
+    fileRows: 5,
+    parsedRows: 5,
+    wouldCreate: 1,
+    wouldNeedReview: 4,
+    wouldSkip: 0,
+    duplicateCandidateCount: 2,
+    typeConflictCount: 0,
+    invalidRowCount: 0,
+  });
+  assert.equal(preview.sourceRecordPreviewCount, 5);
+  assert.equal(preview.sourceRecordsByStatus.NEW, 1);
+  assert.equal(preview.sourceRecordsByStatus.NEEDS_REVIEW, 4);
+  assert.equal(preview.sourceRecordsByType.PROJECT, 5);
+  assert.equal(preview.entityLinksByType.PROJECT, 5);
+  assert.equal(preview.entityLinksByLinkType.CREATED_FROM, 1);
+  assert.equal(preview.entityLinksByLinkType.DUPLICATE_OF, 2);
+  assert.equal(preview.entityLinksByLinkType.REVIEW_CANDIDATE, 2);
+  assert.equal(preview.entitySourceLinkPreviewCount, 5);
+  assert.ok(preview.sourceRecordSamples.some((record) => record.status === "NEW" && record.recordType === "PROJECT"));
+  assert.ok(preview.sourceRecordSamples.some((record) => record.status === "NEEDS_REVIEW"));
+  assert.ok(preview.sourceRecordSamples.every((record) => record.recordHash.length === 64));
+  assert.ok(preview.sourceRecordSamples.every((record) => Number.isInteger(record.rawRef.rowIndex) && record.rawRef.rowIndex >= 1));
+  assert.ok(preview.entitySourceLinkSamples.some((link) => link.linkType === "CREATED_FROM" && link.entityType === "PROJECT"));
+  assert.ok(preview.entitySourceLinkSamples.some((link) => link.linkType === "DUPLICATE_OF"));
+
+  const output = JSON.stringify(report);
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Synthetic Client Alpha"), false);
+  assert.equal(output.includes("Synthetic Alpha Project"), false);
+  assert.equal(output.includes("Build internal workflow"), false);
+  assert.equal(output.includes("tests/fixtures/csv-import"), false);
+  assert.equal(output.includes("C:\\Users"), false);
+}
+
+{
+  const csvText = [
+    "title,companyName,workContent,requiredSkills,unitPrice,startMonth,workLocation",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+  ].join("\n");
+  const report = buildCsvDryRunReport({
+    csvText,
+    type: "project",
+    fileIdentity: "synthetic-stable-hash.csv",
+    sourcePreview: true,
+  });
+  const preview = report.sourcePreview;
+  assert.ok(preview);
+  assert.equal(preview.sourceRecordSamples.length, 2);
+  assert.equal(preview.sourceRecordSamples[0].recordHash, preview.sourceRecordSamples[1].recordHash);
+  assert.deepEqual(preview.sourceRecordSamples.map((record) => record.rawRef), [
+    { rowIndex: 1, rowNumber: 2 },
+    { rowIndex: 2, rowNumber: 3 },
+  ]);
+
+  const output = JSON.stringify(report);
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Stable Project Alpha"), false);
+  assert.equal(output.includes("Stable Company One"), false);
+  assert.equal(output.includes("Stable work item"), false);
+}
+
+{
+  const original = [
+    "title,companyName,workContent,requiredSkills,unitPrice,startMonth,workLocation",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+    "Stable Project Beta,Stable Company Two,Stable build item,\"Java,SQL\",80,2026-08,Hybrid",
+  ].join("\n");
+  const reordered = [
+    "title,companyName,workContent,requiredSkills,unitPrice,startMonth,workLocation",
+    "Stable Project Beta,Stable Company Two,Stable build item,\"Java,SQL\",80,2026-08,Hybrid",
+    "Stable Project Alpha,Stable Company One,Stable work item,\"TypeScript,SQL\",90,2026-07,Remote",
+  ].join("\n");
+  const originalPreview = buildCsvDryRunReport({
+    csvText: original,
+    type: "project",
+    fileIdentity: "synthetic-stable-hash.csv",
+    sourcePreview: true,
+  }).sourcePreview;
+  const reorderedPreview = buildCsvDryRunReport({
+    csvText: reordered,
+    type: "project",
+    fileIdentity: "synthetic-stable-hash.csv",
+    sourcePreview: true,
+  }).sourcePreview;
+  assert.ok(originalPreview);
+  assert.ok(reorderedPreview);
+
+  const originalHashes = originalPreview.sourceRecordSamples.map((record) => record.recordHash);
+  const reorderedHashes = reorderedPreview.sourceRecordSamples.map((record) => record.recordHash);
+  assert.deepEqual([...originalHashes].sort(), [...reorderedHashes].sort());
+  assert.equal(originalHashes[0], reorderedHashes[1]);
+  assert.equal(originalHashes[1], reorderedHashes[0]);
+  assert.deepEqual(originalPreview.sourceRecordSamples[0].rawRef, { rowIndex: 1, rowNumber: 2 });
+  assert.deepEqual(reorderedPreview.sourceRecordSamples[1].rawRef, { rowIndex: 2, rowNumber: 3 });
+
+  const output = JSON.stringify({ originalPreview, reorderedPreview });
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Stable Project Alpha"), false);
+  assert.equal(output.includes("Stable Project Beta"), false);
+  assert.equal(output.includes("Stable Company"), false);
+}
+
+{
   const report = buildCsvDryRunReport({ csvText: personCsv, type: "person", fileIdentity: "synthetic-persons.csv" });
   assert.equal(report.summary.effectiveTypes.person, 5);
   assert.ok(report.mappedColumns.some((column) => column.field === "name"));
@@ -148,6 +325,41 @@ function runCsvDryRunCli(args: string[]) {
   assert.equal(output.includes("Synthetic Station"), false);
   assert.equal(output.includes("Backend Engineer"), false);
   assert.equal(output.includes("Fullstack Engineer"), false);
+}
+
+{
+  const report = buildCsvDryRunReport({
+    csvText: personCsv,
+    type: "person",
+    fileIdentity: "tests/fixtures/csv-import/synthetic-persons.csv",
+    sourcePreview: true,
+  });
+  const preview = report.sourcePreview;
+  assert.ok(preview);
+  assert.equal(preview.previewImportSource.type, "CSV");
+  assert.equal(preview.previewImportSource.nameRedacted, "synthetic-persons.csv");
+  assert.equal(preview.previewImportRun.mode, "DRY_RUN");
+  assert.equal(preview.previewImportRun.status, "PARTIAL");
+  assert.equal(preview.previewImportRun.summary.wouldCreate, 1);
+  assert.equal(preview.previewImportRun.summary.wouldNeedReview, 4);
+  assert.equal(preview.sourceRecordPreviewCount, 5);
+  assert.equal(preview.sourceRecordsByStatus.NEW, 1);
+  assert.equal(preview.sourceRecordsByStatus.NEEDS_REVIEW, 4);
+  assert.equal(preview.sourceRecordsByType.PERSON, 5);
+  assert.equal(preview.entityLinksByType.PERSON, 5);
+  assert.equal(preview.entityLinksByLinkType.CREATED_FROM, 1);
+  assert.equal(preview.entityLinksByLinkType.DUPLICATE_OF, 2);
+  assert.equal(preview.entityLinksByLinkType.REVIEW_CANDIDATE, 2);
+  assert.ok(preview.sourceRecordSamples.some((record) => record.status === "NEW" && record.recordType === "PERSON"));
+  assert.ok(preview.entitySourceLinkSamples.some((link) => link.linkType === "CREATED_FROM" && link.entityType === "PERSON"));
+
+  const output = JSON.stringify(report);
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Synthetic Person One"), false);
+  assert.equal(output.includes("Synthetic Partner Alpha"), false);
+  assert.equal(output.includes("Backend Engineer"), false);
+  assert.equal(output.includes("tests/fixtures/csv-import"), false);
+  assert.equal(output.includes("C:\\Users"), false);
 }
 
 {
@@ -309,5 +521,17 @@ assert.throws(
   () => assertNoSensitiveCsvOutput(JSON.stringify({ rawRow: ["must not print"] })),
   /Sensitive CSV dry-run output/,
 );
+
+assert.throws(
+  () => assertNoSensitiveCsvOutput("C:\\Users\\sample\\secret.csv"),
+  /Sensitive CSV dry-run output/,
+);
+
+{
+  const importerSource = readFileSync("scripts/csv-import-dry-run.ts", "utf8");
+  assert.equal(/\bprisma\.\w+\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/.test(importerSource), false);
+  assert.equal(/\bfetch\s*\(/.test(importerSource), false);
+  assert.equal(/\b(?:openai|anthropic)\b/i.test(importerSource), false);
+}
 
 console.log("csv import dry-run tests passed");

@@ -5,7 +5,7 @@ This folder keeps design notes for importing SES sales data from multiple source
 The theme covers:
 
 - Gmail-derived source mail tracking.
-- Future CSV import tracking.
+- CSV import dry-run and source tracking previews.
 - Future Notion read-only sync tracking.
 - Manual entry traceability.
 - Generic source record to entity mapping.
@@ -20,5 +20,5 @@ Current files:
 
 - `source-tracking-inventory.md`: current-state inventory and CLI output contract.
 - `source-tracking-design.md`: future source tracking design and migration proposal notes.
-- `csv-import-dry-run.md`: CSV import dry-run MVP design, validation policy, and future apply path.
+- `csv-import-dry-run.md`: CSV import dry-run MVP design, source-preview mode, validation policy, and future apply path.
 - `import-source-tracking-schema.md`: additive Prisma schema foundation for generic import sources, runs, records, and entity links.

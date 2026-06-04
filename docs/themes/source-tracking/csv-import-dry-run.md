@@ -39,6 +39,15 @@ npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-pro
 npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-persons.csv --type=auto --db-duplicates=off
 ```
 
+Source tracking preview:
+
+```powershell
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-projects.csv --type=project --source-preview
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-persons.csv --type=person --source-preview
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-projects.csv --type=auto --source-preview
+npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-persons.csv --type=auto --source-preview
+```
+
 Read-only DB duplicate matching:
 
 ```powershell
@@ -56,6 +65,8 @@ $env:CSV_DRY_RUN_DUPLICATE_FIXTURE="synthetic"; npm.cmd run csv:import:dry-run -
 The synthetic fixture mode is for CI/PR verification when real DB credentials are not available. It exercises the same `--db-duplicates=on` CLI branch with bundled synthetic duplicate candidates and performs no DB connection or writes. Real DB duplicate verification should be owner-run separately only when a safe read-only environment is available.
 
 `--limit` defaults to `5000`. The command rejects `--apply`.
+
+`--source-preview` adds an anonymized source-tracking preview summary to the dry-run JSON. It builds in-memory preview objects only and performs no database writes, apply, migrations, external API calls, AI API calls, Notion API calls, or email sending.
 
 ## Supported Input Types
 
@@ -218,8 +229,45 @@ The report is designed for owner review without exposing PII:
 - warning counts by code
 - review reason counts by code
 - max 20 anonymized sample row summaries
+- optional source-tracking preview summary when `--source-preview` is enabled
 
 Sample rows include row hashes, action, type signals, coverage scores, warning codes, review reason codes, duplicate strength, duplicate group hash, and counts. They never include raw values.
+
+## Source Preview Mode
+
+`--source-preview` connects the CSV dry-run report to the generic import source tracking model without persisting anything.
+
+Preview `ImportSource`:
+
+- `type`: `CSV`
+- `nameRedacted`: the synthetic fixture file label, or a redacted `csv-file-<hash>` label for non-synthetic paths
+- `status`: `ACTIVE`
+- `configSummary`: safe metadata only, including file hash, file byte count, row count, requested type, read-only duplicate mode, and path redaction flags
+
+Preview `ImportRun`:
+
+- `mode`: `DRY_RUN`
+- `status`: `SUCCEEDED` when all parsed rows are clean creates, otherwise `PARTIAL`
+- `summary`: file rows, parsed rows, would-create rows, rows needing review, skipped rows, duplicate candidate count, type conflict count, and invalid row count
+
+Preview `SourceRecord`:
+
+- One preview record is built for each parsed CSV row.
+- `recordType` is `PROJECT` or `PERSON` for resolved rows, `UNKNOWN` for auto type conflicts, and `EXCLUDED` for skipped rows.
+- `recordHash` is a deterministic hash.
+- `rawRef` contains only safe row position metadata, including one-based CSV body row index and CSV row number.
+- `normalizedPayload` includes normalized field names, coverage, missing fields, and counts, but not raw values.
+- `redactedPreview` includes action, type signal, confidence, warning count, review reason count, and duplicate strength.
+- `status` is `NEW` for clean create rows, `NEEDS_REVIEW` for review rows, and `SKIPPED` for skipped rows.
+
+Preview `EntitySourceLink`:
+
+- Clean create rows produce `CREATED_FROM` link previews for `PROJECT` or `PERSON`.
+- Duplicate rows produce `DUPLICATE_OF` link previews with duplicate reason codes.
+- Review rows without duplicate candidates produce `REVIEW_CANDIDATE` link previews.
+- Link previews include entity type, link type, confidence, and reasons only. They do not include real entity IDs or raw source values.
+
+The source preview output includes aggregate counts, warning counts, review reason counts, and at most 20 anonymized `SourceRecord` and `EntitySourceLink` samples.
 
 ## Validation Policy
 
@@ -267,9 +315,9 @@ The dry-run report is aggregate and anonymized:
 
 CSV dry-run is a bridge from current Gmail-focused tracking to future generic source tracking.
 
-Future integration should map each CSV row into a `source_records`-like payload, then link approved rows to entities through `entity_source_links`.
+The dry-run now maps each CSV row into an in-memory `SourceRecord` preview and maps clean, duplicate, or review rows into in-memory `EntitySourceLink` previews. These previews match the import source tracking concepts, but they are not inserted into `import_sources`, `import_runs`, `source_records`, or `entity_source_links`.
 
-This PR does not create those tables. It validates mapping, review, duplicate, and type-detection behavior first.
+Future source record writes must be a separate supervised apply PR with explicit owner approval and apply gates.
 
 ## Future Apply Flow Design
 
@@ -291,14 +339,14 @@ Expected future safety gates:
 
 ## Future Source Records And Import Runs
 
-Future schema work should connect CSV import to:
+Future supervised apply work should persist the current preview concepts to:
 
 - `import_sources`
 - `import_runs`
 - `source_records`
 - `entity_source_links`
 
-The CSV dry-run report already exposes the data needed for that design:
+The CSV dry-run source preview exposes the data needed for that design:
 
 - row hashes
 - mapped fields
@@ -308,6 +356,9 @@ The CSV dry-run report already exposes the data needed for that design:
 - review reason counts
 - duplicate reason counts
 - anonymized samples
+- preview import run summary
+- preview source record statuses
+- preview entity source link types
 
 ## Non-goals In This PR
 
