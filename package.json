@@ -27,6 +27,7 @@
     "gmail:extract:quality-audit": "tsx scripts/gmail-extraction-quality-audit.ts",
     "gmail:extract:quality-eval": "tsx scripts/gmail-extraction-quality-eval.ts",
     "csv:import:dry-run": "tsx scripts/csv-import-dry-run.ts",
+    "csv:import:apply": "tsx scripts/csv-import-apply.ts",
     "source:inventory": "tsx scripts/source-inventory.ts",
     "test:gmail-extraction-quality": "tsx scripts/gmail-extraction-quality.test.ts",
     "test:csv-import-dry-run": "tsx scripts/csv-import-dry-run.test.ts",

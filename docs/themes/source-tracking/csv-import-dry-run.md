@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The CSV import dry-run checks whether SES project/person CSV files can be mapped into the console's normalized data shape before any database write path exists.
+The CSV import dry-run checks whether SES project/person CSV files can be mapped into the console's normalized data shape before entity creation exists.
 
-This command is intentionally safe:
+The dry-run command is intentionally safe:
 
 - No DB writes.
 - No `--apply`.
@@ -17,6 +17,8 @@ This command is intentionally safe:
 - No email sending.
 - No raw CSV row output.
 - No real customer names, company names, person names, email addresses, full subjects, full bodies, tokens, connection strings, or secrets in CLI output or docs.
+
+The supervised apply command is separate and guarded. It writes source tracking records only and must not be run casually.
 
 ## Commands
 
@@ -48,6 +50,14 @@ npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-pro
 npm.cmd run csv:import:dry-run -- --file tests/fixtures/csv-import/synthetic-persons.csv --type=auto --source-preview
 ```
 
+Supervised source-record apply:
+
+```powershell
+npm.cmd run csv:import:apply -- --file <path> --type=project --source-preview --limit=50 --confirm=APPLY_CSV_SOURCE_RECORDS
+```
+
+The apply command is implemented for owner-supervised staging use only. It requires `--source-preview`, an explicit `--limit`, a limit of `50` or less, and `--confirm=APPLY_CSV_SOURCE_RECORDS`. Codex verification must not run a successful real apply.
+
 Read-only DB duplicate matching:
 
 ```powershell
@@ -66,7 +76,7 @@ The synthetic fixture mode is for CI/PR verification when real DB credentials ar
 
 `--limit` defaults to `5000`. The command rejects `--apply`.
 
-`--source-preview` adds an anonymized source-tracking preview summary to the dry-run JSON. It builds in-memory preview objects only and performs no database writes, apply, migrations, external API calls, AI API calls, Notion API calls, or email sending.
+`--source-preview` adds an anonymized source-tracking preview summary to the dry-run JSON. In dry-run mode, it builds in-memory preview objects only and performs no database writes, apply, migrations, external API calls, AI API calls, Notion API calls, or email sending.
 
 ## Supported Input Types
 
@@ -269,6 +279,60 @@ Preview `EntitySourceLink`:
 
 The source preview output includes aggregate counts, warning counts, review reason counts, and at most 20 anonymized `SourceRecord` and `EntitySourceLink` samples.
 
+## Supervised Apply Mode
+
+`csv:import:apply` persists the source preview into source tracking tables only:
+
+- `import_sources`
+- `import_runs`
+- `source_records`
+- `entity_source_links`
+
+It does not write:
+
+- `projects`
+- `persons`
+- project/person relation tables
+- Gmail tables
+- Notion data
+- email/send logs
+
+Apply safety guards:
+
+- `--confirm=APPLY_CSV_SOURCE_RECORDS` is required.
+- `--limit` is required.
+- `--limit` must be `50` or less.
+- `--source-preview` is required.
+- Output is aggregate and anonymized.
+- No raw CSV values or local file paths are printed.
+
+Duplicate and idempotency policy:
+
+- `ImportSource` is reused by CSV type and redacted source name when already active.
+- `SourceRecord` is checked by `sourceId`, content-derived `recordHash`, and `recordType` before create.
+- `EntitySourceLink` is checked by `sourceRecordId`, `entityType`, deterministic preview entity candidate ID, and `linkType` before create.
+- `recordHash` remains content-based and does not include row number.
+- `rawRef.rowIndex` and `rawRef.rowNumber` preserve row position separately.
+
+Entity link policy:
+
+- Apply persists the source-preview link concepts because `entity_source_links` requires a UUID-shaped `entityId`.
+- The apply path uses a deterministic preview entity candidate UUID derived from the source record hash and link metadata.
+- This is not a real project or person ID, and no project/person row is created or updated by this PR.
+
+Failure policy:
+
+- If a source-record or entity-link write fails, the write block stops.
+- The ImportRun is marked `FAILED` when a write failure is observed.
+- Error output is sanitized to a generic code and hash.
+- Raw CSV values, DB connection strings, local file paths, and secrets must not be printed.
+
+Rollback/manual cleanup policy:
+
+- Because apply writes only source tracking rows, manual cleanup should target the created `import_runs`, their `source_records`, and related `entity_source_links`.
+- Cleanup should be owner-approved and performed in a separate supervised operation.
+- Project and person tables do not require rollback for this PR because they are not written.
+
 ## Validation Policy
 
 Project required checks:
@@ -315,21 +379,21 @@ The dry-run report is aggregate and anonymized:
 
 CSV dry-run is a bridge from current Gmail-focused tracking to future generic source tracking.
 
-The dry-run now maps each CSV row into an in-memory `SourceRecord` preview and maps clean, duplicate, or review rows into in-memory `EntitySourceLink` previews. These previews match the import source tracking concepts, but they are not inserted into `import_sources`, `import_runs`, `source_records`, or `entity_source_links`.
+The dry-run maps each CSV row into an in-memory `SourceRecord` preview and maps clean, duplicate, or review rows into in-memory `EntitySourceLink` previews.
 
-Future source record writes must be a separate supervised apply PR with explicit owner approval and apply gates.
+The supervised apply path can persist those preview concepts into source tracking tables only. It still does not create or update projects/persons.
 
-## Future Apply Flow Design
+## Future Entity Creation Flow Design
 
-A future apply PR should be separate because it writes data.
+A future project/person creation PR should be separate because it writes normalized business entities.
 
 Expected future safety gates:
 
-- explicit `--apply`
-- required confirmation string
+- source records must already exist
+- explicit confirmation string
 - required source type
-- required import run ID or generated run metadata
-- dry-run summary before apply
+- apply limit
+- dry-run summary before entity creation
 - count-only mode
 - small chunks
 - stop on any failure
@@ -337,16 +401,16 @@ Expected future safety gates:
 - rollback plan
 - owner approval before staging apply
 
-## Future Source Records And Import Runs
+## Source Records And Import Runs
 
-Future supervised apply work should persist the current preview concepts to:
+Supervised apply persists the current preview concepts to:
 
 - `import_sources`
 - `import_runs`
 - `source_records`
 - `entity_source_links`
 
-The CSV dry-run source preview exposes the data needed for that design:
+The CSV dry-run source preview exposes the data needed:
 
 - row hashes
 - mapped fields
@@ -362,10 +426,11 @@ The CSV dry-run source preview exposes the data needed for that design:
 
 ## Non-goals In This PR
 
-- No DB writes.
+- No project/person creation.
+- No project/person updates.
+- No project/person deletes.
 - No migrations.
 - No Prisma schema changes.
-- No apply mode.
 - No external API integration.
 - No AI-assisted mapping.
 - No Notion sync.

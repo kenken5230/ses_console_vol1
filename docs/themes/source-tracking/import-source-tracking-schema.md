@@ -103,7 +103,9 @@ CSV file
 
 The preview uses safe metadata only. It does not print raw CSV values, real customer/company/person names, emails, local file paths, subjects, bodies, tokens, connection strings, or secrets.
 
-The current CSV dry-run remains read-only. `--source-preview` does not insert into `import_sources`, `import_runs`, `source_records`, or `entity_source_links`. Future source record writes must be a separate supervised apply PR with explicit apply gates.
+The current CSV dry-run remains read-only. `--source-preview` on the dry-run command does not insert into `import_sources`, `import_runs`, `source_records`, or `entity_source_links`.
+
+The supervised CSV source-record apply command can persist this preview shape into the source tracking tables only. It requires an explicit confirmation string, an apply limit of 50 or less, and source preview mode. It does not create, update, or delete projects or persons.
 
 ## Notion Read-only Sync Future Flow
 
