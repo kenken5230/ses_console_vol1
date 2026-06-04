@@ -6,9 +6,10 @@ const maxRemediationLimit = 50;
 const defaultCountOnlyScanLimit = 1000;
 const maxScanLimit = 5000;
 const maxPreviewRows = 50;
-const maxBatchLimit = 500;
+const maxUpdateLimit = 2000;
 const defaultChunkSize = maxRemediationLimit;
 const batchApplyConfirmation = "APPLY_GMAIL_PERSON_REMEDIATION";
+const maxBatchApplySampleRows = 20;
 
 type PrismaClient = (typeof import("../lib/prisma"))["prisma"];
 
@@ -23,7 +24,7 @@ type Args = {
   batchPreview: boolean;
   limit: number | null;
   scanLimit: number;
-  batchLimit: number | null;
+  updateLimit: number | null;
   chunkSize: number;
   confirm: string | null;
 };
@@ -82,10 +83,23 @@ type ChunkSummary = {
   failed: number;
 };
 
+type BatchRunResult = {
+  scannedTotal: number;
+  candidatesTotal: number;
+  updatedTotal: number;
+  skippedTotal: number;
+  failedTotal: number;
+  stoppedReason: string;
+  chunkSummaries: ChunkSummary[];
+  rows: OutputRow[];
+  failedRows: OutputRow[];
+};
+
 function parseArgs(argv = process.argv.slice(2)): Args {
   let rawLimit: string | undefined;
   let rawScanLimit: string | undefined;
   let rawBatchLimit: string | undefined;
+  let rawUpdateLimit: string | undefined;
   let rawChunkSize: string | undefined;
   let confirm: string | undefined;
   let apply = false;
@@ -110,7 +124,17 @@ function parseArgs(argv = process.argv.slice(2)): Args {
       continue;
     }
 
+    if (arg === "--supervised-apply") {
+      batchApply = true;
+      continue;
+    }
+
     if (arg === "--batch-preview") {
+      batchPreview = true;
+      continue;
+    }
+
+    if (arg === "--supervised-preview") {
       batchPreview = true;
       continue;
     }
@@ -148,6 +172,17 @@ function parseArgs(argv = process.argv.slice(2)): Args {
       continue;
     }
 
+    if (arg === "--update-limit") {
+      rawUpdateLimit = argv[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--update-limit=")) {
+      rawUpdateLimit = arg.split("=")[1];
+      continue;
+    }
+
     if (arg === "--chunk-size") {
       rawChunkSize = argv[index + 1];
       index += 1;
@@ -178,21 +213,32 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     throw new Error("--batch-apply cannot be combined with --batch-preview.");
   }
   if (batchMode) {
-    if (apply || countOnly || rawLimit || rawScanLimit) {
-      throw new Error("--batch-preview/--batch-apply cannot be combined with --apply, --count-only, --limit, or --scan-limit.");
+    if (apply || countOnly || rawLimit) {
+      throw new Error("--batch-preview/--batch-apply cannot be combined with --apply, --count-only, or --limit.");
+    }
+    if (rawBatchLimit) {
+      throw new Error("--batch-limit has been replaced by --scan-limit and --update-limit for supervised batch mode.");
     }
 
-    const batchLimit = rawBatchLimit ? Number(rawBatchLimit) : NaN;
-    if (!Number.isFinite(batchLimit) || batchLimit <= 0) {
-      throw new Error(`Missing required --batch-limit=N for batch mode. Max is ${maxBatchLimit}.`);
+    const scanLimit = rawScanLimit ? Number(rawScanLimit) : NaN;
+    if (!Number.isFinite(scanLimit) || scanLimit <= 0) {
+      throw new Error(`Missing required --scan-limit=N for batch mode. Max is ${maxScanLimit}.`);
     }
-    if (batchLimit > maxBatchLimit) {
-      throw new Error(`--batch-limit must be ${maxBatchLimit} or less for safe batch remediation.`);
+    if (scanLimit > maxScanLimit) {
+      throw new Error(`--scan-limit must be ${maxScanLimit} or less for safe batch scanning.`);
     }
 
-    const chunkSize = rawChunkSize ? Number(rawChunkSize) : defaultChunkSize;
+    const updateLimit = rawUpdateLimit ? Number(rawUpdateLimit) : NaN;
+    if (!Number.isFinite(updateLimit) || updateLimit <= 0) {
+      throw new Error(`Missing required --update-limit=N for batch mode. Max is ${maxUpdateLimit}.`);
+    }
+    if (updateLimit > maxUpdateLimit) {
+      throw new Error(`--update-limit must be ${maxUpdateLimit} or less for safe supervised remediation.`);
+    }
+
+    const chunkSize = rawChunkSize ? Number(rawChunkSize) : NaN;
     if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
-      throw new Error(`--chunk-size must be a positive number. Max is ${maxRemediationLimit}.`);
+      throw new Error(`Missing required --chunk-size=N for batch mode. Max is ${maxRemediationLimit}.`);
     }
     if (chunkSize > maxRemediationLimit) {
       throw new Error(`--chunk-size must be ${maxRemediationLimit} or less.`);
@@ -207,15 +253,15 @@ function parseArgs(argv = process.argv.slice(2)): Args {
       batchApply,
       batchPreview,
       limit: null,
-      scanLimit: Math.trunc(batchLimit),
-      batchLimit: Math.trunc(batchLimit),
+      scanLimit: Math.trunc(scanLimit),
+      updateLimit: Math.trunc(updateLimit),
       chunkSize: Math.trunc(chunkSize),
       confirm: confirm ?? null,
     };
   }
 
-  if (rawBatchLimit || rawChunkSize) {
-    throw new Error("--batch-limit and --chunk-size require --batch-preview or --batch-apply.");
+  if (rawBatchLimit || rawUpdateLimit || rawChunkSize) {
+    throw new Error("--batch-limit, --update-limit, and --chunk-size require --batch-preview or --batch-apply.");
   }
   if (confirm) {
     throw new Error("--confirm is only used with --batch-apply.");
@@ -243,7 +289,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
       batchPreview: false,
       limit: Math.trunc(limit),
       scanLimit: Math.trunc(limit),
-      batchLimit: null,
+      updateLimit: null,
       chunkSize: defaultChunkSize,
       confirm: null,
     };
@@ -275,7 +321,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     batchPreview: false,
     limit: Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : null,
     scanLimit: Math.trunc(scanLimit),
-    batchLimit: null,
+    updateLimit: null,
     chunkSize: defaultChunkSize,
     confirm: null,
   };
@@ -588,11 +634,17 @@ async function runSingle(args: Args): Promise<void> {
   }
 }
 
-async function runBatch(args: Args): Promise<void> {
-  const mode: RunMode = args.batchApply ? "batch-apply" : "batch-preview";
-  const batchLimit = args.batchLimit ?? 0;
-  const chunkSize = Math.min(args.chunkSize, maxRemediationLimit);
+async function runBatchScan(
+  args: Args,
+  options: {
+    mode: RunMode;
+    apply: boolean;
+    rowLimit: number;
+  },
+): Promise<BatchRunResult> {
+  const updateLimit = args.updateLimit ?? 0;
   const rows: OutputRow[] = [];
+  const failedRows: OutputRow[] = [];
   const chunkSummaries: ChunkSummary[] = [];
   let after: PageCursor | undefined;
   let scannedTotal = 0;
@@ -600,29 +652,36 @@ async function runBatch(args: Args): Promise<void> {
   let updatedTotal = 0;
   let skippedTotal = 0;
   let failedTotal = 0;
-  let stoppedReason = "batch_limit_reached";
+  let stoppedReason = "scan_limit_reached";
 
-  for (let chunk = 1; scannedTotal < batchLimit; chunk += 1) {
-    const take = Math.min(chunkSize, batchLimit - scannedTotal);
+  for (let chunk = 1; scannedTotal < args.scanLimit; chunk += 1) {
+    const take = Math.min(args.chunkSize, args.scanLimit - scannedTotal);
     const persons = await fetchRemediationPersons(take, after);
     if (persons.length === 0) {
       stoppedReason = "no_more_persons";
       break;
     }
 
-    after = nextCursor(persons);
-    scannedTotal += persons.length;
-
     const chunkSummary: ChunkSummary = {
       chunk,
-      scanned: persons.length,
+      scanned: 0,
       candidates: 0,
       updated: 0,
       skipped: 0,
       failed: 0,
     };
+    let processedFullChunk = true;
 
     for (const person of persons) {
+      if (options.apply && updatedTotal >= updateLimit) {
+        stoppedReason = "update_limit_reached";
+        processedFullChunk = false;
+        break;
+      }
+
+      scannedTotal += 1;
+      chunkSummary.scanned += 1;
+
       let candidate: RemediationCandidate | null = null;
       try {
         candidate = buildCandidate(person);
@@ -630,6 +689,7 @@ async function runBatch(args: Args): Promise<void> {
         failedTotal += 1;
         chunkSummary.failed += 1;
         stoppedReason = "failed_in_chunk";
+        processedFullChunk = false;
         break;
       }
 
@@ -642,9 +702,9 @@ async function runBatch(args: Args): Promise<void> {
       candidatesTotal += 1;
       chunkSummary.candidates += 1;
 
-      if (!args.batchApply) {
-        if (rows.length < maxPreviewRows) {
-          rows.push(candidateRow(candidate, mode, "candidate"));
+      if (!options.apply) {
+        if (rows.length < options.rowLimit) {
+          rows.push(candidateRow(candidate, options.mode, "candidate"));
         }
         continue;
       }
@@ -654,23 +714,31 @@ async function runBatch(args: Args): Promise<void> {
         if (result === "updated") {
           updatedTotal += 1;
           chunkSummary.updated += 1;
-          if (rows.length < maxPreviewRows) {
-            rows.push(candidateRow(candidate, mode, "updated"));
+          if (rows.length < options.rowLimit) {
+            rows.push(candidateRow(candidate, options.mode, "updated"));
+          }
+          if (updatedTotal >= updateLimit) {
+            stoppedReason = "update_limit_reached";
+            processedFullChunk = false;
+            break;
           }
         } else {
           skippedTotal += 1;
           chunkSummary.skipped += 1;
-          if (rows.length < maxPreviewRows) {
-            rows.push(candidateRow(candidate, mode, "skipped"));
+          if (rows.length < options.rowLimit) {
+            rows.push(candidateRow(candidate, options.mode, "skipped"));
           }
         }
       } catch (error) {
+        const row = candidateRow(candidate, options.mode, "failed", errorMessage(error));
         failedTotal += 1;
         chunkSummary.failed += 1;
         stoppedReason = "failed_in_chunk";
-        if (rows.length < maxPreviewRows) {
-          rows.push(candidateRow(candidate, mode, "failed", errorMessage(error)));
+        failedRows.push(row);
+        if (rows.length < options.rowLimit) {
+          rows.push(row);
         }
+        processedFullChunk = false;
         break;
       }
     }
@@ -680,29 +748,115 @@ async function runBatch(args: Args): Promise<void> {
     if (chunkSummary.failed > 0) {
       break;
     }
-    if (args.batchApply && chunkSummary.updated === 0) {
-      stoppedReason = "no_updates_in_chunk";
+    if (options.apply && updatedTotal >= updateLimit) {
+      stoppedReason = "update_limit_reached";
       break;
     }
+    if (!processedFullChunk) {
+      break;
+    }
+    after = nextCursor(persons);
     if (persons.length < take) {
       stoppedReason = "no_more_persons";
       break;
     }
   }
 
-  console.log(
-    args.batchApply
-      ? "Gmail person remediation batch apply. DB writes are limited to persons.name and extraction_results."
-      : "Gmail person remediation batch preview. DB writes are not performed.",
-  );
-  console.log(
-    `mode: ${mode}, batchLimit: ${batchLimit}, chunkSize: ${chunkSize}, scannedTotal: ${scannedTotal}, candidatesTotal: ${candidatesTotal}, updatedTotal: ${updatedTotal}, skippedTotal: ${skippedTotal}, failedTotal: ${failedTotal}, chunks: ${chunkSummaries.length}, stoppedReason: ${stoppedReason}, displayed: ${rows.length}`,
-  );
-  console.table(chunkSummaries);
-  if (candidatesTotal > rows.length) {
-    console.log(`candidate rows are limited to ${maxPreviewRows}.`);
+  if (
+    candidatesTotal === 0 &&
+    (stoppedReason === "scan_limit_reached" || stoppedReason === "no_more_persons")
+  ) {
+    stoppedReason = "no_candidates_in_scan";
   }
-  console.table(rows);
+
+  return {
+    scannedTotal,
+    candidatesTotal,
+    updatedTotal,
+    skippedTotal,
+    failedTotal,
+    stoppedReason,
+    chunkSummaries,
+    rows,
+    failedRows,
+  };
+}
+
+async function runBatch(args: Args): Promise<void> {
+  const mode: RunMode = args.batchApply ? "batch-apply" : "batch-preview";
+  const updateLimit = args.updateLimit ?? 0;
+
+  if (!args.batchApply) {
+    const result = await runBatchScan(args, {
+      mode,
+      apply: false,
+      rowLimit: maxPreviewRows,
+    });
+    const wouldUpdateTotal = Math.min(result.candidatesTotal, updateLimit);
+
+    console.log("Gmail person remediation batch preview. DB writes are not performed.");
+    console.log(
+      `mode: ${mode}, scanLimit: ${args.scanLimit}, updateLimit: ${updateLimit}, chunkSize: ${args.chunkSize}, scannedTotal: ${result.scannedTotal}, candidatesTotal: ${result.candidatesTotal}, wouldUpdateTotal: ${wouldUpdateTotal}, updatedTotal: 0, skippedTotal: ${result.skippedTotal}, failedTotal: ${result.failedTotal}, chunks: ${result.chunkSummaries.length}, stoppedReason: ${result.stoppedReason}, displayed: ${result.rows.length}`,
+    );
+    console.table(result.chunkSummaries);
+    if (result.candidatesTotal > result.rows.length) {
+      console.log(`candidate rows are limited to ${maxPreviewRows}.`);
+    }
+    console.table(result.rows);
+    if (result.failedRows.length > 0) {
+      console.table(result.failedRows);
+    }
+    return;
+  }
+
+  const before = await runBatchScan(args, {
+    mode: "count-only",
+    apply: false,
+    rowLimit: 0,
+  });
+  const applyResult =
+    before.failedTotal > 0
+      ? {
+          scannedTotal: 0,
+          candidatesTotal: 0,
+          updatedTotal: 0,
+          skippedTotal: 0,
+          failedTotal: 0,
+          stoppedReason: "not_started_due_to_pre_count_failure",
+          chunkSummaries: [],
+          rows: [],
+          failedRows: [],
+        }
+      : await runBatchScan(args, {
+          mode,
+          apply: true,
+          rowLimit: maxBatchApplySampleRows,
+        });
+  const after =
+    before.failedTotal > 0
+      ? before
+      : await runBatchScan(args, {
+          mode: "count-only",
+          apply: false,
+          rowLimit: 0,
+        });
+  const failedTotal = before.failedTotal + applyResult.failedTotal + (before.failedTotal > 0 ? 0 : after.failedTotal);
+  const reducedCandidates = before.candidatesTotal - after.candidatesTotal;
+
+  console.log(
+    "Gmail person remediation batch apply. DB writes are limited to persons.name and extraction_results. Post-count is included.",
+  );
+  console.log(
+    `mode: ${mode}, scanLimit: ${args.scanLimit}, updateLimit: ${updateLimit}, chunkSize: ${args.chunkSize}, beforeScanned: ${before.scannedTotal}, beforeCandidates: ${before.candidatesTotal}, updatedTotal: ${applyResult.updatedTotal}, skippedTotal: ${applyResult.skippedTotal}, failedTotal: ${failedTotal}, afterScanned: ${after.scannedTotal}, afterCandidates: ${after.candidatesTotal}, reducedCandidates: ${reducedCandidates}, chunks: ${applyResult.chunkSummaries.length}, stoppedReason: ${applyResult.stoppedReason}, displayed: ${applyResult.rows.length}`,
+  );
+  console.table(applyResult.chunkSummaries);
+  if (applyResult.rows.length > 0) {
+    console.log(`sample rows are limited to ${maxBatchApplySampleRows}.`);
+    console.table(applyResult.rows);
+  }
+  if (applyResult.failedRows.length > 0) {
+    console.table(applyResult.failedRows);
+  }
 }
 
 async function main(): Promise<void> {
