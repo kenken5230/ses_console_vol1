@@ -3,7 +3,7 @@
 作成日: 2026-06-04  
 目的: Notion卒業、SES営業データ統合、AIマッチング、提案、メール、進捗、統計を一つのconsoleへ集約するための統合要件定義。  
 前提: 既存DB・Gmail抽出・remediation・docsを活用し、足りない機能をテーマ別に整理する。  
-BK: `docs/BK/backups/2026-06-04-ses-console-theme-input-bk-v0.1.md`
+BK: `docs/themes/ses-sales-console/BK/backups/2026-06-04-ses-console-theme-input-bk-v0.1.md`
 
 ## 1. ゴール
 
@@ -445,4 +445,3 @@ Owner確認:
 - 重複する要求は共通データ/共通workflowへ寄せている。
 - 既存データ更新・削除を伴わない。
 - secret、DB接続URL、token、password、connection stringの実値を含まない。
-

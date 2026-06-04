@@ -1,8 +1,8 @@
 # SES Sales Console Theme Backlog v0.1
 
 作成日: 2026-06-04  
-親要件: `docs/requirements/ses-sales-console-integrated-requirements-v0.1.md`  
-BK: `docs/BK/backups/2026-06-04-ses-console-theme-input-bk-v0.1.md`
+親要件: `docs/themes/ses-sales-console/requirements/ses-sales-console-integrated-requirements-v0.1.md`  
+BK: `docs/themes/ses-sales-console/BK/backups/2026-06-04-ses-console-theme-input-bk-v0.1.md`
 
 ## 1. 目的
 
@@ -518,4 +518,3 @@ Owner確認:
 - 各BKに要件、タスク、2周テスト、Owner確認がある。
 - Owner確認以外はCodex/CLI/API/テスト側で確認する設計になっている。
 - 既存データ削除、schema migration、DB更新を含まないdocs-only変更である。
-

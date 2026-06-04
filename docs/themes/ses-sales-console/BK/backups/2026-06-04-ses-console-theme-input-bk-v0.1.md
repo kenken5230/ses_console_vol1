@@ -53,9 +53,9 @@
 - `lib/mailer.ts`
 - `scripts/gmail-extraction.ts`
 - `scripts/gmail-person-remediation-preview.ts`
-- `docs/BK/feature-backlog-and-task-list-v0.1.md`
-- `docs/gmail/gmail-person-remediation-supervised-ops-v0.1.md`
-- `docs/quality/two-pass-task-test-policy-v0.1.md`
+- `docs/themes/gmail-remediation/BK/feature-backlog-and-task-list-v0.1.md`
+- `docs/themes/gmail-remediation/design/gmail-person-remediation-supervised-ops-v0.1.md`
+- `docs/shared/quality/two-pass-task-test-policy-v0.1.md`
 
 ## 4. 現行repoの高レベル認識
 
@@ -83,6 +83,5 @@
 
 このBKをもとに、以下のmdを作成する。
 
-- `docs/requirements/ses-sales-console-integrated-requirements-v0.1.md`
-- `docs/BK/ses-sales-console-theme-backlog-v0.1.md`
-
+- `docs/themes/ses-sales-console/requirements/ses-sales-console-integrated-requirements-v0.1.md`
+- `docs/themes/ses-sales-console/BK/ses-sales-console-theme-backlog-v0.1.md`

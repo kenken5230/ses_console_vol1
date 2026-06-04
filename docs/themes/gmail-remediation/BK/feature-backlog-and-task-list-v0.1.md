@@ -15,10 +15,10 @@ SES Consoleで今後やりたい機能を、ユーザー確認を最小化でき
 - `docs/gmail/gmail-ingest-design-v0.1.md`
 - `docs/gmail/gmail-ingest-implementation-status-v0.1.md`
 - `docs/gmail/gmail-classification-analysis-v0.1.md`
-- `docs/gmail/gmail-person-remediation-supervised-ops-v0.1.md`
+- `docs/themes/gmail-remediation/design/gmail-person-remediation-supervised-ops-v0.1.md`
 - `docs/release/network-migration-open-issues-v0.1.md`
 - `docs/release/public-release-review-tasks-v0.1.md`
-- `docs/quality/two-pass-task-test-policy-v0.1.md`
+- `docs/shared/quality/two-pass-task-test-policy-v0.1.md`
 
 ## 3. 共通実行ルール
 
@@ -34,7 +34,7 @@ SES Consoleで今後やりたい機能を、ユーザー確認を最小化でき
 
 | ID | 優先度 | 機能 | 状態 | 設計 |
 |---|---:|---|---|---|
-| BK-GM-001 | P0 | Gmail person remediation supervised apply | PR #14で実装済み | `docs/gmail/gmail-person-remediation-supervised-ops-v0.1.md` |
+| BK-GM-001 | P0 | Gmail person remediation supervised apply | PR #14で実装済み | `docs/themes/gmail-remediation/design/gmail-person-remediation-supervised-ops-v0.1.md` |
 | BK-GM-002 | P0 | remediation後の画面表示・抽出品質確認 | 未着手 | 本書 |
 | BK-GM-003 | P1 | Gmail分類/抽出の残candidate精査 | 未着手 | 既存Gmail docs + 本書 |
 | BK-SYNC-001 | P1 | Gmail同期ジョブ運用ログ/通知強化 | 一部実装済み | 本書 |
