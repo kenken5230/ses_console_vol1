@@ -20,5 +20,5 @@ Current files:
 
 - `source-tracking-inventory.md`: current-state inventory and CLI output contract.
 - `source-tracking-design.md`: future source tracking design and migration proposal notes.
-- `csv-import-dry-run.md`: CSV import dry-run MVP design, source-preview mode, validation policy, and future apply path.
-- `import-source-tracking-schema.md`: additive Prisma schema foundation for generic import sources, runs, records, and entity links.
+- `csv-import-dry-run.md`: CSV import dry-run MVP design, source-preview mode, supervised source-record apply, read-only import review, validation policy, and future apply paths.
+- `import-source-tracking-schema.md`: additive Prisma schema foundation plus the generic read-only review surface for import sources, runs, records, and entity links.
