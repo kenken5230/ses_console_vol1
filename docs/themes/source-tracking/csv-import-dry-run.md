@@ -383,6 +383,69 @@ The dry-run maps each CSV row into an in-memory `SourceRecord` preview and maps 
 
 The supervised apply path can persist those preview concepts into source tracking tables only. It still does not create or update projects/persons.
 
+## Import Review UI And Read-only API
+
+The import review surface is available at `/imports` for admin and manager users.
+
+Read-only API endpoints:
+
+- `GET /api/imports`
+- `GET /api/imports/source-records`
+- `GET /api/imports/source-records/{id}`
+
+The endpoints only read source tracking tables. They do not create, update, delete, backfill, apply, send mail, or call external systems.
+
+ImportRun review shows generic source tracking metadata:
+
+- short run id
+- source type
+- mode and status
+- created, started, and finished timestamps
+- sanitized summary fields
+- SourceRecord count
+- EntitySourceLink count
+
+SourceRecord review shows generic record metadata:
+
+- short record id
+- source type
+- record type and status
+- short record hash
+- safe `rawRef` fields such as row number and row index
+- warning and review reason counts
+- EntitySourceLink count
+- created and updated timestamps
+
+Record detail shows only redacted data:
+
+- `redactedPreview` after server-side sanitization
+- warning and review reason codes
+- safe raw reference fields
+- EntitySourceLink summaries with short ids, link type, entity type, confidence, and reason codes
+
+The review API does not return raw CSV values, local file paths, raw provider payloads, raw normalized payloads, full subjects, full bodies, addresses, customer labels, company labels, or person labels. Source names are reduced to a synthetic label or hashed source label.
+
+Pagination and filtering:
+
+- Default page size is small.
+- Maximum page size is capped at 100.
+- ImportRun filters include source type, mode, and status.
+- SourceRecord filters include source type, record type, status, link type, import run id, review-needed state, and warning-present state.
+
+Current mapping policy:
+
+- The UI uses generic source fields only.
+- CSV and Notion header mappings can be adjusted later without changing the review list contract.
+- `redactedPreview` keys can be expanded later as new importers add safe metadata.
+- `source_records` remain the generic review boundary.
+
+Future flow:
+
+1. CSV dry-run.
+2. CSV source-record supervised apply after owner approval.
+3. Review ImportRuns and SourceRecords in `/imports`.
+4. Later supervised Project/Person creation from SourceRecords only after separate owner approval.
+
 ## Future Entity Creation Flow Design
 
 A future project/person creation PR should be separate because it writes normalized business entities.

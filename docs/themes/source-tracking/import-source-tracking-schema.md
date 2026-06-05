@@ -107,6 +107,25 @@ The current CSV dry-run remains read-only. `--source-preview` on the dry-run com
 
 The supervised CSV source-record apply command can persist this preview shape into the source tracking tables only. It requires an explicit confirmation string, an apply limit of 50 or less, and source preview mode. It does not create, update, or delete projects or persons.
 
+## Import Review Surface
+
+`/imports` provides a read-only review surface for persisted import source tracking records.
+
+The surface is intentionally generic so future real CSV exports and Notion-exported CSV files can be mapped in a separate mapping-focused PR:
+
+- ImportRun rows display source type, mode, status, timestamps, sanitized summary, SourceRecord count, and EntitySourceLink count.
+- SourceRecord rows display source type, record type, status, short record hash, safe raw reference row fields, warning/review reason counts, link count, and timestamps.
+- SourceRecord detail displays server-sanitized `redactedPreview`, safe `rawRef` fields, warning/review reason codes, and EntitySourceLink summaries.
+- The API does not expose raw normalized payloads or raw source values.
+
+Extension points:
+
+- CSV and Notion header mapping can be adjusted later.
+- `redactedPreview` can gain new safe keys without changing the generic review list.
+- `source_records` stay the generic boundary between import source data and later supervised entity creation.
+
+No real CSV files are required for this review UI/API PR. Real Notion-exported CSV files should be provided before a later mapping-focused PR if final Notion or project/person DB header mappings are needed.
+
 ## Notion Read-only Sync Future Flow
 
 Future Notion integration should start with read-only sync:
