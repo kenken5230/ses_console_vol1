@@ -2176,6 +2176,21 @@ input[type="radio"] {
   padding: 0 10px;
 }
 
+.import-filter-field input {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: #1f2937;
+  font-weight: 800;
+  min-height: 42px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.match-filter-bar {
+  grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
+}
+
 .import-review-grid {
   align-items: start;
   display: grid;
@@ -2330,6 +2345,40 @@ input[type="radio"] {
 .import-record-table td:nth-child(9) {
   text-align: right;
   width: 76px;
+}
+
+.match-summary-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.match-review-table th:nth-child(1),
+.match-review-table td:nth-child(1),
+.match-review-table th:nth-child(2),
+.match-review-table td:nth-child(2) {
+  width: 96px;
+}
+
+.match-review-table th:nth-child(3),
+.match-review-table td:nth-child(3),
+.match-review-table th:nth-child(5),
+.match-review-table td:nth-child(5),
+.match-review-table th:nth-child(6),
+.match-review-table td:nth-child(6),
+.match-review-table th:nth-child(10),
+.match-review-table td:nth-child(10) {
+  text-align: right;
+  width: 72px;
+}
+
+.match-review-table th:nth-child(4),
+.match-review-table td:nth-child(4),
+.match-review-table th:nth-child(7),
+.match-review-table td:nth-child(7),
+.match-review-table th:nth-child(8),
+.match-review-table td:nth-child(8),
+.match-review-table th:nth-child(9),
+.match-review-table td:nth-child(9) {
+  width: 112px;
 }
 
 .import-badge {

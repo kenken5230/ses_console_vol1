@@ -111,6 +111,18 @@ export type MatchDryRunReport = {
   notes: string[];
 };
 
+export type MatchDryRunInputs = {
+  projects: ProjectMatchInput[];
+  persons: PersonMatchInput[];
+};
+
+export type MatchCandidateBuildResult = {
+  candidates: MatchCandidate[];
+  scoreDistribution: ScoreDistribution;
+  warningCounts: Record<string, number>;
+  reviewReasonCounts: Record<string, number>;
+};
+
 function parseArgValue(argv: string[], name: string): string | null {
   const prefix = `--${name}=`;
   const inline = argv.find((arg) => arg.startsWith(prefix));
@@ -378,6 +390,43 @@ export function buildMatchDryRunReport(params: {
   persons: PersonMatchInput[];
   dataSource?: MatchDryRunReport["summary"]["dataSource"];
 }): MatchDryRunReport {
+  const candidateResult = buildMatchCandidates(params);
+  const topMatches = candidateResult.candidates.slice(0, MAX_SAMPLES);
+  const report: MatchDryRunReport = {
+    summary: {
+      mode: "match-dry-run",
+      readOnly: true,
+      dataSource: params.dataSource ?? "database-read-only",
+      scannedProjects: params.projects.length,
+      scannedPersons: params.persons.length,
+      candidatePairs: params.projects.length * params.persons.length,
+      displayed: topMatches.length,
+      minScore: params.args.minScore,
+      limit: params.args.limit,
+      scoreDistribution: candidateResult.scoreDistribution,
+      warningCounts: sortCountMap(candidateResult.warningCounts),
+      reviewReasonCounts: sortCountMap(candidateResult.reviewReasonCounts),
+      piiSafe: true,
+      secretsRedacted: true,
+    },
+    topMatches,
+    reasonCodes: Object.values(REASON_CODES).sort(),
+    notes: [
+      "Deterministic scoring only. No AI is used.",
+      "Output is anonymized and includes IDs, scores, counts, compatibility states, and reason codes only.",
+      "This dry-run does not create proposals or message drafts.",
+    ],
+  };
+
+  assertNoSensitiveMatchOutput(JSON.stringify(report));
+  return report;
+}
+
+export function buildMatchCandidates(params: {
+  args: Pick<MatchDryRunArgs, "minScore">;
+  projects: ProjectMatchInput[];
+  persons: PersonMatchInput[];
+}): MatchCandidateBuildResult {
   const warningCounts: Record<string, number> = {};
   const reviewReasonCounts: Record<string, number> = {};
   const scoreDistribution = emptyDistribution();
@@ -399,35 +448,12 @@ export function buildMatchDryRunReport(params: {
     return left.personShortId.localeCompare(right.personShortId);
   });
 
-  const topMatches = candidates.slice(0, MAX_SAMPLES);
-  const report: MatchDryRunReport = {
-    summary: {
-      mode: "match-dry-run",
-      readOnly: true,
-      dataSource: params.dataSource ?? "database-read-only",
-      scannedProjects: params.projects.length,
-      scannedPersons: params.persons.length,
-      candidatePairs: params.projects.length * params.persons.length,
-      displayed: topMatches.length,
-      minScore: params.args.minScore,
-      limit: params.args.limit,
-      scoreDistribution,
-      warningCounts: sortCountMap(warningCounts),
-      reviewReasonCounts: sortCountMap(reviewReasonCounts),
-      piiSafe: true,
-      secretsRedacted: true,
-    },
-    topMatches,
-    reasonCodes: Object.values(REASON_CODES).sort(),
-    notes: [
-      "Deterministic scoring only. No AI is used.",
-      "Output is anonymized and includes IDs, scores, counts, compatibility states, and reason codes only.",
-      "This dry-run does not create proposals or message drafts.",
-    ],
+  return {
+    candidates,
+    scoreDistribution,
+    warningCounts,
+    reviewReasonCounts,
   };
-
-  assertNoSensitiveMatchOutput(JSON.stringify(report));
-  return report;
 }
 
 function sortCountMap(map: Record<string, number>): Record<string, number> {
@@ -495,7 +521,7 @@ function syntheticInputs(): { projects: ProjectMatchInput[]; persons: PersonMatc
   };
 }
 
-async function loadDatabaseInputs(args: MatchDryRunArgs): Promise<{ projects: ProjectMatchInput[]; persons: PersonMatchInput[] } | null> {
+async function loadDatabaseInputs(args: MatchDryRunArgs): Promise<MatchDryRunInputs | null> {
   if (!process.env[dbConnectionEnvName]) return null;
 
   const { prisma } = await import("../lib/prisma");
@@ -588,19 +614,30 @@ async function loadDatabaseInputs(args: MatchDryRunArgs): Promise<{ projects: Pr
 
 export async function runMatchDryRun(argv = process.argv): Promise<MatchDryRunReport> {
   const args = parseMatchDryRunArgs(argv);
+  const loaded = await loadMatchDryRunInputs(args);
+
+  return buildMatchDryRunReport({
+    args,
+    ...loaded.inputs,
+    dataSource: loaded.dataSource,
+  });
+}
+
+export async function loadMatchDryRunInputs(args: MatchDryRunArgs): Promise<{
+  inputs: MatchDryRunInputs;
+  dataSource: MatchDryRunReport["summary"]["dataSource"];
+}> {
   let databaseInputs: Awaited<ReturnType<typeof loadDatabaseInputs>> = null;
   try {
     databaseInputs = await loadDatabaseInputs(args);
   } catch {
     databaseInputs = null;
   }
-  const inputs = databaseInputs ?? syntheticInputs();
 
-  return buildMatchDryRunReport({
-    args,
-    ...inputs,
+  return {
+    inputs: databaseInputs ?? syntheticInputs(),
     dataSource: databaseInputs ? "database-read-only" : "synthetic-fixture-no-db",
-  });
+  };
 }
 
 export function assertNoSensitiveMatchOutput(text: string): void {
