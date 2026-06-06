@@ -6,7 +6,7 @@ This design defines the next step after the current deterministic matching dry-r
 
 The goal is to persist reviewed Project x Person match candidates as `match_suggestions`, then let sales users review, approve, reject, archive, and eventually convert approved suggestions into proposal work.
 
-This document is design only. It does not add schema, migrations, API routes, UI code, DB writes, apply commands, proposal creation, email draft generation, email sending, external API calls, AI API calls, Notion calls, or real CSV files.
+PR #27 introduced this design as docs only. PR #28 adds the schema and migration foundation for saved match suggestions, but still does not apply the migration to any database, add write code, add API routes, add UI code, create proposals, generate email drafts, send email, call external APIs, call AI APIs, call Notion, or commit real CSV files.
 
 ## Current Context
 
@@ -29,16 +29,15 @@ Existing proposal foundation:
 - `DistributionLog` records outbound delivery state.
 - Proposal creation currently requires more business context than a match score, such as target company/contact and sales mail account.
 
-## Non-goals For This Design PR
+## Non-goals For PR #28
 
-- No implementation.
-- No Prisma schema change.
-- No migration file.
+- No migration deploy, `db push`, or real DB apply by Codex.
 - No DB write code.
 - No API route addition.
 - No UI component addition.
 - No `--apply` flag addition or usage.
 - No proposal creation.
+- No direct Proposal relation in the first match suggestion schema foundation.
 - No email draft generation.
 - No email sending.
 - No external API or AI API use.
@@ -57,7 +56,11 @@ Recommended minimum fields:
 - `score`
 - `scoreBand`
 - `scoringVersion`
+- `sourceSnapshotHash`
 - `suggestionKey`
+- `attentionState`
+- `warningCount`
+- `reviewReasonCount`
 - `reasonCodes`
 - `warningCodes`
 - `reviewFlags`
@@ -83,6 +86,9 @@ Scoring fields:
 - Store `score` as the deterministic integer score at save time.
 - Store `scoreBand` as a controlled value such as `HIGH`, `MEDIUM`, `LOW`, or `REVIEW`.
 - Store `scoringVersion` so changed scoring logic can create a new deterministic snapshot without overwriting old review decisions.
+- Store `sourceSnapshotHash` as a safe hash of the matching input/snapshot identity, not raw Project or Person text.
+- Store `attentionState` as a short safe label such as high-fit, needs-review, or warning. This remains a string so UI labels can evolve without enum churn.
+- Store `warningCount` and `reviewReasonCount` as denormalized counts for queue filtering.
 - Store `reasonCodes`, `warningCodes`, and `reviewFlags` as JSON arrays of safe code strings.
 - Store `compatibilitySummary` as safe structured values only:
   - `rateCompatibility`
@@ -158,7 +164,7 @@ Mis-match handling:
 
 ## Proposed DB Design
 
-This is a future schema proposal only.
+PR #28 adds this schema foundation to `prisma/schema.prisma` and creates migration `20260606113000_match_suggestion_persistence_foundation`. The migration file is committed for owner-controlled application later; Codex must not run `prisma migrate deploy`, `prisma db push`, or any successful real DB apply for this PR.
 
 ### Enums
 
@@ -180,8 +186,6 @@ enum MatchSuggestionSourceRecordRole {
 }
 ```
 
-Optional future enum:
-
 ```prisma
 enum MatchSuggestionReviewAction {
   CREATED
@@ -196,7 +200,7 @@ enum MatchSuggestionReviewAction {
 
 ### `match_suggestions`
 
-Suggested table:
+Added table:
 
 ```prisma
 model MatchSuggestion {
@@ -207,14 +211,17 @@ model MatchSuggestion {
   score               Int
   scoreBand           String                @map("score_band") @db.VarChar(24)
   scoringVersion      String                @map("scoring_version") @db.VarChar(80)
+  sourceSnapshotHash  String                @map("source_snapshot_hash") @db.Char(64)
   suggestionKey       String                @unique @map("suggestion_key") @db.Char(64)
+  attentionState      String?               @map("attention_state") @db.VarChar(40)
+  warningCount        Int                   @default(0) @map("warning_count")
+  reviewReasonCount   Int                   @default(0) @map("review_reason_count")
   reasonCodes         Json?                 @map("reason_codes")
   warningCodes        Json?                 @map("warning_codes")
   reviewFlags         Json?                 @map("review_flags")
   compatibilitySummary Json?                @map("compatibility_summary")
   skillOverlapSummary Json?                 @map("skill_overlap_summary")
   redactedPreview     Json?                 @map("redacted_preview")
-  proposalId          String?               @unique @map("proposal_id") @db.Uuid
   createdByUserId     String?               @map("created_by_user_id") @db.Uuid
   reviewedByUserId    String?               @map("reviewed_by_user_id") @db.Uuid
   reviewedAt          DateTime?             @map("reviewed_at") @db.Timestamptz(6)
@@ -222,14 +229,19 @@ model MatchSuggestion {
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  person  Person  @relation(fields: [personId], references: [id], onDelete: Restrict)
-  proposal Proposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  project       Project                       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  person        Person                        @relation(fields: [personId], references: [id], onDelete: Restrict)
+  createdBy     User?                         @relation("MatchSuggestionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy    User?                         @relation("MatchSuggestionReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewEvents  MatchSuggestionReviewEvent[]
+  sourceRecords MatchSuggestionSourceRecord[]
 
+  @@unique([projectId, personId, scoringVersion, sourceSnapshotHash], map: "match_suggestions_pair_snapshot_key")
   @@index([status, createdAt])
   @@index([projectId, status])
   @@index([personId, status])
   @@index([scoreBand, score])
+  @@index([attentionState, status])
   @@index([createdByUserId, createdAt])
   @@index([reviewedByUserId, reviewedAt])
   @@map("match_suggestions")
@@ -239,38 +251,41 @@ model MatchSuggestion {
 Notes:
 
 - `scoreBand` can be an enum later, but a string keeps the migration smaller if score bands evolve.
-- `proposalId` should stay nullable and must not be populated until a future proposal PR.
-- A direct `Proposal` relation may require adding a corresponding relation field to `Proposal`; that belongs in the migration PR, not this design PR.
+- `attentionState` also stays a string so the review UI can evolve labels without schema churn.
+- `sourceSnapshotHash` is a safe hash for the matching input/snapshot identity. It must not be computed from raw text that is later stored in this table.
+- `suggestionKey` is unique for idempotent saves. A separate compound unique constraint on `projectId + personId + scoringVersion + sourceSnapshotHash` protects repeated saves for the same pair and snapshot.
+- Proposal linkage is intentionally deferred. Approved suggestions should not become Proposal records until a separate owner-approved proposal design and migration.
 
 ### `match_suggestion_review_events`
 
-Suggested audit table:
+Added audit table:
 
 ```prisma
 model MatchSuggestionReviewEvent {
-  id                String   @id @default(uuid()) @db.Uuid
-  matchSuggestionId String   @map("match_suggestion_id") @db.Uuid
-  action            String   @db.VarChar(80)
-  fromStatus        String?  @map("from_status") @db.VarChar(40)
-  toStatus          String?  @map("to_status") @db.VarChar(40)
-  actorUserId       String?  @map("actor_user_id") @db.Uuid
-  reasonCodes       Json?    @map("reason_codes")
-  noteRedacted      String?  @map("note_redacted") @db.Text
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                String                      @id @default(uuid()) @db.Uuid
+  matchSuggestionId String                      @map("match_suggestion_id") @db.Uuid
+  action            MatchSuggestionReviewAction
+  fromStatus        MatchSuggestionStatus?      @map("from_status")
+  toStatus          MatchSuggestionStatus?      @map("to_status")
+  actorUserId       String?                     @map("actor_user_id") @db.Uuid
+  reasonCodes       Json?                       @map("reason_codes")
+  noteRedacted      String?                     @map("note_redacted") @db.Text
+  createdAt         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
 
   matchSuggestion MatchSuggestion @relation(fields: [matchSuggestionId], references: [id], onDelete: Cascade)
-  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actor User? @relation("MatchSuggestionReviewActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
-  @@index([matchSuggestionId, createdAt])
-  @@index([actorUserId, createdAt])
-  @@index([action, createdAt])
+  @@index([matchSuggestionId, createdAt], map: "match_suggestion_events_suggestion_created_at_idx")
+  @@index([actorUserId, createdAt], map: "match_suggestion_events_actor_created_at_idx")
+  @@index([action, createdAt], map: "match_suggestion_events_action_created_at_idx")
+  @@index([toStatus, createdAt], map: "match_suggestion_events_to_status_created_at_idx")
   @@map("match_suggestion_review_events")
 }
 ```
 
 ### `match_suggestion_source_records`
 
-Optional evidence table:
+Added optional evidence table:
 
 ```prisma
 model MatchSuggestionSourceRecord {
@@ -283,8 +298,9 @@ model MatchSuggestionSourceRecord {
   matchSuggestion MatchSuggestion @relation(fields: [matchSuggestionId], references: [id], onDelete: Cascade)
   sourceRecord SourceRecord @relation(fields: [sourceRecordId], references: [id], onDelete: Restrict)
 
-  @@unique([matchSuggestionId, sourceRecordId, role])
-  @@index([sourceRecordId])
+  @@unique([matchSuggestionId, sourceRecordId, role], map: "match_suggestion_source_records_unique")
+  @@index([matchSuggestionId], map: "match_suggestion_source_records_suggestion_idx")
+  @@index([sourceRecordId, role], map: "match_suggestion_source_records_source_role_idx")
   @@map("match_suggestion_source_records")
 }
 ```
@@ -317,7 +333,7 @@ Project + Person
 Recommended `suggestionKey`:
 
 ```text
-sha256(projectId + personId + scoringVersion + normalizedReasonCodes + normalizedWarningCodes)
+sha256(projectId + personId + scoringVersion + sourceSnapshotHash + normalizedReasonCodes + normalizedWarningCodes)
 ```
 
 Why:
@@ -325,6 +341,13 @@ Why:
 - Prevents duplicate suggestions from repeated dry-run saves.
 - Allows a new suggestion when scoring logic changes.
 - Avoids relying on partial unique indexes that Prisma may not express cleanly.
+- Keeps the idempotency key derived from stable identifiers and safe hashes, not raw Project text, raw Person text, CSV rows, email body, company name, person name, or email address.
+
+PR #28 database constraints:
+
+- `match_suggestions.suggestion_key` is unique.
+- `match_suggestions(project_id, person_id, scoring_version, source_snapshot_hash)` is unique.
+- `match_suggestion_source_records(match_suggestion_id, source_record_id, role)` is unique.
 
 Recommended duplicate policy:
 
@@ -352,6 +375,15 @@ Future read-only suggestion APIs:
 - `GET /api/matches/suggestions`
 - `GET /api/matches/suggestions/:id`
 - `GET /api/matches/suggestions/review-queue`
+
+Recommended next PR:
+
+- Add these read-only endpoints only.
+- Return paginated, redacted data from `match_suggestions`, `match_suggestion_review_events`, and `match_suggestion_source_records`.
+- Enforce safe default limits and max limits.
+- Return only short Project/Person ids, status, score metadata, compatibility summaries, counts, and safe reason/warning codes.
+- Do not return raw Project text, raw Person text, company labels, person labels, emails, CSV raw values, source raw payloads, local paths, secrets, or full notes.
+- Do not add POST, PUT, PATCH, DELETE, save, review-update, proposal, or email endpoints in the read-only API PR.
 
 Future mutation APIs:
 
@@ -489,7 +521,7 @@ STOP conditions before proposal/email:
 ## Recommended Implementation PR Sequence
 
 1. `Add match suggestion schema`
-   - Adds Prisma schema and migration only.
+   - Implemented by PR #28 as Prisma schema and migration file only.
    - No migration deploy by Codex.
    - No DB writes by Codex.
    - Owner decides when to apply migration to staging.
@@ -499,6 +531,7 @@ STOP conditions before proposal/email:
    - No mutation endpoints.
    - No DB writes.
    - Requires migration to be present in target environment before deployed reads are useful.
+   - Should use the PR #28 schema without exposing raw text or PII fields.
 
 3. `Add saved match suggestion review UI`
    - Adds `/matches` saved suggestion tabs and detail views.
@@ -539,10 +572,9 @@ STOP conditions before proposal/email:
 - Proposal draft PR: owner approval required before creating Proposal records.
 - Email PR: owner approval required before generating drafts or sending email.
 
-## Open Questions For The Migration PR
+## Open Questions After PR #28
 
-- Should `scoreBand` be a DB enum or string?
 - Should rejected suggestions block future scoring-version duplicates, or only exact `suggestionKey` duplicates?
 - Should `SALES` users be allowed to approve/reject, or should initial writes be ADMIN/MANAGER only?
 - Should notes be allowed at all, or limited to safe reason codes only?
-- Should source evidence links be included in the first schema migration or deferred until source-record matching is needed?
+- Should the future proposal draft schema link directly to `match_suggestions`, or use a separate proposal-source bridge table?
