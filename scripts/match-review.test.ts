@@ -10,7 +10,12 @@ import {
 } from "../lib/match-review";
 import type { MatchDryRunArgs, MatchDryRunInputs } from "./match-dry-run";
 // @ts-ignore Runtime JSX transform is provided by tsx for this smoke test.
-import MatchingReviewPage, { MatchingReviewEmptyState } from "../components/MatchingReviewPage.jsx";
+import MatchingReviewPage, {
+  MatchExplanationPanel,
+  MatchingReviewEmptyState,
+  MatchingReviewErrorState,
+  MatchingReviewLoadingState,
+} from "../components/MatchingReviewPage.jsx";
 
 const rawProjectText = "HiddenProjectNarrativeSentinel";
 const rawPersonText = "HiddenPersonNarrativeSentinel";
@@ -127,6 +132,9 @@ async function main() {
   assert.equal(firstPage.items.length, 1);
   assert.ok(firstPage.totalPages >= 2);
   assert.ok(firstPage.items[0].score >= secondPage.items[0].score);
+  assert.equal(firstPage.items[0].attention, "HIGH_SCORE");
+  assert.equal(firstPage.items[0].warningCount, 0);
+  assert.ok(firstPage.items[0].reviewReasonCount > 0);
 
   const highOnly = await buildMatchReviewResponse(new URLSearchParams("scoreBand=HIGH&limit=20"), loadMockInputs);
   assert.ok(highOnly.items.length >= 1);
@@ -135,6 +143,8 @@ async function main() {
   const reviewOnly = await buildMatchReviewResponse(new URLSearchParams("hasReviewFlag=true&limit=20"), loadMockInputs);
   assert.ok(reviewOnly.items.length >= 1);
   assert.ok(reviewOnly.items.every((item) => item.hasReviewFlag));
+  assert.ok(reviewOnly.items.every((item) => item.attention === "NEEDS_REVIEW"));
+  assert.ok(reviewOnly.items.some((item) => item.warningCount > 0));
 
   const mismatchOnly = await buildMatchReviewResponse(new URLSearchParams("rateCompatibility=mismatch&limit=20"), loadMockInputs);
   assert.ok(mismatchOnly.items.length >= 1);
@@ -196,14 +206,31 @@ async function main() {
   const emptyHtml = renderToStaticMarkup(React.createElement(MatchingReviewEmptyState));
   assert.ok(emptyHtml.includes("No match candidates found"));
   assert.ok(emptyHtml.includes("field coverage"));
+  const filteredEmptyHtml = renderToStaticMarkup(React.createElement(MatchingReviewEmptyState, { isFiltered: true }));
+  assert.ok(filteredEmptyHtml.includes("No candidates match current filters"));
+
+  const loadingHtml = renderToStaticMarkup(React.createElement(MatchingReviewLoadingState));
+  assert.ok(loadingHtml.includes("Loading match candidates"));
+  const errorHtml = renderToStaticMarkup(React.createElement(MatchingReviewErrorState, { message: "Safe failure" }));
+  assert.ok(errorHtml.includes("Matching dry-run failed"));
+  const explanationHtml = renderToStaticMarkup(React.createElement(MatchExplanationPanel));
+  assert.ok(explanationHtml.includes("Score bands"));
+  assert.ok(explanationHtml.includes("Compatibility"));
+  assert.ok(explanationHtml.includes("Review required"));
 
   const pageHtml = renderToStaticMarkup(React.createElement(MatchingReviewPage, {
     initialSession: { authenticated: true, user: { id: "user-1", name: "Reviewer", role: "ADMIN" } },
-    initialResponse: { ...firstPage, items: [highOnly.items[0]] },
+    initialResponse: { ...firstPage, items: [highOnly.items[0], reviewOnly.items[0]] },
   }));
   assert.ok(pageHtml.includes("Match candidates"));
   assert.ok(pageHtml.includes("Score breakdown"));
   assert.ok(pageHtml.includes("MATCH_SKILL_REQUIRED_OVERLAP"));
+  assert.ok(pageHtml.includes("High fit"));
+  assert.ok(pageHtml.includes("Needs review"));
+  assert.ok(pageHtml.includes("No filters applied"));
+  assert.ok(pageHtml.includes("Project ref"));
+  assert.ok(pageHtml.includes("Required skill overlap"));
+  assert.ok(pageHtml.includes("Score bands"));
   assert.equal(pageHtml.includes(rawProjectText), false);
   assert.equal(pageHtml.includes(rawPersonText), false);
   assert.equal(pageHtml.includes(unsafeAddress), false);
