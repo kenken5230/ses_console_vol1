@@ -13,3 +13,4 @@ pnpm-debug.log*
 secrets/
 gmail-oauth-client.json
 *.secret.json
+/private/

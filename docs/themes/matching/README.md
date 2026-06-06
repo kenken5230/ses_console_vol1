@@ -38,6 +38,93 @@ The MVP uses deterministic rule-based scoring only:
 
 The output does not include raw project text, company labels, person labels, addresses, full skill text, subjects, bodies, or secrets.
 
+## Matching Review UI and Read-only API
+
+Route:
+
+- `/matches`
+
+Read-only API:
+
+- `GET /api/matches/dry-run`
+
+The review UI gives ADMIN and MANAGER users a generic review surface for deterministic Project/Person match candidates before any supervised save, proposal creation, draft generation, or message sending. It reuses the dry-run scoring helpers and returns only anonymized match metadata.
+
+The API is GET-only. It does not expose POST, PUT, PATCH, or DELETE handlers. It does not mutate Projects, Persons, Proposals, match suggestions, ImportRuns, SourceRecords, EntitySourceLinks, drafts, or messages.
+
+If database reads are unavailable during local verification, the API falls back to synthetic in-process records and marks the response with `dataSource: synthetic-fixture-no-db`.
+
+## Review Summary
+
+The matching review response includes:
+
+- scanned Project count
+- scanned Person count
+- candidate pair count
+- displayed candidate count
+- total filtered candidate count
+- score distribution
+- filtered score distribution
+- warning code counts
+- review reason code counts
+
+Candidate rows include only:
+
+- short Project id
+- short Person id
+- score
+- score band
+- reason codes
+- review flags
+- skill overlap counts
+- rate compatibility
+- date compatibility
+- location compatibility
+- role compatibility
+- missing field codes
+
+The redacted detail view may show score breakdowns, compatibility states, reason codes, missing field codes, and redacted short-id previews only.
+
+## Filters, Sorting, and Pagination
+
+Supported filters:
+
+- score band
+- minimum score
+- review flag present
+- rate compatibility
+- date compatibility
+- location compatibility
+- skill overlap present
+- Project id or Person id, accepted as safe UUID input and returned only as short id
+
+Supported sorting:
+
+- score descending
+- score ascending
+- review first
+- newest where source ordering is applicable
+
+Pagination uses a small default page size and enforces a max limit of 100.
+
+## Redaction Policy
+
+The matching review API and UI do not return:
+
+- raw company labels
+- raw person labels
+- addresses
+- full Project text
+- full Person text
+- full skill sheet text
+- message subjects or bodies
+- secrets
+- local file paths
+
+The response keeps source records generic and returns only short ids, scores, compatibility states, counts, and reason codes. Future CSV or Notion header mapping can expand safe `redactedPreview` keys without changing the review surface contract.
+
+Real Notion-exported CSV files should not be committed. The local private export path assumption is `private/notion-exports/`, which is ignored by Git through `/private/`.
+
 ## Score Bands
 
 - `HIGH`: score 75 or higher.
@@ -98,6 +185,9 @@ Each match sample includes only:
 - This does not send messages.
 - This does not persist match suggestions.
 - This does not use Notion or real CSV field mapping.
+- The review UI/API does not write to the database.
+- The review UI/API does not generate email drafts.
+- The review UI/API does not call external APIs or AI APIs.
 
 ## Future Flow
 
