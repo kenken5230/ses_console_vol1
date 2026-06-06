@@ -5,7 +5,7 @@ This theme covers deterministic matching between existing Projects and Persons.
 Current files:
 
 - `README.md`: deterministic matching dry-run and read-only matching review UI/API notes.
-- `match-suggestion-persistence-design.md`: future match suggestion persistence, review workflow, schema/API/UI/safety design, and staged implementation plan.
+- `match-suggestion-persistence-design.md`: match suggestion persistence, review workflow, schema/API/UI/safety design, PR #28 schema foundation, and staged implementation plan.
 
 ## Deterministic Matching Dry-run MVP
 
@@ -105,6 +105,25 @@ The matching review UI keeps the same read-only API contract and adds reviewer-f
 
 No raw Project text, Person text, company label, person label, address, email, full skill sheet, local path, or secret is shown.
 
+## Match Suggestion Schema Foundation
+
+PR #28 adds Prisma schema and migration foundation for saved match suggestions:
+
+- `MatchSuggestion`
+- `MatchSuggestionReviewEvent`
+- `MatchSuggestionSourceRecord`
+- `MatchSuggestionStatus`
+- `MatchSuggestionReviewAction`
+- `MatchSuggestionSourceRecordRole`
+
+The migration file is `prisma/migrations/20260606113000_match_suggestion_persistence_foundation/migration.sql`.
+
+This foundation only creates the future persistence shape. It does not add save APIs, review mutation APIs, UI changes, Proposal creation, email draft generation, email sending, external API calls, AI API calls, or real CSV/Notion mapping.
+
+Saved suggestions store safe Project/Person references, scores, score bands, source snapshot hashes, reason/warning/review code payloads, compatibility summaries, counts, redacted previews, review status, and review events. They must not store raw Project text, raw Person text, company names, person names, email addresses, CSV raw values, email bodies, local file paths, or secrets.
+
+The recommended next PR is read-only saved suggestion API coverage for `GET /api/matches/suggestions`, `GET /api/matches/suggestions/:id`, and `GET /api/matches/suggestions/review-queue` after the owner applies the migration in the target environment.
+
 ## Filters, Sorting, and Pagination
 
 Supported filters:
@@ -203,7 +222,8 @@ Each match sample includes only:
 - This does not create Proposal records.
 - This does not create message drafts.
 - This does not send messages.
-- This does not persist match suggestions.
+- The current UI/API does not persist match suggestions.
+- PR #28 adds only the schema/migration foundation for future match suggestion persistence.
 - This does not use Notion or real CSV field mapping.
 - The review UI/API does not write to the database.
 - The review UI/API does not generate email drafts.
@@ -213,7 +233,10 @@ Each match sample includes only:
 
 1. Dry-run matching.
 2. Review anonymized candidate matches.
-3. Add supervised match suggestion save.
-4. Generate proposal drafts after owner approval.
-5. Human approval.
-6. Send messages only after explicit owner approval.
+3. Apply PR #28 migration only after owner approval.
+4. Add read-only saved suggestion APIs.
+5. Add saved suggestion review UI.
+6. Add supervised match suggestion save.
+7. Generate proposal drafts after owner approval.
+8. Human approval.
+9. Send messages only after explicit owner approval.
