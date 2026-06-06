@@ -2,6 +2,11 @@
 
 This theme covers deterministic matching between existing Projects and Persons.
 
+Current files:
+
+- `README.md`: deterministic matching dry-run and read-only matching review UI/API notes.
+- `match-suggestion-persistence-design.md`: future match suggestion persistence, review workflow, schema/API/UI/safety design, and staged implementation plan.
+
 ## Deterministic Matching Dry-run MVP
 
 Command:
