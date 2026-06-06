@@ -85,6 +85,21 @@ Candidate rows include only:
 
 The redacted detail view may show score breakdowns, compatibility states, reason codes, missing field codes, and redacted short-id previews only.
 
+## Review UI Usability
+
+The matching review UI keeps the same read-only API contract and adds reviewer-focused presentation:
+
+- Summary cards separate displayed candidates, candidate pairs, review load, and reason signals.
+- Score band cards show `HIGH`, `MEDIUM`, `LOW`, and `REVIEW` counts after filters are applied.
+- A score explanation panel defines score bands, compatibility states, and review-required signals.
+- Candidate rows show attention states such as `High fit`, `Needs review`, and `Warning`.
+- Candidate rows surface warning counts, reason counts, skill overlap counts, and rate/date/location compatibility.
+- Active filter chips show which filters are currently shaping the review set.
+- Loading, API failure, no-data, and filtered-empty states are shown separately.
+- The detail panel groups Project and Person short references, score breakdown, reason codes, missing field codes, and compatibility details.
+
+No raw Project text, Person text, company label, person label, address, email, full skill sheet, local path, or secret is shown.
+
 ## Filters, Sorting, and Pagination
 
 Supported filters:

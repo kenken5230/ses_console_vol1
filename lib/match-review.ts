@@ -208,13 +208,25 @@ function totalPages(total: number, limit: number) {
 
 function safeCandidate(candidate: MatchCandidate) {
   const reviewFlag = hasReviewFlag(candidate);
+  const warningCount = candidate.missingFieldCodes.length;
+  const reviewReasonCount = candidate.reasonCodes.length;
+  const attention = reviewFlag
+    ? "NEEDS_REVIEW"
+    : candidate.scoreBand === "HIGH"
+      ? "HIGH_SCORE"
+      : warningCount > 0
+        ? "WARNING"
+        : "STANDARD";
 
   return {
     projectShortId: candidate.projectShortId,
     personShortId: candidate.personShortId,
     score: candidate.score,
     scoreBand: candidate.scoreBand,
+    attention,
     hasReviewFlag: reviewFlag,
+    warningCount,
+    reviewReasonCount,
     reviewFlags: reviewFlag ? candidate.missingFieldCodes : [],
     reasonCodes: candidate.reasonCodes,
     missingFieldCodes: candidate.missingFieldCodes,
