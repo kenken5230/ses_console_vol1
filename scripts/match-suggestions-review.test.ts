@@ -309,7 +309,13 @@ async function main() {
     "app/api/matches/suggestions/review-queue/route.ts",
   ]) {
     const route = readFileSync(routePath, "utf8");
-    assert.doesNotMatch(route, /export\s+async\s+function\s+(?:POST|PUT|PATCH|DELETE)\b/);
+    if (routePath === "app/api/matches/suggestions/route.ts") {
+      assert.match(route, /export\s+async\s+function\s+POST\b/);
+      assert.match(route, /matchSuggestionSaveGuard/);
+      assert.doesNotMatch(route, /export\s+async\s+function\s+(?:PUT|PATCH|DELETE)\b/);
+    } else {
+      assert.doesNotMatch(route, /export\s+async\s+function\s+(?:POST|PUT|PATCH|DELETE)\b/);
+    }
     assert.doesNotMatch(route, /\b(?:matchSuggestion|matchSuggestionReviewEvent|matchSuggestionSourceRecord|project|person|proposal)\s*\.\s*(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/);
   }
 

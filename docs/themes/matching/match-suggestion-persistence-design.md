@@ -543,10 +543,17 @@ STOP conditions before proposal/email:
    - No save buttons, approve/reject/archive controls, POST/PUT/PATCH/DELETE endpoints, DB writes, proposal/email features, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
 
 4. `Add supervised match suggestion save`
-   - First PR where application code can write `match_suggestions`.
-   - Requires confirm string and max limit.
-   - Codex must not execute successful real save during verification.
-   - Owner decides when to run/enable write path.
+   - Adds `POST /api/matches/suggestions` as the first application write path for saved match suggestions.
+   - Disabled by default unless `MATCH_SUGGESTION_SAVE_ENABLED=true` and `MATCH_SUGGESTION_WRITE_TARGET=staging`.
+   - Requires ADMIN/MANAGER auth and `confirmSave: true`.
+   - Validates Project/Person UUIDs, score metadata, source snapshot hash, suggestion key, code arrays, sanitized summaries, redacted preview, and optional source evidence ids.
+   - Rejects raw Project text, raw Person text, company names, person names, email addresses, CSV raw values, source raw payloads, normalized payloads, local paths, secrets, and full notes.
+   - Uses existing uniqueness on `suggestionKey` and Project/Person/scoring-version/source-snapshot to skip duplicates safely.
+   - Creates one initial `CREATED` review event without note text.
+   - May link valid source evidence records, but does not expose raw source payloads.
+   - Codex must not execute a successful real save during verification.
+   - Production writes remain disabled by guard.
+   - Owner decides when to enable and execute the staging write path.
 
 5. `Add supervised match suggestion review updates`
    - Writes status changes and review events.
