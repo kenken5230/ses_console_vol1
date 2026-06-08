@@ -61,6 +61,11 @@ const stateBoxStyle = {
   padding: 24,
 };
 
+const errorTitleStyle = {
+  display: "block",
+  marginBottom: 6,
+};
+
 const priceBandLabels = {
   under_50: "〜50万円",
   "50_60": "50〜60万円",
@@ -128,9 +133,27 @@ const marketCellColumns = [
       contractTypeLabels[row.contractType] || row.contractType || "-",
     ].join(" / "),
   },
-  ...commonMetricColumns,
+  { key: "recruitingCount", label: "募集人数" },
+  { key: "personCount", label: "要員数" },
+  { key: "demandSupplyGap", label: "需給ギャップ" },
+  { key: "projectMedianPrice", label: "案件単価中央値", type: "price" },
   { key: "salesPriorityScore", label: "営業優先度スコア", type: "score" },
+  { key: "recommendedAction", label: "推奨アクション", type: "action" },
 ];
+
+function buildFetchError(response, payload) {
+  if (response.status === 401) {
+    return {
+      detail: "再ログイン後に市場分析画面を開き直してください",
+      title: "ログインが必要です",
+    };
+  }
+
+  return {
+    detail: response.status >= 500 ? "時間を置いて再読み込みしてください。" : "",
+    title: payload.message || "市場分析データの取得に失敗しました。",
+  };
+}
 
 async function fetchMarketAnalysis({ focusOnly, limit, signal }) {
   const params = new URLSearchParams({
@@ -144,7 +167,10 @@ async function fetchMarketAnalysis({ focusOnly, limit, signal }) {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.message || "市場分析データの取得に失敗しました。");
+    const errorInfo = buildFetchError(response, payload);
+    const error = new Error(errorInfo.title);
+    error.info = errorInfo;
+    throw error;
   }
 
   return response.json();
@@ -164,7 +190,7 @@ export default function MarketAnalysisPage() {
   const [limit, setLimit] = useState(500);
   const [focusOnly, setFocusOnly] = useState(false);
   const [data, setData] = useState(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -175,13 +201,18 @@ export default function MarketAnalysisPage() {
   useEffect(() => {
     const controller = new AbortController();
     setIsLoading(true);
-    setError("");
+    setError(null);
 
     fetchMarketAnalysis({ focusOnly, limit, signal: controller.signal })
       .then(setData)
       .catch((fetchError) => {
         if (fetchError.name === "AbortError") return;
-        setError(fetchError.message || "市場分析データの取得に失敗しました。");
+        setError(
+          fetchError.info || {
+            detail: "",
+            title: fetchError.message || "市場分析データの取得に失敗しました。",
+          },
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) setIsLoading(false);
@@ -223,7 +254,8 @@ export default function MarketAnalysisPage() {
 
         {error ? (
           <div style={{ ...stateBoxStyle, borderColor: "#fecaca", color: "#b91c1c" }}>
-            {error}
+            <strong style={errorTitleStyle}>{error.title}</strong>
+            {error.detail ? <span>{error.detail}</span> : null}
           </div>
         ) : null}
 
