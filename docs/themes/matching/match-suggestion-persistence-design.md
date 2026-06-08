@@ -376,14 +376,15 @@ Future read-only suggestion APIs:
 - `GET /api/matches/suggestions/:id`
 - `GET /api/matches/suggestions/review-queue`
 
-Recommended next PR:
+PR #30 implementation:
 
-- Add these read-only endpoints only.
-- Return paginated, redacted data from `match_suggestions`, `match_suggestion_review_events`, and `match_suggestion_source_records`.
-- Enforce safe default limits and max limits.
-- Return only short Project/Person ids, status, score metadata, compatibility summaries, counts, and safe reason/warning codes.
-- Do not return raw Project text, raw Person text, company labels, person labels, emails, CSV raw values, source raw payloads, local paths, secrets, or full notes.
-- Do not add POST, PUT, PATCH, DELETE, save, review-update, proposal, or email endpoints in the read-only API PR.
+- Adds these read-only endpoints only.
+- Returns paginated, redacted data from `match_suggestions`, `match_suggestion_review_events`, and `match_suggestion_source_records`.
+- Enforces safe default limits and a max limit of 100.
+- Returns only safe suggestion ids, short Project/Person ids, status, score metadata, compatibility summaries, counts, and safe reason/warning codes.
+- Does not return raw Project text, raw Person text, company labels, person labels, emails, CSV raw values, source raw payloads, local paths, secrets, or full notes.
+- Does not add POST, PUT, PATCH, DELETE, save, review-update, proposal, or email endpoints.
+- Returns a safe `migrationRequired` response when the target database is missing the match suggestion migration.
 
 Future mutation APIs:
 
@@ -527,7 +528,7 @@ STOP conditions before proposal/email:
    - Owner decides when to apply migration to staging.
 
 2. `Add match suggestion read-only API`
-   - Adds list/detail/read-only review queue endpoints.
+   - Implemented by PR #30 as list/detail/read-only review queue endpoints.
    - No mutation endpoints.
    - No DB writes.
    - Requires migration to be present in target environment before deployed reads are useful.
