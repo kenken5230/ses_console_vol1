@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { PersonStatus, ProjectStatus } from "../../../app/generated/prisma/enums";
 import { authErrorResponse, requireAuth } from "../../../lib/auth";
 import {
   MARKET_ANALYSIS_PERSON_SELECT,
@@ -17,14 +18,23 @@ export async function GET(request: Request) {
     await requireAuth(request);
 
     const query = parseMarketAnalysisQuery(new URL(request.url).searchParams);
+    const projectWhere = {
+      status: { not: ProjectStatus.ARCHIVED },
+      ...(query.focusOnly ? { isFocus: true } : {}),
+    };
+    const personWhere = {
+      status: { not: PersonStatus.ARCHIVED },
+    };
+
     const [projects, persons] = await Promise.all([
       prisma.project.findMany({
-        where: query.focusOnly ? { isFocus: true } : undefined,
+        where: projectWhere,
         take: query.limit,
         orderBy: { createdAt: "desc" },
         select: MARKET_ANALYSIS_PROJECT_SELECT,
       }),
       prisma.person.findMany({
+        where: personWhere,
         take: query.limit,
         orderBy: { createdAt: "desc" },
         select: MARKET_ANALYSIS_PERSON_SELECT,

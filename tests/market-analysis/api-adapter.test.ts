@@ -12,7 +12,6 @@ import {
 
 const project = marketProjectFromDb({
   id: "project-1",
-  title: "Java platform",
   isFocus: true,
   condition: {
     unitPriceMin: 70,
@@ -34,7 +33,7 @@ const project = marketProjectFromDb({
 });
 
 assert.equal(project.id, "project-1");
-assert.equal(project.title, "Java platform");
+assert.equal("title" in project, false);
 assert.equal(project.isFocus, true);
 assert.equal(project.unitPriceMax, 80);
 assert.equal(project.upperAmountMax, 90);
@@ -63,7 +62,6 @@ assert.deepEqual(sparseProject.skills, []);
 
 const person = marketPersonFromDb({
   id: "person-1",
-  name: "Sample Person",
   desiredUnitPrice: 80,
   availableFrom: new Date("2026-06-01T00:00:00.000Z"),
   preferredLocation: "東京",
@@ -71,7 +69,7 @@ const person = marketPersonFromDb({
   skills: [{ skillName: "Java", years: { toNumber: () => 4 } }],
 });
 assert.equal(person.id, "person-1");
-assert.equal(person.name, "Sample Person");
+assert.equal("name" in person, false);
 assert.equal(person.desiredUnitPrice, 80);
 assert.equal(person.availableFrom instanceof Date, true);
 assert.equal(person.preferredLocation, "東京");
@@ -104,7 +102,6 @@ assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("limit=99999&focus
 const response = buildMarketAnalysisResponse(
   [{
     id: "project-1",
-    title: "Java platform",
     isFocus: true,
     condition: {
       upperAmountMax: 90,
@@ -150,5 +147,7 @@ const routeSource = readFileSync("app/api/market-analysis/route.ts", "utf8");
 assert.doesNotMatch(routeSource, /matchSuggestion/i);
 assert.doesNotMatch(routeSource, /\b(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/);
 assert.doesNotMatch(routeSource, /\$executeRaw|\$queryRaw|db push|migrate deploy|seed/i);
+assert.match(routeSource, /ProjectStatus\.ARCHIVED/);
+assert.match(routeSource, /PersonStatus\.ARCHIVED/);
 
 console.log("market analysis api adapter tests passed");

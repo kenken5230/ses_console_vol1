@@ -23,7 +23,6 @@ export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
 
 export const MARKET_ANALYSIS_PROJECT_SELECT = {
   id: true,
-  title: true,
   isFocus: true,
   condition: {
     select: {
@@ -51,7 +50,6 @@ export const MARKET_ANALYSIS_PROJECT_SELECT = {
 
 export const MARKET_ANALYSIS_PERSON_SELECT = {
   id: true,
-  name: true,
   desiredUnitPrice: true,
   availableFrom: true,
   preferredLocation: true,
@@ -71,7 +69,6 @@ export type MarketAnalysisQuery = {
 
 export type MarketProjectDbRow = {
   id: string;
-  title?: string | null;
   isFocus?: boolean | null;
   condition?: {
     unitPriceMin?: number | null;
@@ -95,7 +92,6 @@ export type MarketProjectDbRow = {
 
 export type MarketPersonDbRow = {
   id: string;
-  name?: string | null;
   desiredUnitPrice?: number | null;
   availableFrom?: string | Date | null;
   preferredLocation?: string | null;
@@ -167,7 +163,6 @@ export function marketProjectFromDb(row: MarketProjectDbRow): MarketProjectInput
   const condition = row.condition;
   return {
     id: row.id,
-    title: row.title ?? null,
     skills: (row.skills ?? []).map((skill) => ({
       skillName: skill.skillName ?? null,
       skillType: skill.skillType ?? "OTHER",
@@ -191,7 +186,6 @@ export function marketProjectFromDb(row: MarketProjectDbRow): MarketProjectInput
 export function marketPersonFromDb(row: MarketPersonDbRow): MarketPersonInput {
   return {
     id: row.id,
-    name: row.name ?? null,
     skills: (row.skills ?? []).map((skill) => ({
       skillName: skill.skillName ?? null,
       years: decimalLikeToNumber(skill.years),
