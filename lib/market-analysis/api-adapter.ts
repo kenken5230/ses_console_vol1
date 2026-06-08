@@ -39,6 +39,7 @@ export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
 
 export const MARKET_ANALYSIS_PROJECT_SELECT = {
   id: true,
+  createdAt: true,
   isFocus: true,
   condition: {
     select: {
@@ -66,6 +67,7 @@ export const MARKET_ANALYSIS_PROJECT_SELECT = {
 
 export const MARKET_ANALYSIS_PERSON_SELECT = {
   id: true,
+  createdAt: true,
   desiredUnitPrice: true,
   availableFrom: true,
   preferredLocation: true,
@@ -81,6 +83,8 @@ export const MARKET_ANALYSIS_PERSON_SELECT = {
 export type MarketAnalysisQuery = {
   limit: number;
   focusOnly: boolean;
+  fromMonth?: string;
+  toMonth?: string;
   skill?: string;
   region?: string;
   priceBand?: PriceBandKey;
@@ -90,6 +94,7 @@ export type MarketAnalysisQuery = {
 
 export type MarketProjectDbRow = {
   id: string;
+  createdAt?: string | Date | null;
   isFocus?: boolean | null;
   condition?: {
     unitPriceMin?: number | null;
@@ -113,6 +118,7 @@ export type MarketProjectDbRow = {
 
 export type MarketPersonDbRow = {
   id: string;
+  createdAt?: string | Date | null;
   desiredUnitPrice?: number | null;
   availableFrom?: string | Date | null;
   preferredLocation?: string | null;
@@ -136,9 +142,23 @@ export type MarketAnalysisApiResponse = {
     limit: number;
     focusOnly: boolean;
   };
+  period: {
+    basis: "createdAt";
+    basisLabel: string;
+    fromMonth: string | null;
+    toMonth: string | null;
+    actualFromMonth: string | null;
+    actualToMonth: string | null;
+    projectFromMonth: string | null;
+    projectToMonth: string | null;
+    personFromMonth: string | null;
+    personToMonth: string | null;
+  };
   appliedFilters: {
     limit: number;
     focusOnly: boolean;
+    fromMonth: string | null;
+    toMonth: string | null;
     skill: string | null;
     region: string | null;
     priceBand: PriceBandKey | null;
@@ -168,6 +188,13 @@ function booleanParam(value: string | null) {
 function optionalParam(value: string | null) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function monthParam(value: string | null) {
+  const normalized = optionalParam(value);
+  if (!normalized || !/^\d{4}-\d{2}$/.test(normalized)) return undefined;
+  const month = Number(normalized.slice(5, 7));
+  return month >= 1 && month <= 12 ? normalized : undefined;
 }
 
 function priceBandParam(value: string | null): PriceBandKey | undefined {
@@ -223,6 +250,7 @@ function firstKnownPriceBand(metrics: PriceBandMetric[]): PriceBandKey | null {
 }
 
 export function parseMarketAnalysisQuery(params: URLSearchParams): MarketAnalysisQuery {
+  const monthRange = normalizeMonthRange(monthParam(params.get("fromMonth")), monthParam(params.get("toMonth")));
   const query: MarketAnalysisQuery = {
     limit: clampLimit(params.get("limit")),
     focusOnly: booleanParam(params.get("focusOnly")),
@@ -233,6 +261,8 @@ export function parseMarketAnalysisQuery(params: URLSearchParams): MarketAnalysi
   const workStyle = workStyleParam(params.get("workStyle"));
   const contractType = contractTypeParam(params.get("contractType"));
 
+  if (monthRange.fromMonth) query.fromMonth = monthRange.fromMonth;
+  if (monthRange.toMonth) query.toMonth = monthRange.toMonth;
   if (skill) query.skill = skill;
   if (region) query.region = region;
   if (priceBand) query.priceBand = priceBand;
@@ -240,6 +270,16 @@ export function parseMarketAnalysisQuery(params: URLSearchParams): MarketAnalysi
   if (contractType) query.contractType = contractType;
 
   return query;
+}
+
+export function buildCreatedAtWhere(query: Pick<MarketAnalysisQuery, "fromMonth" | "toMonth">) {
+  const from = monthToDate(query.fromMonth);
+  const toExclusive = nextMonthToDate(query.toMonth);
+  if (!from && !toExclusive) return undefined;
+  return {
+    ...(from ? { gte: from } : {}),
+    ...(toExclusive ? { lt: toExclusive } : {}),
+  };
 }
 
 export function marketProjectFromDb(row: MarketProjectDbRow): MarketProjectInput {
@@ -286,11 +326,24 @@ export function buildMarketAnalysisResponse(
   options: Partial<MarketAnalysisQuery> & { generatedAt?: string } = {},
 ): MarketAnalysisApiResponse {
   const filters = appliedFiltersFromOptions(options);
-  const projects = projectRows.map(marketProjectFromDb).filter((project) => projectMatchesFilters(project, filters));
-  const persons = personRows.map(marketPersonFromDb).filter((person) => personMatchesFilters(person, filters));
+  const projectPairs = projectRows
+    .filter((row) => rowMatchesPeriod(row.createdAt, filters))
+    .map((row) => ({ row, project: marketProjectFromDb(row) }))
+    .filter(({ project }) => projectMatchesFilters(project, filters));
+  const personPairs = personRows
+    .filter((row) => rowMatchesPeriod(row.createdAt, filters))
+    .map((row) => ({ row, person: marketPersonFromDb(row) }))
+    .filter(({ person }) => personMatchesFilters(person, filters));
+  const projects = projectPairs.map(({ project }) => project);
+  const persons = personPairs.map(({ person }) => person);
   const qualityAlerts = buildQualityAlerts(projects, persons);
   const priceBandRankings = aggregatePriceBandMarket(projects, persons);
   const focusProjectCount = projects.filter((project) => project.isFocus).length;
+  const period = buildPeriodSummary(
+    filters,
+    projectPairs.map(({ row }) => row.createdAt),
+    personPairs.map(({ row }) => row.createdAt),
+  );
 
   return {
     summary: {
@@ -301,6 +354,7 @@ export function buildMarketAnalysisResponse(
       limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
       focusOnly: Boolean(options.focusOnly),
     },
+    period,
     appliedFilters: filters,
     skillRankings: aggregateSkillMarket(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
     priceBandRankings: priceBandRankings.slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
@@ -312,14 +366,97 @@ export function buildMarketAnalysisResponse(
 }
 
 function appliedFiltersFromOptions(options: Partial<MarketAnalysisQuery>) {
+  const monthRange = normalizeMonthRange(options.fromMonth, options.toMonth);
   return {
     limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
     focusOnly: Boolean(options.focusOnly),
+    fromMonth: monthRange.fromMonth ?? null,
+    toMonth: monthRange.toMonth ?? null,
     skill: options.skill ?? null,
     region: options.region ?? null,
     priceBand: options.priceBand ?? null,
     workStyle: options.workStyle ?? null,
     contractType: options.contractType ?? null,
+  };
+}
+
+function normalizeMonthRange(fromMonth: string | null | undefined, toMonth: string | null | undefined) {
+  if (fromMonth && toMonth && fromMonth > toMonth) {
+    return { fromMonth: toMonth, toMonth: fromMonth };
+  }
+  return { fromMonth, toMonth };
+}
+
+function monthToDate(month: string | null | undefined) {
+  if (!month) return null;
+  const [year, monthIndex] = month.split("-").map(Number);
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex)) return null;
+  return new Date(Date.UTC(year, monthIndex - 1, 1));
+}
+
+function nextMonthToDate(month: string | null | undefined) {
+  if (!month) return null;
+  const [year, monthIndex] = month.split("-").map(Number);
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex)) return null;
+  return new Date(Date.UTC(year, monthIndex, 1));
+}
+
+function dateValue(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function monthKeyFromDate(value: string | Date | null | undefined) {
+  const date = dateValue(value);
+  if (!date) return null;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function rowMatchesPeriod(value: string | Date | null | undefined, filters: ReturnType<typeof appliedFiltersFromOptions>) {
+  if (!filters.fromMonth && !filters.toMonth) return true;
+  const date = dateValue(value);
+  if (!date) return false;
+  const from = monthToDate(filters.fromMonth);
+  const toExclusive = nextMonthToDate(filters.toMonth);
+  if (from && date < from) return false;
+  if (toExclusive && date >= toExclusive) return false;
+  return true;
+}
+
+function monthRange(values: Array<string | Date | null | undefined>) {
+  const months = values
+    .map(monthKeyFromDate)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  return {
+    fromMonth: months[0] ?? null,
+    toMonth: months[months.length - 1] ?? null,
+  };
+}
+
+function buildPeriodSummary(
+  filters: ReturnType<typeof appliedFiltersFromOptions>,
+  projectCreatedAtValues: Array<string | Date | null | undefined>,
+  personCreatedAtValues: Array<string | Date | null | undefined>,
+): MarketAnalysisApiResponse["period"] {
+  const projectRange = monthRange(projectCreatedAtValues);
+  const personRange = monthRange(personCreatedAtValues);
+  const actualRange = monthRange([...projectCreatedAtValues, ...personCreatedAtValues]);
+
+  return {
+    basis: "createdAt",
+    basisLabel: "データ登録月",
+    fromMonth: filters.fromMonth,
+    toMonth: filters.toMonth,
+    actualFromMonth: actualRange.fromMonth,
+    actualToMonth: actualRange.toMonth,
+    projectFromMonth: projectRange.fromMonth,
+    projectToMonth: projectRange.toMonth,
+    personFromMonth: personRange.fromMonth,
+    personToMonth: personRange.toMonth,
   };
 }
 

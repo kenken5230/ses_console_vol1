@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import {
   MARKET_ANALYSIS_MAX_LIMIT,
+  buildCreatedAtWhere,
   buildFocusInsights,
   buildMarketAnalysisResponse,
   marketPersonFromDb,
@@ -99,10 +100,12 @@ assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("limit=99999&focus
   focusOnly: true,
 });
 assert.deepEqual(
-  parseMarketAnalysisQuery(new URLSearchParams("limit=500&focusOnly=false&skill=JAVA&region=渋谷&priceBand=70_80&workStyle=hybrid&contractType=準委任")),
+  parseMarketAnalysisQuery(new URLSearchParams("limit=500&focusOnly=false&fromMonth=2026-08&toMonth=2026-06&skill=JAVA&region=渋谷&priceBand=70_80&workStyle=hybrid&contractType=準委任")),
   {
     limit: 500,
     focusOnly: false,
+    fromMonth: "2026-06",
+    toMonth: "2026-08",
     skill: "Java",
     region: "東京",
     priceBand: "70_80",
@@ -110,10 +113,14 @@ assert.deepEqual(
     contractType: "SEMI_DELEGATION",
   },
 );
+const createdAtWhere = buildCreatedAtWhere({ fromMonth: "2026-06", toMonth: "2026-08" });
+assert.equal(createdAtWhere?.gte?.toISOString(), "2026-06-01T00:00:00.000Z");
+assert.equal(createdAtWhere?.lt?.toISOString(), "2026-09-01T00:00:00.000Z");
 
 const response = buildMarketAnalysisResponse(
   [{
     id: "project-1",
+    createdAt: "2026-06-15T00:00:00.000Z",
     isFocus: true,
     condition: {
       upperAmountMax: 90,
@@ -129,6 +136,7 @@ const response = buildMarketAnalysisResponse(
   }],
   [{
     id: "person-1",
+    createdAt: "2026-07-01T00:00:00.000Z",
     desiredUnitPrice: 90,
     preferredLocation: "東京",
     remotePreference: "一部リモート",
@@ -146,11 +154,25 @@ assert.equal(response.summary.focusOnly, true);
 assert.deepEqual(response.appliedFilters, {
   limit: 25,
   focusOnly: true,
+  fromMonth: null,
+  toMonth: null,
   skill: null,
   region: null,
   priceBand: null,
   workStyle: null,
   contractType: null,
+});
+assert.deepEqual(response.period, {
+  basis: "createdAt",
+  basisLabel: "データ登録月",
+  fromMonth: null,
+  toMonth: null,
+  actualFromMonth: "2026-06",
+  actualToMonth: "2026-07",
+  projectFromMonth: "2026-06",
+  projectToMonth: "2026-06",
+  personFromMonth: "2026-07",
+  personToMonth: "2026-07",
 });
 assert.equal(response.generatedAt, "2026-06-08T00:00:00.000Z");
 assert.equal(response.skillRankings[0].skill, "Java");
@@ -167,6 +189,7 @@ assert.equal(insights.topRegion, "東京");
 const filterProjects = [
   {
     id: "filter-project-java",
+    createdAt: "2026-06-15T00:00:00.000Z",
     condition: {
       upperAmountMax: 75,
       recruitingCount: 2,
@@ -181,6 +204,7 @@ const filterProjects = [
   },
   {
     id: "filter-project-python",
+    createdAt: "2026-08-02T00:00:00.000Z",
     condition: {
       upperAmountMax: 90,
       recruitingCount: 1,
@@ -198,6 +222,7 @@ const filterProjects = [
 const filterPersons = [
   {
     id: "filter-person-java",
+    createdAt: "2026-06-20T00:00:00.000Z",
     desiredUnitPrice: 75,
     preferredLocation: "東京",
     remotePreference: "週3出社",
@@ -206,6 +231,7 @@ const filterPersons = [
   },
   {
     id: "filter-person-python",
+    createdAt: "2026-08-15T00:00:00.000Z",
     desiredUnitPrice: 90,
     preferredLocation: "大阪",
     remotePreference: "フルリモート",
@@ -217,6 +243,23 @@ const filterPersons = [
 const unfilteredResponse = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100 });
 assert.equal(unfilteredResponse.summary.projectCount, 2);
 assert.equal(unfilteredResponse.summary.personCount, 2);
+
+const periodFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, fromMonth: "2026-08", toMonth: "2026-08" });
+assert.equal(periodFiltered.summary.projectCount, 1);
+assert.equal(periodFiltered.summary.personCount, 1);
+assert.equal(periodFiltered.skillRankings[0].skill, "Python");
+assert.deepEqual(periodFiltered.period, {
+  basis: "createdAt",
+  basisLabel: "データ登録月",
+  fromMonth: "2026-08",
+  toMonth: "2026-08",
+  actualFromMonth: "2026-08",
+  actualToMonth: "2026-08",
+  projectFromMonth: "2026-08",
+  projectToMonth: "2026-08",
+  personFromMonth: "2026-08",
+  personToMonth: "2026-08",
+});
 
 const skillFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, skill: "Java" });
 assert.equal(skillFiltered.summary.projectCount, 1);
@@ -255,6 +298,8 @@ const fullyFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons,
 assert.deepEqual(fullyFiltered.appliedFilters, {
   limit: 100,
   focusOnly: false,
+  fromMonth: null,
+  toMonth: null,
   skill: "Java",
   region: "東京",
   priceBand: "70_80",

@@ -6,6 +6,7 @@ import {
   MARKET_ANALYSIS_PERSON_SELECT,
   MARKET_ANALYSIS_PROJECT_SELECT,
   buildFocusInsights,
+  buildCreatedAtWhere,
   buildMarketAnalysisResponse,
   parseMarketAnalysisQuery,
 } from "../../../lib/market-analysis/api-adapter";
@@ -18,12 +19,15 @@ export async function GET(request: Request) {
     await requireAuth(request);
 
     const query = parseMarketAnalysisQuery(new URL(request.url).searchParams);
+    const createdAtWhere = buildCreatedAtWhere(query);
     const projectWhere = {
       status: { not: ProjectStatus.ARCHIVED },
+      ...(createdAtWhere ? { createdAt: createdAtWhere } : {}),
       ...(query.focusOnly ? { isFocus: true } : {}),
     };
     const personWhere = {
       status: { not: PersonStatus.ARCHIVED },
+      ...(createdAtWhere ? { createdAt: createdAtWhere } : {}),
     };
 
     const [projects, persons] = await Promise.all([
