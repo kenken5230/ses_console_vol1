@@ -29,6 +29,8 @@ assert.equal(normalizeRegion({ preferredLocation: "梅田または淀屋橋" }),
 assert.equal(normalizeRegion({ preferredLocation: "名古屋" }), "愛知");
 assert.equal(normalizeRegion({ preferredLocation: "博多" }), "福岡");
 assert.equal(normalizeRegion({ preferredLocation: "横浜" }), "神奈川");
+assert.equal(normalizeRegion({ prefecture: "神奈川県", workLocationText: "東京駅近辺" }), "神奈川");
+assert.equal(normalizeRegion({ prefecture: null, workLocationText: "渋谷駅近辺" }), "東京");
 assert.equal(normalizeRegion({ preferredLocation: "" }), "unknown");
 
 assert.equal(normalizeWorkStyle(null, "フルリモート案件"), "FULL_REMOTE");
@@ -38,6 +40,9 @@ assert.equal(normalizeWorkStyle(null, "一部リモート 週2出社"), "HYBRID"
 assert.equal(normalizeWorkStyle(null, "常駐"), "ONSITE");
 assert.equal(normalizeWorkStyle(null, "オンサイト"), "ONSITE");
 assert.equal(normalizeWorkStyle("REMOTE", "常駐"), "REMOTE");
+assert.equal(normalizeWorkStyle("UNKNOWN", "フルリモート"), "FULL_REMOTE");
+assert.equal(normalizeWorkStyle("UNKNOWN", "週3出社"), "HYBRID");
+assert.equal(normalizeWorkStyle("UNKNOWN", "常駐"), "ONSITE");
 assert.equal(normalizeWorkStyle(null, null), "UNKNOWN");
 
 assert.equal(toPriceBand(null), "unknown");

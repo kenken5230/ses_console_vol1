@@ -60,6 +60,17 @@ function isFinitePositiveNumber(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+function detectRegion(value: string | null | undefined) {
+  const text = compact(value);
+  if (!text) return UNKNOWN_REGION;
+
+  for (const [region, tokens] of REGION_RULES) {
+    if (tokens.some((token) => text.includes(token))) return region;
+  }
+
+  return UNKNOWN_REGION;
+}
+
 export function normalizeSkillName(value: string | null | undefined) {
   const raw = compact(value);
   if (!raw) return UNKNOWN_SKILL;
@@ -79,28 +90,24 @@ export function normalizeRegion(
     | undefined,
 ) {
   const source = input as Partial<Pick<MarketProjectInput, "prefecture" | "workLocationText"> & Pick<MarketPersonInput, "preferredLocation">> | null | undefined;
-  const text = typeof input === "string"
-    ? input
-    : [
-      source?.prefecture,
-      source?.workLocationText,
-      source?.preferredLocation,
-    ].filter(Boolean).join(" ");
+  if (typeof input === "string") return detectRegion(input);
 
-  if (!compact(text)) return UNKNOWN_REGION;
+  const prefectureRegion = detectRegion(source?.prefecture);
+  if (prefectureRegion !== UNKNOWN_REGION) return prefectureRegion;
 
-  for (const [region, tokens] of REGION_RULES) {
-    if (tokens.some((token) => text.includes(token))) return region;
-  }
+  const workLocationRegion = detectRegion(source?.workLocationText);
+  if (workLocationRegion !== UNKNOWN_REGION) return workLocationRegion;
 
-  return UNKNOWN_REGION;
+  return detectRegion(source?.preferredLocation);
 }
 
 export function normalizeWorkStyle(remoteType?: string | null, text?: string | null): WorkStyleKey {
   const direct = compact(remoteType).toUpperCase();
-  if (WORK_STYLE_KEYS.includes(direct as WorkStyleKey)) return direct as WorkStyleKey;
+  if (direct && direct !== "UNKNOWN" && WORK_STYLE_KEYS.includes(direct as WorkStyleKey)) {
+    return direct as WorkStyleKey;
+  }
 
-  const searchable = `${remoteType ?? ""} ${text ?? ""}`.toLowerCase();
+  const searchable = compact(text).toLowerCase();
   if (!searchable.trim()) return "UNKNOWN";
 
   if (
