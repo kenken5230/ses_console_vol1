@@ -122,7 +122,58 @@ This foundation only creates the future persistence shape. It does not add save 
 
 Saved suggestions store safe Project/Person references, scores, score bands, source snapshot hashes, reason/warning/review code payloads, compatibility summaries, counts, redacted previews, review status, and review events. They must not store raw Project text, raw Person text, company names, person names, email addresses, CSV raw values, email bodies, local file paths, or secrets.
 
-The recommended next PR is read-only saved suggestion API coverage for `GET /api/matches/suggestions`, `GET /api/matches/suggestions/:id`, and `GET /api/matches/suggestions/review-queue` after the owner applies the migration in the target environment.
+The owner applied the match suggestion persistence migration to staging after PR #29. PR #30 adds read-only saved suggestion API coverage without mutation endpoints.
+
+## Saved Match Suggestion Read-only APIs
+
+Read-only API routes:
+
+- `GET /api/matches/suggestions`
+- `GET /api/matches/suggestions/[id]`
+- `GET /api/matches/suggestions/review-queue`
+
+These endpoints require the same ADMIN/MANAGER review access pattern as the current matching review API. They read only from saved match suggestion tables and do not write to `MatchSuggestion`, `MatchSuggestionReviewEvent`, `MatchSuggestionSourceRecord`, `Project`, `Person`, `Proposal`, `DistributionLog`, drafts, messages, or import tables.
+
+Returned fields are limited to safe review metadata:
+
+- match suggestion id and short id
+- short Project id and short Person id
+- status
+- score
+- score band
+- scoring version
+- attention state
+- warning count
+- review reason count
+- reason codes
+- warning codes
+- review flags
+- compatibility summary
+- skill overlap summary
+- redacted preview
+- created, updated, reviewed, and archived timestamps
+- safe review event metadata without note text
+- safe source-record evidence metadata without raw source payloads
+
+The APIs do not return raw Project text, raw Person text, company names, person names, email addresses, CSV raw values, email bodies, source raw payloads, local file paths, secrets, or full review notes.
+
+Supported list filters:
+
+- `status`
+- `scoreBand`
+- `attentionState`
+- `minScore`
+- `maxScore`
+- `projectId`, accepted only when it is a valid UUID and returned only as a short id
+- `personId`, accepted only when it is a valid UUID and returned only as a short id
+- `page`
+- `limit`, capped at 100
+
+The review queue endpoint focuses on saved suggestions that are `NEEDS_REVIEW`, `SUGGESTED`, have warnings, or have review reasons. It returns `NEEDS_REVIEW` rows first, then `SUGGESTED` rows, then other warning/review rows, with score descending and newest fallback ordering inside each group.
+
+If the target database has not received the match suggestion migration, the endpoints return a safe `migrationRequired` response instead of leaking database metadata or internal Prisma details.
+
+Mutation and downstream work remain deferred. PR #30 does not add POST, PUT, PATCH, DELETE, save, review update, Proposal creation, email draft generation, email sending, external API, AI API, CSV/Notion mapping, or apply behavior.
 
 ## Filters, Sorting, and Pagination
 
@@ -224,6 +275,7 @@ Each match sample includes only:
 - This does not send messages.
 - The current UI/API does not persist match suggestions.
 - PR #28 adds only the schema/migration foundation for future match suggestion persistence.
+- PR #30 adds read-only saved suggestion APIs, but no saved suggestion write path.
 - This does not use Notion or real CSV field mapping.
 - The review UI/API does not write to the database.
 - The review UI/API does not generate email drafts.

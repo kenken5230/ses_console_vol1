@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "npm run test:gmail-extraction-quality && npm run test:source-inventory && npm run test:csv-import-dry-run && npm run test:import-source-tracking && npm run test:import-review && npm run test:match-dry-run && npm run test:match-review && npm run gmail:extract:quality-eval",
+    "test": "npm run test:gmail-extraction-quality && npm run test:source-inventory && npm run test:csv-import-dry-run && npm run test:import-source-tracking && npm run test:import-review && npm run test:match-dry-run && npm run test:match-review && npm run test:match-suggestions-review && npm run gmail:extract:quality-eval",
     "postinstall": "prisma generate",
     "start": "next start",
     "seed": "tsx prisma/seed.ts",
@@ -36,7 +36,8 @@
     "test:source-inventory": "tsx scripts/source-inventory.test.ts",
     "test:import-review": "tsx scripts/import-review.test.ts",
     "test:match-dry-run": "tsx scripts/match-dry-run.test.ts",
-    "test:match-review": "tsx scripts/match-review.test.ts"
+    "test:match-review": "tsx scripts/match-review.test.ts",
+    "test:match-suggestions-review": "tsx scripts/match-suggestions-review.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
