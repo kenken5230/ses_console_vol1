@@ -91,6 +91,15 @@ const contractTypeLabels = {
   UNKNOWN: "未設定",
 };
 
+const DEFAULT_LIMIT = 500;
+const DEFAULT_DETAIL_FILTERS = {
+  skill: "",
+  region: "",
+  priceBand: "",
+  workStyle: "",
+  contractType: "",
+};
+
 const commonMetricColumns = [
   { key: "projectCount", label: "案件数" },
   { key: "recruitingCount", label: "募集人数" },
@@ -155,11 +164,21 @@ function buildFetchError(response, payload) {
   };
 }
 
-async function fetchMarketAnalysis({ focusOnly, limit, signal }) {
+function appendOptionalParam(params, key, value) {
+  if (value) params.set(key, value);
+}
+
+async function fetchMarketAnalysis({ filters, focusOnly, limit, signal }) {
   const params = new URLSearchParams({
     limit: String(limit),
     focusOnly: focusOnly ? "true" : "false",
   });
+  appendOptionalParam(params, "skill", filters.skill);
+  appendOptionalParam(params, "region", filters.region);
+  appendOptionalParam(params, "priceBand", filters.priceBand);
+  appendOptionalParam(params, "workStyle", filters.workStyle);
+  appendOptionalParam(params, "contractType", filters.contractType);
+
   const response = await fetch(`/api/market-analysis?${params.toString()}`, {
     cache: "no-store",
     signal,
@@ -187,8 +206,9 @@ function formatGeneratedAt(value) {
 }
 
 export default function MarketAnalysisPage() {
-  const [limit, setLimit] = useState(500);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [focusOnly, setFocusOnly] = useState(false);
+  const [filters, setFilters] = useState(DEFAULT_DETAIL_FILTERS);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -198,12 +218,23 @@ export default function MarketAnalysisPage() {
     setReloadKey((current) => current + 1);
   }, []);
 
+  const applyFilters = useCallback((nextFilters) => {
+    setFilters(nextFilters);
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    setLimit(DEFAULT_LIMIT);
+    setFocusOnly(false);
+    setFilters(DEFAULT_DETAIL_FILTERS);
+    setReloadKey((current) => current + 1);
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     setIsLoading(true);
     setError(null);
 
-    fetchMarketAnalysis({ focusOnly, limit, signal: controller.signal })
+    fetchMarketAnalysis({ filters, focusOnly, limit, signal: controller.signal })
       .then(setData)
       .catch((fetchError) => {
         if (fetchError.name === "AbortError") return;
@@ -219,7 +250,7 @@ export default function MarketAnalysisPage() {
       });
 
     return () => controller.abort();
-  }, [focusOnly, limit, reloadKey]);
+  }, [filters, focusOnly, limit, reloadKey]);
 
   const generatedAt = useMemo(() => formatGeneratedAt(data?.generatedAt), [data?.generatedAt]);
 
@@ -240,12 +271,15 @@ export default function MarketAnalysisPage() {
 
       <div style={stackStyle}>
         <MarketFilterBar
+          filters={filters}
           focusOnly={focusOnly}
           isLoading={isLoading}
           limit={limit}
+          onApplyFilters={applyFilters}
           onFocusOnlyChange={setFocusOnly}
           onLimitChange={setLimit}
           onReload={reload}
+          onResetFilters={resetFilters}
         />
 
         {isLoading && !data ? (

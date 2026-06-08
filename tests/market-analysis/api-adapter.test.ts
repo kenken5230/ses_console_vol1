@@ -98,6 +98,18 @@ assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("limit=99999&focus
   limit: MARKET_ANALYSIS_MAX_LIMIT,
   focusOnly: true,
 });
+assert.deepEqual(
+  parseMarketAnalysisQuery(new URLSearchParams("limit=500&focusOnly=false&skill=JAVA&region=渋谷&priceBand=70_80&workStyle=hybrid&contractType=準委任")),
+  {
+    limit: 500,
+    focusOnly: false,
+    skill: "Java",
+    region: "東京",
+    priceBand: "70_80",
+    workStyle: "HYBRID",
+    contractType: "SEMI_DELEGATION",
+  },
+);
 
 const response = buildMarketAnalysisResponse(
   [{
@@ -131,6 +143,15 @@ assert.equal(response.summary.personCount, 1);
 assert.equal(response.summary.focusProjectCount, 1);
 assert.equal(response.summary.limit, 25);
 assert.equal(response.summary.focusOnly, true);
+assert.deepEqual(response.appliedFilters, {
+  limit: 25,
+  focusOnly: true,
+  skill: null,
+  region: null,
+  priceBand: null,
+  workStyle: null,
+  contractType: null,
+});
 assert.equal(response.generatedAt, "2026-06-08T00:00:00.000Z");
 assert.equal(response.skillRankings[0].skill, "Java");
 assert.equal(response.priceBandRankings[0].priceBand, "80_over");
@@ -142,6 +163,106 @@ const insights = buildFocusInsights(response);
 assert.equal(insights.topSkill, "Java");
 assert.equal(insights.topPriceBand, "80_over");
 assert.equal(insights.topRegion, "東京");
+
+const filterProjects = [
+  {
+    id: "filter-project-java",
+    condition: {
+      upperAmountMax: 75,
+      recruitingCount: 2,
+      prefecture: "東京都",
+      workLocationText: "渋谷",
+      remoteType: "UNKNOWN",
+      workEnvironment: "週3出社",
+      startMonth: "2026-07",
+      contractType: "SEMI_DELEGATION",
+    },
+    skills: [{ skillName: "JAVA", skillType: "REQUIRED" }],
+  },
+  {
+    id: "filter-project-python",
+    condition: {
+      upperAmountMax: 90,
+      recruitingCount: 1,
+      prefecture: "大阪府",
+      workLocationText: "梅田",
+      remoteType: "UNKNOWN",
+      workEnvironment: "フルリモート",
+      startMonth: "2026-08",
+      contractType: "DISPATCH",
+    },
+    skills: [{ skillName: "Python", skillType: "REQUIRED" }],
+  },
+];
+
+const filterPersons = [
+  {
+    id: "filter-person-java",
+    desiredUnitPrice: 75,
+    preferredLocation: "東京",
+    remotePreference: "週3出社",
+    availableFrom: "2026-06-01",
+    skills: [{ skillName: "Java" }],
+  },
+  {
+    id: "filter-person-python",
+    desiredUnitPrice: 90,
+    preferredLocation: "大阪",
+    remotePreference: "フルリモート",
+    availableFrom: "2026-07-01",
+    skills: [{ skillName: "Python" }],
+  },
+];
+
+const unfilteredResponse = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100 });
+assert.equal(unfilteredResponse.summary.projectCount, 2);
+assert.equal(unfilteredResponse.summary.personCount, 2);
+
+const skillFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, skill: "Java" });
+assert.equal(skillFiltered.summary.projectCount, 1);
+assert.equal(skillFiltered.summary.personCount, 1);
+assert.equal(skillFiltered.skillRankings[0].skill, "Java");
+
+const regionFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, region: "東京" });
+assert.equal(regionFiltered.summary.projectCount, 1);
+assert.equal(regionFiltered.summary.personCount, 1);
+assert.equal(regionFiltered.regionRankings[0].region, "東京");
+
+const priceBandFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, priceBand: "70_80" });
+assert.equal(priceBandFiltered.summary.projectCount, 1);
+assert.equal(priceBandFiltered.summary.personCount, 1);
+assert.equal(priceBandFiltered.priceBandRankings[0].priceBand, "70_80");
+
+const workStyleFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, workStyle: "HYBRID" });
+assert.equal(workStyleFiltered.summary.projectCount, 1);
+assert.equal(workStyleFiltered.summary.personCount, 1);
+assert.equal(workStyleFiltered.regionRankings[0].workStyle, "HYBRID");
+
+const contractTypeFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, contractType: "SEMI_DELEGATION" });
+assert.equal(contractTypeFiltered.summary.projectCount, 1);
+assert.equal(contractTypeFiltered.summary.personCount, 2);
+assert.equal(contractTypeFiltered.marketCellRankings[0].contractType, "SEMI_DELEGATION");
+
+const fullyFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, {
+  limit: 100,
+  focusOnly: false,
+  skill: "Java",
+  region: "東京",
+  priceBand: "70_80",
+  workStyle: "HYBRID",
+  contractType: "SEMI_DELEGATION",
+});
+assert.deepEqual(fullyFiltered.appliedFilters, {
+  limit: 100,
+  focusOnly: false,
+  skill: "Java",
+  region: "東京",
+  priceBand: "70_80",
+  workStyle: "HYBRID",
+  contractType: "SEMI_DELEGATION",
+});
+assert.equal(fullyFiltered.summary.projectCount, 1);
+assert.equal(fullyFiltered.summary.personCount, 1);
 
 const routeSource = readFileSync("app/api/market-analysis/route.ts", "utf8");
 assert.doesNotMatch(routeSource, /matchSuggestion/i);

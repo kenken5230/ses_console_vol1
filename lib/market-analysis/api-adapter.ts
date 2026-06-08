@@ -5,7 +5,22 @@ import {
   aggregateSkillMarket,
   buildQualityAlerts,
 } from "./aggregate";
+import {
+  CONTRACT_TYPE_KEYS,
+  PRICE_BANDS,
+  UNKNOWN_REGION,
+  WORK_STYLE_KEYS,
+} from "./constants";
+import {
+  normalizeContractType,
+  normalizeRegion,
+  normalizeSkillName,
+  normalizeWorkStyle,
+  pickProjectPrice,
+  toPriceBand,
+} from "./normalize";
 import type {
+  ContractTypeKey,
   MarketCellMetric,
   MarketPersonInput,
   MarketProjectInput,
@@ -15,6 +30,7 @@ import type {
   RegionMarketMetric,
   SalesPriorityScore,
   SkillMarketMetric,
+  WorkStyleKey,
 } from "./types";
 
 export const MARKET_ANALYSIS_DEFAULT_LIMIT = 1000;
@@ -65,6 +81,11 @@ export const MARKET_ANALYSIS_PERSON_SELECT = {
 export type MarketAnalysisQuery = {
   limit: number;
   focusOnly: boolean;
+  skill?: string;
+  region?: string;
+  priceBand?: PriceBandKey;
+  workStyle?: WorkStyleKey;
+  contractType?: ContractTypeKey;
 };
 
 export type MarketProjectDbRow = {
@@ -115,6 +136,15 @@ export type MarketAnalysisApiResponse = {
     limit: number;
     focusOnly: boolean;
   };
+  appliedFilters: {
+    limit: number;
+    focusOnly: boolean;
+    skill: string | null;
+    region: string | null;
+    priceBand: PriceBandKey | null;
+    workStyle: WorkStyleKey | null;
+    contractType: ContractTypeKey | null;
+  };
   skillRankings: SkillMarketMetric[];
   priceBandRankings: PriceBandMetric[];
   regionRankings: RegionMarketMetric[];
@@ -135,6 +165,46 @@ function booleanParam(value: string | null) {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
+function optionalParam(value: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function priceBandParam(value: string | null): PriceBandKey | undefined {
+  const normalized = optionalParam(value);
+  if (!normalized) return undefined;
+  return PRICE_BANDS.some((band) => band.key === normalized) ? normalized as PriceBandKey : undefined;
+}
+
+function workStyleParam(value: string | null): WorkStyleKey | undefined {
+  const normalized = optionalParam(value)?.toUpperCase();
+  if (!normalized) return undefined;
+  return WORK_STYLE_KEYS.includes(normalized as WorkStyleKey) ? normalized as WorkStyleKey : undefined;
+}
+
+function contractTypeParam(value: string | null): ContractTypeKey | undefined {
+  const normalized = optionalParam(value);
+  if (!normalized) return undefined;
+
+  const direct = normalized.toUpperCase();
+  if (CONTRACT_TYPE_KEYS.includes(direct as ContractTypeKey)) return direct as ContractTypeKey;
+
+  return normalizeContractType(normalized);
+}
+
+function skillParam(value: string | null) {
+  const normalized = optionalParam(value);
+  if (!normalized) return undefined;
+  return normalizeSkillName(normalized);
+}
+
+function regionParam(value: string | null) {
+  const normalized = optionalParam(value);
+  if (!normalized) return undefined;
+  if (normalized.toLowerCase() === UNKNOWN_REGION) return UNKNOWN_REGION;
+  return normalizeRegion(normalized);
+}
+
 function decimalLikeToNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -153,10 +223,23 @@ function firstKnownPriceBand(metrics: PriceBandMetric[]): PriceBandKey | null {
 }
 
 export function parseMarketAnalysisQuery(params: URLSearchParams): MarketAnalysisQuery {
-  return {
+  const query: MarketAnalysisQuery = {
     limit: clampLimit(params.get("limit")),
     focusOnly: booleanParam(params.get("focusOnly")),
   };
+  const skill = skillParam(params.get("skill"));
+  const region = regionParam(params.get("region"));
+  const priceBand = priceBandParam(params.get("priceBand"));
+  const workStyle = workStyleParam(params.get("workStyle"));
+  const contractType = contractTypeParam(params.get("contractType"));
+
+  if (skill) query.skill = skill;
+  if (region) query.region = region;
+  if (priceBand) query.priceBand = priceBand;
+  if (workStyle) query.workStyle = workStyle;
+  if (contractType) query.contractType = contractType;
+
+  return query;
 }
 
 export function marketProjectFromDb(row: MarketProjectDbRow): MarketProjectInput {
@@ -202,8 +285,9 @@ export function buildMarketAnalysisResponse(
   personRows: MarketPersonDbRow[],
   options: Partial<MarketAnalysisQuery> & { generatedAt?: string } = {},
 ): MarketAnalysisApiResponse {
-  const projects = projectRows.map(marketProjectFromDb);
-  const persons = personRows.map(marketPersonFromDb);
+  const filters = appliedFiltersFromOptions(options);
+  const projects = projectRows.map(marketProjectFromDb).filter((project) => projectMatchesFilters(project, filters));
+  const persons = personRows.map(marketPersonFromDb).filter((person) => personMatchesFilters(person, filters));
   const qualityAlerts = buildQualityAlerts(projects, persons);
   const priceBandRankings = aggregatePriceBandMarket(projects, persons);
   const focusProjectCount = projects.filter((project) => project.isFocus).length;
@@ -217,6 +301,7 @@ export function buildMarketAnalysisResponse(
       limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
       focusOnly: Boolean(options.focusOnly),
     },
+    appliedFilters: filters,
     skillRankings: aggregateSkillMarket(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
     priceBandRankings: priceBandRankings.slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
     regionRankings: aggregateRegionMarket(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
@@ -224,6 +309,44 @@ export function buildMarketAnalysisResponse(
     qualityAlerts,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
   };
+}
+
+function appliedFiltersFromOptions(options: Partial<MarketAnalysisQuery>) {
+  return {
+    limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
+    focusOnly: Boolean(options.focusOnly),
+    skill: options.skill ?? null,
+    region: options.region ?? null,
+    priceBand: options.priceBand ?? null,
+    workStyle: options.workStyle ?? null,
+    contractType: options.contractType ?? null,
+  };
+}
+
+function hasSkill(skills: MarketProjectInput["skills"] | MarketPersonInput["skills"], skill: string) {
+  return (skills ?? []).some((item) => normalizeSkillName(item.skillName) === skill);
+}
+
+function projectMatchesFilters(project: MarketProjectInput, filters: ReturnType<typeof appliedFiltersFromOptions>) {
+  if (filters.skill && !hasSkill(project.skills, filters.skill)) return false;
+  if (filters.region && normalizeRegion(project) !== filters.region) return false;
+  if (filters.priceBand && toPriceBand(pickProjectPrice(project)) !== filters.priceBand) return false;
+  if (
+    filters.workStyle
+    && normalizeWorkStyle(project.remoteType, `${project.workStyleText ?? ""} ${project.workLocationText ?? ""}`) !== filters.workStyle
+  ) {
+    return false;
+  }
+  if (filters.contractType && normalizeContractType(project.contractType) !== filters.contractType) return false;
+  return true;
+}
+
+function personMatchesFilters(person: MarketPersonInput, filters: ReturnType<typeof appliedFiltersFromOptions>) {
+  if (filters.skill && !hasSkill(person.skills, filters.skill)) return false;
+  if (filters.region && normalizeRegion(person) !== filters.region) return false;
+  if (filters.priceBand && toPriceBand(person.desiredUnitPrice) !== filters.priceBand) return false;
+  if (filters.workStyle && normalizeWorkStyle(null, person.remotePreference) !== filters.workStyle) return false;
+  return true;
 }
 
 export function buildFocusInsights(response: MarketAnalysisApiResponse) {
