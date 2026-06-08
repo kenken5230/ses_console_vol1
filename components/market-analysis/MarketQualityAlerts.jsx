@@ -54,6 +54,20 @@ const severityColor = {
   info: { background: "#dbeafe", color: "#1d4ed8" },
 };
 
+const emptyStyle = {
+  color: "#64748b",
+  fontSize: 14,
+  fontWeight: 700,
+  padding: 18,
+};
+
+const emptyTitleStyle = {
+  color: "#334155",
+  display: "block",
+  fontSize: 15,
+  marginBottom: 6,
+};
+
 export default function MarketQualityAlerts({ alerts = [] }) {
   return (
     <section style={sectionStyle}>
@@ -88,8 +102,9 @@ export default function MarketQualityAlerts({ alerts = [] }) {
           </tbody>
         </table>
       ) : (
-        <div style={{ color: "#64748b", fontSize: 14, fontWeight: 700, padding: 18 }}>
-          データ品質アラートはありません。
+        <div style={emptyStyle}>
+          <strong style={emptyTitleStyle}>該当データがありません</strong>
+          <span>条件を変更するか、案件・要員データを追加してください</span>
         </div>
       )}
     </section>

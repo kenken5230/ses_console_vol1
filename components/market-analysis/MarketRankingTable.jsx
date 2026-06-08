@@ -57,6 +57,13 @@ const emptyStyle = {
   padding: 18,
 };
 
+const emptyTitleStyle = {
+  color: "#334155",
+  display: "block",
+  fontSize: 15,
+  marginBottom: 6,
+};
+
 function formatNumber(value) {
   if (value === null || value === undefined || value === "") return "-";
   return Number(value).toLocaleString("ja-JP");
@@ -72,9 +79,18 @@ function formatScore(value) {
   return Number(value).toLocaleString("ja-JP");
 }
 
+function recommendedActionFor(row) {
+  if (Number(row.demandSupplyGap || 0) >= 3) return "要員掘り起こし";
+  if (Number(row.projectMedianPrice || 0) >= 80) return "高単価案件として営業注力";
+  if (Number(row.focusProjectCount || 0) >= 1) return "注力案件の提案候補確認";
+  if (Number(row.qualityAlertCount || row.qualityIssueCount || 0) >= 3) return "データ補完";
+  return "状況確認";
+}
+
 function valueFor(row, column) {
   if (column.type === "price") return formatPrice(row[column.key]);
   if (column.type === "score") return formatScore(row.salesPriorityScore?.score ?? row[column.key]);
+  if (column.type === "action") return recommendedActionFor(row);
   if (column.render) return column.render(row);
   return formatNumber(row[column.key]);
 }
@@ -114,7 +130,10 @@ export default function MarketRankingTable({ columns, rows = [], title }) {
           </table>
         </div>
       ) : (
-        <div style={emptyStyle}>表示できるデータがありません。</div>
+        <div style={emptyStyle}>
+          <strong style={emptyTitleStyle}>該当データがありません</strong>
+          <span>条件を変更するか、案件・要員データを追加してください</span>
+        </div>
       )}
     </section>
   );
