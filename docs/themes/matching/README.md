@@ -175,6 +175,36 @@ If the target database has not received the match suggestion migration, the endp
 
 Mutation and downstream work remain deferred. PR #30 does not add POST, PUT, PATCH, DELETE, save, review update, Proposal creation, email draft generation, email sending, external API, AI API, CSV/Notion mapping, or apply behavior.
 
+## Saved Match Suggestion Review UI
+
+The `/matches` review surface includes read-only saved suggestion views backed by the saved suggestion APIs:
+
+- `Dry-run review`: existing deterministic matching dry-run review.
+- `Saved suggestions`: paginated saved `MatchSuggestion` metadata from `GET /api/matches/suggestions`.
+- `Review queue`: paginated read-only review queue from `GET /api/matches/suggestions/review-queue`.
+
+Selecting a saved suggestion loads safe detail metadata from `GET /api/matches/suggestions/[id]`.
+
+The saved suggestion UI shows only safe review fields:
+
+- short suggestion, Project, Person, review event, source evidence, and source record ids
+- status, score, score band, scoring version, and attention state
+- warning counts and review reason counts
+- reason codes, warning codes, and review flags
+- compatibility summary and skill overlap summary after UI-side key/value redaction
+- redacted preview
+- safe review event metadata without full notes
+- safe source evidence metadata without raw source payloads
+- created, updated, reviewed, and archived timestamps
+
+The UI does not show raw Project text, raw Person text, company names, person names, email addresses, CSV raw values, source raw payloads, local paths, secrets, full review notes, or normalized payloads.
+
+The UI supports simple read-only filters for status, score band, attention state, score range, valid UUID Project/Person filters, page, limit capped at 100, and saved-list sort. The review queue keeps the API-defined ordering: `NEEDS_REVIEW`, then `SUGGESTED`, then warning/review-count rows.
+
+If the API returns `migrationRequired`, the UI shows a safe unavailable state without database metadata.
+
+The saved suggestion UI does not add save buttons, approve/reject/archive controls, POST/PUT/PATCH/DELETE endpoints, DB writes, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
+
 ## Filters, Sorting, and Pagination
 
 Supported filters:

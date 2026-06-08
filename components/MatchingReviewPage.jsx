@@ -1,6 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import {
+  buildSavedSuggestionQuery,
+  countLabel as safeCountLabel,
+  isSafeUuid,
+  safeJsonText,
+  sanitizeSuggestionUiValue,
+  shortDate as safeShortDate,
+} from "../lib/match-suggestion-ui-safe";
 import LoginPanel from "./LoginPanel";
 
 const defaultResponse = {
@@ -21,11 +29,27 @@ const defaultResponse = {
   totalPages: 1,
   items: [],
 };
+const defaultSavedResponse = {
+  items: [],
+  page: 1,
+  limit: 20,
+  maxLimit: 100,
+  migrationRequired: false,
+  readOnly: true,
+  summary: { displayed: 0, total: 0, readOnly: true, piiSafe: true },
+  total: 0,
+  totalPages: 1,
+};
 
 const scoreBandOptions = ["", "HIGH", "MEDIUM", "LOW", "REVIEW"];
 const compatibilityOptions = ["", "match", "mismatch", "unknown"];
 const booleanOptions = ["", "true", "false"];
 const sortOptions = ["score-desc", "score-asc", "review-first", "newest"];
+const savedStatusOptions = ["", "SUGGESTED", "NEEDS_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
+const savedScoreBandOptions = ["", "HIGH", "MEDIUM", "LOW", "REVIEW"];
+const attentionStateOptions = ["", "HIGH_SCORE", "NEEDS_REVIEW", "WARNING"];
+const savedSortOptions = ["newest", "score-desc", "score-asc"];
+const savedLimitOptions = ["20", "50", "100"];
 
 const scoreBandHelp = [
   ["HIGH", "75+; strong deterministic fit"],
@@ -107,6 +131,14 @@ async function fetchJson(url) {
   return result;
 }
 
+async function fetchSavedJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  const result = await response.json().catch(() => ({}));
+  if (response.status === 503 && result?.migrationRequired) return result;
+  if (!response.ok) throw new Error(result.message || "Saved match suggestion request failed");
+  return result;
+}
+
 function optionLabel(value, fallback) {
   return value || fallback;
 }
@@ -149,6 +181,19 @@ function activeFilterChips(filters) {
   return chips;
 }
 
+function savedActiveFilterChips(filters) {
+  const chips = [];
+  if (filters.status) chips.push(["Status", filters.status]);
+  if (filters.scoreBand) chips.push(["Band", filters.scoreBand]);
+  if (filters.attentionState) chips.push(["Attention", filters.attentionState]);
+  if (filters.minScore) chips.push(["Min", filters.minScore]);
+  if (filters.maxScore) chips.push(["Max", filters.maxScore]);
+  if (filters.projectId) chips.push(["Project UUID", isSafeUuid(filters.projectId) ? "set" : "invalid"]);
+  if (filters.personId) chips.push(["Person UUID", isSafeUuid(filters.personId) ? "set" : "invalid"]);
+  if (filters.limit && filters.limit !== "20") chips.push(["Limit", filters.limit]);
+  return chips;
+}
+
 function Pager({ onPageChange, response }) {
   const currentPage = response?.summary?.page || 1;
   const totalPages = response?.totalPages || 1;
@@ -164,6 +209,35 @@ function Pager({ onPageChange, response }) {
       <button disabled={!canGoNext} onClick={() => onPageChange(currentPage + 1)} type="button">
         Next
       </button>
+    </div>
+  );
+}
+
+function savedSuggestionStatus(suggestion) {
+  if (!suggestion) return { label: "No selection", className: "match-status-neutral", hint: "Select a saved suggestion" };
+  if (suggestion.status === "NEEDS_REVIEW" || Number(suggestion.reviewReasonCount || 0) > 0) {
+    return { label: "Needs review", className: "match-status-review", hint: "Review reasons are present" };
+  }
+  if (Number(suggestion.warningCount || 0) > 0 || suggestion.attentionState === "WARNING") {
+    return { label: "Warning", className: "match-status-warning", hint: "Warning codes are present" };
+  }
+  if (suggestion.scoreBand === "HIGH" || suggestion.attentionState === "HIGH_SCORE") {
+    return { label: "High fit", className: "match-status-high", hint: "Strong saved score signals" };
+  }
+  return { label: suggestion.status || "Saved", className: "match-status-neutral", hint: "Saved match suggestion metadata" };
+}
+
+function safeObjectEntries(value, limit = 4) {
+  const sanitized = sanitizeSuggestionUiValue(value);
+  if (!sanitized || typeof sanitized !== "object" || Array.isArray(sanitized)) return [];
+  return Object.entries(sanitized).slice(0, limit);
+}
+
+function InlineSummary({ value }) {
+  const entries = safeObjectEntries(value, 3);
+  return (
+    <div className="match-inline-summary">
+      {entries.length ? entries.map(([key, item]) => <span key={key}>{key}: {String(item ?? "-")}</span>) : <span>none</span>}
     </div>
   );
 }
@@ -448,6 +522,296 @@ function CandidateDetail({ candidate, response }) {
   );
 }
 
+function SavedSuggestionSummary({ queueResponse, suggestionsResponse }) {
+  const savedTotal = suggestionsResponse?.total ?? suggestionsResponse?.items?.length ?? 0;
+  const queueTotal = queueResponse?.total ?? queueResponse?.items?.length ?? 0;
+  const displayed = suggestionsResponse?.summary?.displayed ?? suggestionsResponse?.items?.length ?? 0;
+  const warningTotal = (suggestionsResponse?.items || []).reduce((sum, item) => sum + Number(item.warningCount || 0), 0);
+
+  return (
+    <section className="match-summary-panel" aria-label="Saved match suggestion summary">
+      <div className="match-summary-primary">
+        <div>
+          <span>Saved suggestions</span>
+          <strong>{safeCountLabel(savedTotal)}</strong>
+          <small>{safeCountLabel(displayed)} displayed</small>
+        </div>
+        <div>
+          <span>Review queue</span>
+          <strong>{safeCountLabel(queueTotal)}</strong>
+          <small>needs review, suggested, or warnings</small>
+        </div>
+        <div>
+          <span>Warning load</span>
+          <strong>{safeCountLabel(warningTotal)}</strong>
+          <small>current saved page only</small>
+        </div>
+        <div>
+          <span>Mode</span>
+          <strong>Read-only</strong>
+          <small>no save or review mutation controls</small>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SavedSuggestionEmptyState({ isFiltered = false, queue = false } = {}) {
+  return (
+    <div className="import-review-empty" role="status">
+      <h2>{isFiltered ? "No saved suggestions match current filters" : queue ? "Review queue is empty" : "No saved match suggestions yet"}</h2>
+      <p>{isFiltered ? "Clear filters or widen the score range." : "Saved suggestions will appear after a future supervised save flow runs."}</p>
+    </div>
+  );
+}
+
+function SavedSuggestionMigrationRequired({ endpoint }) {
+  return (
+    <div className="match-state-panel match-state-error" role="status">
+      <div>
+        <h2>Saved suggestion tables unavailable</h2>
+        <p>{endpoint || "Saved match suggestion"} review needs the match suggestion persistence migration in this environment.</p>
+      </div>
+    </div>
+  );
+}
+
+function SavedSuggestionTable({ onPageChange, onSelectSuggestion, queue = false, response, selectedSuggestionId }) {
+  const suggestions = response?.items || [];
+  const title = queue ? "Review queue" : "Saved suggestions";
+  if (response?.migrationRequired) return <SavedSuggestionMigrationRequired endpoint={title} />;
+
+  return (
+    <section className="import-review-section" aria-labelledby={queue ? "saved-review-queue-title" : "saved-suggestions-title"}>
+      <div className="import-review-section-heading">
+        <h2 id={queue ? "saved-review-queue-title" : "saved-suggestions-title"}>{title}</h2>
+        <span>{safeCountLabel(response?.total)} total</span>
+      </div>
+      {suggestions.length ? (
+        <div className="import-table-wrap">
+          <table className="import-review-table saved-suggestion-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Match</th>
+                <th>Score</th>
+                <th>Band</th>
+                <th>Attention</th>
+                <th>Warnings</th>
+                <th>Review</th>
+                <th>Reasons</th>
+                <th>Compatibility</th>
+                <th>Skills</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suggestions.map((suggestion) => {
+                const status = savedSuggestionStatus(suggestion);
+                return (
+                  <tr
+                    className={`match-row ${status.className} ${selectedSuggestionId === suggestion.id ? "selected" : ""}`}
+                    key={suggestion.id || `${suggestion.projectShortId}-${suggestion.personShortId}`}
+                    onClick={() => onSelectSuggestion(suggestion)}
+                  >
+                    <td><span className={`match-status-pill ${status.className}`}>{status.label}</span></td>
+                    <td>
+                      <span className="match-saved-ref">{suggestion.projectShortId || "-"} / {suggestion.personShortId || "-"}</span>
+                    </td>
+                    <td>
+                      <div className="match-score-cell">
+                        <strong>{safeCountLabel(suggestion.score)}</strong>
+                        <span><i style={{ width: `${Math.max(0, Math.min(100, Number(suggestion.score || 0)))}%` }} /></span>
+                      </div>
+                    </td>
+                    <td><span className={badgeClass(suggestion.scoreBand)}>{suggestion.scoreBand || "-"}</span></td>
+                    <td>{suggestion.attentionState || "-"}</td>
+                    <td>{safeCountLabel(suggestion.warningCount)}</td>
+                    <td>{safeCountLabel(suggestion.reviewReasonCount)}</td>
+                    <td>{safeCountLabel(suggestion.reasonCodes?.length)}</td>
+                    <td><InlineSummary value={suggestion.compatibilitySummary} /></td>
+                    <td><InlineSummary value={suggestion.skillOverlapSummary} /></td>
+                    <td>{safeShortDate(suggestion.updatedAt || suggestion.createdAt)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <SavedSuggestionEmptyState isFiltered={Boolean(response?.filters && Object.keys(response.filters).some((key) => response.filters[key]))} queue={queue} />
+      )}
+      <Pager onPageChange={onPageChange} response={response || defaultSavedResponse} />
+    </section>
+  );
+}
+
+function SavedSuggestionFilterStatus({ activeView, filters, response }) {
+  const chips = savedActiveFilterChips(filters);
+  const total = response?.total ?? 0;
+  const displayed = response?.summary?.displayed ?? response?.items?.length ?? 0;
+  const sort = activeView === "queue" ? "needs-review first" : filters.sort;
+
+  return (
+    <section className="match-filter-status" aria-label="Active saved suggestion filters">
+      <div>
+        <strong>Sort: {sort || "newest"}</strong>
+        <span>Showing {safeCountLabel(displayed)} of {safeCountLabel(total)} saved suggestions</span>
+      </div>
+      <div className="match-filter-chips">
+        {chips.length ? chips.map(([label, value]) => <span key={`${label}-${value}`}>{label}: {value}</span>) : <span>No filters applied</span>}
+      </div>
+    </section>
+  );
+}
+
+function ReviewEvents({ events }) {
+  return (
+    <div className="import-detail-block">
+      <h3>Review events</h3>
+      {(events || []).length ? (
+        <ul className="match-safe-list">
+          {events.map((event) => (
+            <li key={`${event.shortId}-${event.createdAt}`}>
+              <span className="import-badge">{event.action}</span>
+              <span>{event.fromStatus || "-"} to {event.toStatus || "-"}</span>
+              <span>actor {event.actorUserShortId || "-"}</span>
+              <span>note {event.notePresent ? "present" : "none"}</span>
+              <span>{safeShortDate(event.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>none</p>
+      )}
+    </div>
+  );
+}
+
+function SourceEvidence({ evidence }) {
+  return (
+    <div className="import-detail-block">
+      <h3>Source evidence</h3>
+      {(evidence || []).length ? (
+        <ul className="match-safe-list">
+          {evidence.map((item) => {
+            const record = item.sourceRecord || {};
+            const rowRef = record.rawRef?.rowNumber ?? record.rawRef?.rowIndex ?? "-";
+            return (
+              <li key={`${item.shortId}-${record.shortId}`}>
+                <span className="import-badge">{item.role}</span>
+                <span>{record.sourceType || "UNKNOWN"}</span>
+                <span>{record.recordType || "UNKNOWN"} / {record.status || "UNKNOWN"}</span>
+                <span>hash {record.recordHashShort || "-"}</span>
+                <span>row {rowRef}</span>
+                <span>{safeCountLabel(record.warningCount)} warnings</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p>none</p>
+      )}
+    </div>
+  );
+}
+
+function SavedSuggestionDetail({ detail, isLoading, selectedSuggestion }) {
+  if (isLoading) {
+    return (
+      <aside className="import-review-detail">
+        <h2>Saved detail</h2>
+        <p>Loading safe saved suggestion metadata.</p>
+      </aside>
+    );
+  }
+
+  if (detail?.migrationRequired) {
+    return (
+      <aside className="import-review-detail">
+        <h2>Saved detail</h2>
+        <p>Saved suggestion tables are unavailable in this environment.</p>
+      </aside>
+    );
+  }
+
+  const suggestion = detail?.item || selectedSuggestion;
+  if (!suggestion) {
+    return (
+      <aside className="import-review-detail">
+        <h2>Saved detail</h2>
+        <p>Select a saved match suggestion to inspect safe metadata.</p>
+      </aside>
+    );
+  }
+
+  const status = savedSuggestionStatus(suggestion);
+
+  return (
+    <aside className="import-review-detail" aria-label="Saved match suggestion safe detail">
+      <h2>Saved detail</h2>
+      <div className="match-reference-grid">
+        <div>
+          <span>Project ref</span>
+          <strong>{suggestion.projectShortId || "-"}</strong>
+        </div>
+        <div>
+          <span>Person ref</span>
+          <strong>{suggestion.personShortId || "-"}</strong>
+        </div>
+      </div>
+      <div className={`match-detail-status ${status.className}`}>
+        <strong>{status.label}</strong>
+        <span>{status.hint}</span>
+      </div>
+      <DetailList
+        items={[
+          ["Suggestion", suggestion.shortId],
+          ["Status", suggestion.status],
+          ["Score", suggestion.score],
+          ["Band", suggestion.scoreBand],
+          ["Scoring version", suggestion.scoringVersion],
+          ["Attention", suggestion.attentionState],
+          ["Warnings", safeCountLabel(suggestion.warningCount)],
+          ["Review reasons", safeCountLabel(suggestion.reviewReasonCount)],
+          ["Review events", safeCountLabel(suggestion.reviewEventCount || suggestion.reviewEvents?.length)],
+          ["Source evidence", safeCountLabel(suggestion.sourceEvidenceCount || suggestion.sourceEvidence?.length)],
+          ["Created", safeShortDate(suggestion.createdAt)],
+          ["Updated", safeShortDate(suggestion.updatedAt)],
+          ["Reviewed", safeShortDate(suggestion.reviewedAt)],
+          ["Archived", safeShortDate(suggestion.archivedAt)],
+        ]}
+      />
+      <div className="import-detail-block">
+        <h3>Reason codes</h3>
+        <CodeFlow codes={suggestion.reasonCodes} describe />
+      </div>
+      <div className="import-detail-block">
+        <h3>Warning codes</h3>
+        <CodeFlow codes={suggestion.warningCodes} describe />
+      </div>
+      <div className="import-detail-block">
+        <h3>Review flags</h3>
+        <CodeFlow codes={suggestion.reviewFlags} describe />
+      </div>
+      <div className="import-detail-block">
+        <h3>Compatibility summary</h3>
+        <pre>{safeJsonText(suggestion.compatibilitySummary)}</pre>
+      </div>
+      <div className="import-detail-block">
+        <h3>Skill overlap summary</h3>
+        <pre>{safeJsonText(suggestion.skillOverlapSummary)}</pre>
+      </div>
+      <div className="import-detail-block">
+        <h3>Redacted preview</h3>
+        <pre>{safeJsonText(suggestion.redactedPreview)}</pre>
+      </div>
+      <ReviewEvents events={suggestion.reviewEvents} />
+      <SourceEvidence evidence={suggestion.sourceEvidence} />
+    </aside>
+  );
+}
+
 function FilterStatusBar({ filters, response }) {
   const chips = activeFilterChips(filters);
   const summary = response?.summary || defaultResponse.summary;
@@ -471,6 +835,7 @@ export default function MatchingReviewPage({
 }) {
   const [authStatus, setAuthStatus] = useState(initialSession?.authenticated ? "authenticated" : "checking");
   const [currentUser, setCurrentUser] = useState(initialSession?.user || null);
+  const [activeView, setActiveView] = useState("dry-run");
   const [response, setResponse] = useState(initialResponse || defaultResponse);
   const [selectedCandidate, setSelectedCandidate] = useState(initialResponse?.items?.[0] || null);
   const [filters, setFilters] = useState({
@@ -489,6 +854,27 @@ export default function MatchingReviewPage({
   const [refreshToken, setRefreshToken] = useState(0);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [savedSuggestions, setSavedSuggestions] = useState(defaultSavedResponse);
+  const [reviewQueue, setReviewQueue] = useState(defaultSavedResponse);
+  const [selectedSavedSuggestion, setSelectedSavedSuggestion] = useState(null);
+  const [savedSuggestionDetail, setSavedSuggestionDetail] = useState(null);
+  const [savedFilters, setSavedFilters] = useState({
+    status: "",
+    scoreBand: "",
+    attentionState: "",
+    minScore: "",
+    maxScore: "",
+    projectId: "",
+    personId: "",
+    sort: "newest",
+    limit: "20",
+  });
+  const [savedPage, setSavedPage] = useState(1);
+  const [queuePage, setQueuePage] = useState(1);
+  const [savedError, setSavedError] = useState("");
+  const [detailError, setDetailError] = useState("");
+  const [isSavedLoading, setIsSavedLoading] = useState(false);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   useEffect(() => {
     if (initialSession) return;
@@ -521,9 +907,13 @@ export default function MatchingReviewPage({
     return params.toString();
   }, [filters, page]);
 
+  const savedQuery = useMemo(() => buildSavedSuggestionQuery(savedFilters, savedPage), [savedFilters, savedPage]);
+  const queueQuery = useMemo(() => buildSavedSuggestionQuery(savedFilters, queuePage, { reviewQueue: true }), [savedFilters, queuePage]);
+
   useEffect(() => {
     if (authStatus !== "authenticated" || !isReviewer(currentUser)) return;
     if (initialResponse) return;
+    if (activeView !== "dry-run") return;
 
     let cancelled = false;
     setIsLoading(true);
@@ -544,7 +934,66 @@ export default function MatchingReviewPage({
     return () => {
       cancelled = true;
     };
-  }, [authStatus, currentUser, initialResponse, query, refreshToken]);
+  }, [activeView, authStatus, currentUser, initialResponse, query, refreshToken]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !isReviewer(currentUser)) return;
+    if (activeView !== "saved" && activeView !== "queue") return;
+
+    let cancelled = false;
+    setIsSavedLoading(true);
+    setSavedError("");
+    Promise.all([
+      fetchSavedJson(`/api/matches/suggestions?${savedQuery}`),
+      fetchSavedJson(`/api/matches/suggestions/review-queue?${queueQuery}`),
+    ])
+      .then(([savedResult, queueResult]) => {
+        if (cancelled) return;
+        setSavedSuggestions(savedResult);
+        setReviewQueue(queueResult);
+        const activeResult = activeView === "queue" ? queueResult : savedResult;
+        const nextSuggestion = activeResult.items?.[0] || null;
+        setSelectedSavedSuggestion(nextSuggestion);
+        setSavedSuggestionDetail(null);
+      })
+      .catch((fetchError) => {
+        if (!cancelled) setSavedError(fetchError instanceof Error ? fetchError.message : "Saved match suggestion fetch failed");
+      })
+      .finally(() => {
+        if (!cancelled) setIsSavedLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, authStatus, currentUser, queueQuery, refreshToken, savedQuery]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !isReviewer(currentUser)) return;
+    if (activeView !== "saved" && activeView !== "queue") return;
+    if (!selectedSavedSuggestion?.id || !isSafeUuid(selectedSavedSuggestion.id)) {
+      setSavedSuggestionDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsDetailLoading(true);
+    setDetailError("");
+    fetchSavedJson(`/api/matches/suggestions/${selectedSavedSuggestion.id}`)
+      .then((result) => {
+        if (!cancelled) setSavedSuggestionDetail(result);
+      })
+      .catch((fetchError) => {
+        if (!cancelled) setDetailError(fetchError instanceof Error ? fetchError.message : "Saved match suggestion detail fetch failed");
+      })
+      .finally(() => {
+        if (!cancelled) setIsDetailLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, authStatus, currentUser, selectedSavedSuggestion]);
 
   function handleAuthenticated(user) {
     setCurrentUser(user);
@@ -576,6 +1025,35 @@ export default function MatchingReviewPage({
       personId: "",
       sort: "score-desc",
     });
+  }
+
+  function updateSavedFilter(key, value) {
+    setSavedPage(1);
+    setQueuePage(1);
+    setSavedFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function clearSavedFilters() {
+    setSavedPage(1);
+    setQueuePage(1);
+    setSavedFilters({
+      status: "",
+      scoreBand: "",
+      attentionState: "",
+      minScore: "",
+      maxScore: "",
+      projectId: "",
+      personId: "",
+      sort: "newest",
+      limit: "20",
+    });
+  }
+
+  function changeView(nextView) {
+    setActiveView(nextView);
+    setError("");
+    setSavedError("");
+    setDetailError("");
   }
 
   if (authStatus === "checking") {
@@ -610,6 +1088,10 @@ export default function MatchingReviewPage({
     );
   }
 
+  const activeSavedResponse = activeView === "queue" ? reviewQueue : savedSuggestions;
+  const activeSavedPageChange = activeView === "queue" ? setQueuePage : setSavedPage;
+  const activeLoading = activeView === "dry-run" ? isLoading : isSavedLoading || isDetailLoading;
+
   return (
     <main className="console-app import-review-page matching-review-page">
       <header className="global-header">
@@ -634,42 +1116,89 @@ export default function MatchingReviewPage({
           <h1>Matching review</h1>
           <p>Read-only deterministic Project/Person match inspection.</p>
         </div>
-        <button className="outline-button" disabled={isLoading} onClick={() => setRefreshToken((current) => current + 1)} type="button">
-          {isLoading ? "Loading" : "Refresh"}
+        <button className="outline-button" disabled={activeLoading} onClick={() => setRefreshToken((current) => current + 1)} type="button">
+          {activeLoading ? "Loading" : "Refresh"}
         </button>
       </div>
 
-      <SummaryStrip response={response} />
-      <MatchExplanationPanel />
-
-      <section className="import-filter-bar match-filter-bar" aria-label="Match candidate filters">
-        <SelectField label="Band" onChange={(value) => updateFilter("scoreBand", value)} options={scoreBandOptions} value={filters.scoreBand} />
-        <InputField label="Min score" onChange={(value) => updateFilter("minScore", value)} type="number" value={filters.minScore} />
-        <SelectField label="Review" onChange={(value) => updateFilter("hasReviewFlag", value)} options={booleanOptions} value={filters.hasReviewFlag} />
-        <SelectField label="Rate" onChange={(value) => updateFilter("rateCompatibility", value)} options={compatibilityOptions} value={filters.rateCompatibility} />
-        <SelectField label="Date" onChange={(value) => updateFilter("dateCompatibility", value)} options={compatibilityOptions} value={filters.dateCompatibility} />
-        <SelectField label="Location" onChange={(value) => updateFilter("locationCompatibility", value)} options={compatibilityOptions} value={filters.locationCompatibility} />
-        <SelectField label="Skills" onChange={(value) => updateFilter("skillOverlapPresent", value)} options={booleanOptions} value={filters.skillOverlapPresent} />
-        <SelectField label="Sort" onChange={(value) => updateFilter("sort", value)} options={sortOptions} value={filters.sort} />
-        <InputField label="Project id" onChange={(value) => updateFilter("projectId", value)} placeholder="uuid" value={filters.projectId} />
-        <InputField label="Person id" onChange={(value) => updateFilter("personId", value)} placeholder="uuid" value={filters.personId} />
-        <button className="ghost-button" onClick={clearFilters} type="button">Clear</button>
+      <section className="match-view-tabs" aria-label="Matching review views">
+        <button className={activeView === "dry-run" ? "active" : ""} onClick={() => changeView("dry-run")} type="button">Dry-run review</button>
+        <button className={activeView === "saved" ? "active" : ""} onClick={() => changeView("saved")} type="button">Saved suggestions</button>
+        <button className={activeView === "queue" ? "active" : ""} onClick={() => changeView("queue")} type="button">Review queue</button>
       </section>
 
-      <FilterStatusBar filters={filters} response={response} />
+      {activeView === "dry-run" ? (
+        <>
+          <SummaryStrip response={response} />
+          <MatchExplanationPanel />
 
-      {error ? <MatchingReviewErrorState message={error} onRetry={() => setRefreshToken((current) => current + 1)} /> : null}
-      {isLoading ? <MatchingReviewLoadingState /> : null}
+          <section className="import-filter-bar match-filter-bar" aria-label="Match candidate filters">
+            <SelectField label="Band" onChange={(value) => updateFilter("scoreBand", value)} options={scoreBandOptions} value={filters.scoreBand} />
+            <InputField label="Min score" onChange={(value) => updateFilter("minScore", value)} type="number" value={filters.minScore} />
+            <SelectField label="Review" onChange={(value) => updateFilter("hasReviewFlag", value)} options={booleanOptions} value={filters.hasReviewFlag} />
+            <SelectField label="Rate" onChange={(value) => updateFilter("rateCompatibility", value)} options={compatibilityOptions} value={filters.rateCompatibility} />
+            <SelectField label="Date" onChange={(value) => updateFilter("dateCompatibility", value)} options={compatibilityOptions} value={filters.dateCompatibility} />
+            <SelectField label="Location" onChange={(value) => updateFilter("locationCompatibility", value)} options={compatibilityOptions} value={filters.locationCompatibility} />
+            <SelectField label="Skills" onChange={(value) => updateFilter("skillOverlapPresent", value)} options={booleanOptions} value={filters.skillOverlapPresent} />
+            <SelectField label="Sort" onChange={(value) => updateFilter("sort", value)} options={sortOptions} value={filters.sort} />
+            <InputField label="Project id" onChange={(value) => updateFilter("projectId", value)} placeholder="uuid" value={filters.projectId} />
+            <InputField label="Person id" onChange={(value) => updateFilter("personId", value)} placeholder="uuid" value={filters.personId} />
+            <button className="ghost-button" onClick={clearFilters} type="button">Clear</button>
+          </section>
 
-      <div className="import-review-grid">
-        <div className="import-review-main">
-          {!isLoading && !error ? (
-            <CandidateTable candidates={response.items || []} onSelectCandidate={setSelectedCandidate} selectedCandidate={selectedCandidate} />
-          ) : null}
-          <Pager onPageChange={setPage} response={response} />
-        </div>
-        <CandidateDetail candidate={selectedCandidate} response={response} />
-      </div>
+          <FilterStatusBar filters={filters} response={response} />
+
+          {error ? <MatchingReviewErrorState message={error} onRetry={() => setRefreshToken((current) => current + 1)} /> : null}
+          {isLoading ? <MatchingReviewLoadingState /> : null}
+
+          <div className="import-review-grid">
+            <div className="import-review-main">
+              {!isLoading && !error ? (
+                <CandidateTable candidates={response.items || []} onSelectCandidate={setSelectedCandidate} selectedCandidate={selectedCandidate} />
+              ) : null}
+              <Pager onPageChange={setPage} response={response} />
+            </div>
+            <CandidateDetail candidate={selectedCandidate} response={response} />
+          </div>
+        </>
+      ) : (
+        <>
+          <SavedSuggestionSummary queueResponse={reviewQueue} suggestionsResponse={savedSuggestions} />
+          <section className="import-filter-bar match-filter-bar match-saved-filter-bar" aria-label="Saved match suggestion filters">
+            <SelectField label="Status" onChange={(value) => updateSavedFilter("status", value)} options={savedStatusOptions} value={savedFilters.status} />
+            <SelectField label="Band" onChange={(value) => updateSavedFilter("scoreBand", value)} options={savedScoreBandOptions} value={savedFilters.scoreBand} />
+            <SelectField label="Attention" onChange={(value) => updateSavedFilter("attentionState", value)} options={attentionStateOptions} value={savedFilters.attentionState} />
+            <InputField label="Min score" onChange={(value) => updateSavedFilter("minScore", value)} type="number" value={savedFilters.minScore} />
+            <InputField label="Max score" onChange={(value) => updateSavedFilter("maxScore", value)} type="number" value={savedFilters.maxScore} />
+            <SelectField label="Limit" onChange={(value) => updateSavedFilter("limit", value)} options={savedLimitOptions} value={savedFilters.limit} />
+            {activeView === "saved" ? <SelectField label="Sort" onChange={(value) => updateSavedFilter("sort", value)} options={savedSortOptions} value={savedFilters.sort} /> : null}
+            <InputField label="Project id" onChange={(value) => updateSavedFilter("projectId", value)} placeholder="uuid" value={savedFilters.projectId} />
+            <InputField label="Person id" onChange={(value) => updateSavedFilter("personId", value)} placeholder="uuid" value={savedFilters.personId} />
+            <button className="ghost-button" onClick={clearSavedFilters} type="button">Clear</button>
+          </section>
+
+          <SavedSuggestionFilterStatus activeView={activeView} filters={savedFilters} response={activeSavedResponse} />
+
+          {savedError ? <MatchingReviewErrorState message={savedError} onRetry={() => setRefreshToken((current) => current + 1)} /> : null}
+          {detailError ? <MatchingReviewErrorState message={detailError} onRetry={() => setRefreshToken((current) => current + 1)} /> : null}
+          {isSavedLoading ? <MatchingReviewLoadingState /> : null}
+
+          <div className="import-review-grid saved-suggestion-grid">
+            <div className="import-review-main">
+              {!isSavedLoading && !savedError ? (
+                <SavedSuggestionTable
+                  onPageChange={activeSavedPageChange}
+                  onSelectSuggestion={setSelectedSavedSuggestion}
+                  queue={activeView === "queue"}
+                  response={activeSavedResponse}
+                  selectedSuggestionId={selectedSavedSuggestion?.id}
+                />
+              ) : null}
+            </div>
+            <SavedSuggestionDetail detail={savedSuggestionDetail} isLoading={isDetailLoading} selectedSuggestion={selectedSavedSuggestion} />
+          </div>
+        </>
+      )}
     </main>
   );
 }

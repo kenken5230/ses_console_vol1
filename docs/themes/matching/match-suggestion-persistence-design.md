@@ -535,9 +535,12 @@ STOP conditions before proposal/email:
    - Should use the PR #28 schema without exposing raw text or PII fields.
 
 3. `Add saved match suggestion review UI`
-   - Adds `/matches` saved suggestion tabs and detail views.
-   - No writes.
-   - No proposal/email features.
+   - Adds `/matches` read-only tabs/sections for dry-run review, saved suggestions, and review queue.
+   - Uses only `GET /api/matches/suggestions`, `GET /api/matches/suggestions/[id]`, and `GET /api/matches/suggestions/review-queue`.
+   - Shows short ids, status, score metadata, compatibility summaries, skill summaries, redacted previews, safe review event metadata, and safe source evidence metadata.
+   - Shows empty/loading/error and safe `migrationRequired` states.
+   - Does not show raw Project text, raw Person text, company names, person names, email addresses, CSV raw values, source raw payloads, local paths, secrets, full review notes, or normalized payloads.
+   - No save buttons, approve/reject/archive controls, POST/PUT/PATCH/DELETE endpoints, DB writes, proposal/email features, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
 
 4. `Add supervised match suggestion save`
    - First PR where application code can write `match_suggestions`.
