@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import MarketDrilldownPanel from "../../components/market-analysis/MarketDrilldownPanel";
 import MarketFilterBar from "../../components/market-analysis/MarketFilterBar";
 import MarketQualityAlerts from "../../components/market-analysis/MarketQualityAlerts";
 import MarketRankingTable from "../../components/market-analysis/MarketRankingTable";
@@ -115,32 +116,44 @@ const skillColumns = [
   ...commonMetricColumns,
 ];
 
+function formatPriceBand(row) {
+  return priceBandLabels[row.priceBand] || row.priceBand || "-";
+}
+
 const priceBandColumns = [
-  { key: "priceBand", label: "単価帯", render: (row) => priceBandLabels[row.priceBand] || row.priceBand || "-" },
+  { key: "priceBand", label: "単価帯", render: formatPriceBand },
   ...commonMetricColumns,
 ];
+
+function formatRegion(row) {
+  return `${row.region || "-"} / ${workStyleLabels[row.workStyle] || row.workStyle || "-"}`;
+}
 
 const regionColumns = [
   {
     key: "region",
     label: "地域・勤務形態",
-    render: (row) => `${row.region || "-"} / ${workStyleLabels[row.workStyle] || row.workStyle || "-"}`,
+    render: formatRegion,
   },
   ...commonMetricColumns,
 ];
+
+function formatMarketCell(row) {
+  return [
+    row.skill || "-",
+    priceBandLabels[row.priceBand] || row.priceBand || "-",
+    row.region || "-",
+    workStyleLabels[row.workStyle] || row.workStyle || "-",
+    row.startMonth || "-",
+    contractTypeLabels[row.contractType] || row.contractType || "-",
+  ].join(" / ");
+}
 
 const marketCellColumns = [
   {
     key: "cell",
     label: "市場セル",
-    render: (row) => [
-      row.skill || "-",
-      priceBandLabels[row.priceBand] || row.priceBand || "-",
-      row.region || "-",
-      workStyleLabels[row.workStyle] || row.workStyle || "-",
-      row.startMonth || "-",
-      contractTypeLabels[row.contractType] || row.contractType || "-",
-    ].join(" / "),
+    render: formatMarketCell,
   },
   { key: "recruitingCount", label: "募集人数" },
   { key: "personCount", label: "要員数" },
@@ -205,6 +218,18 @@ function formatGeneratedAt(value) {
   }).format(date);
 }
 
+function drilldownTitleFor(type, row) {
+  if (type === "skill") return row.skill || "未設定スキル";
+  if (type === "priceBand") return formatPriceBand(row);
+  if (type === "region") return formatRegion(row);
+  if (type === "marketCell") return formatMarketCell(row);
+  return "選択中のランキング";
+}
+
+function selectedRowFor(selection, type) {
+  return selection?.type === type ? selection.row : null;
+}
+
 export default function MarketAnalysisPage() {
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [focusOnly, setFocusOnly] = useState(false);
@@ -213,12 +238,15 @@ export default function MarketAnalysisPage() {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectedDrilldown, setSelectedDrilldown] = useState(null);
 
   const reload = useCallback(() => {
+    setSelectedDrilldown(null);
     setReloadKey((current) => current + 1);
   }, []);
 
   const applyFilters = useCallback((nextFilters) => {
+    setSelectedDrilldown(null);
     setFilters(nextFilters);
   }, []);
 
@@ -226,7 +254,16 @@ export default function MarketAnalysisPage() {
     setLimit(DEFAULT_LIMIT);
     setFocusOnly(false);
     setFilters(DEFAULT_DETAIL_FILTERS);
+    setSelectedDrilldown(null);
     setReloadKey((current) => current + 1);
+  }, []);
+
+  const selectDrilldown = useCallback(({ row, type }) => {
+    setSelectedDrilldown({
+      row,
+      title: drilldownTitleFor(type, row),
+      type,
+    });
   }, []);
 
   useEffect(() => {
@@ -251,6 +288,10 @@ export default function MarketAnalysisPage() {
 
     return () => controller.abort();
   }, [filters, focusOnly, limit, reloadKey]);
+
+  useEffect(() => {
+    setSelectedDrilldown(null);
+  }, [data]);
 
   const generatedAt = useMemo(() => formatGeneratedAt(data?.generatedAt), [data?.generatedAt]);
 
@@ -296,10 +337,39 @@ export default function MarketAnalysisPage() {
         {data ? (
           <>
             <MarketSummaryCards summary={data.summary} />
-            <MarketRankingTable columns={skillColumns} rows={data.skillRankings} title="スキル別ランキング" />
-            <MarketRankingTable columns={priceBandColumns} rows={data.priceBandRankings} title="単価帯別ランキング" />
-            <MarketRankingTable columns={regionColumns} rows={data.regionRankings} title="地域・勤務形態別ランキング" />
-            <MarketRankingTable columns={marketCellColumns} rows={data.marketCellRankings} title="市場セル別ランキング" />
+            <MarketDrilldownPanel selection={selectedDrilldown} />
+            <MarketRankingTable
+              columns={skillColumns}
+              onRowSelect={selectDrilldown}
+              rows={data.skillRankings}
+              selectedRow={selectedRowFor(selectedDrilldown, "skill")}
+              title="スキル別ランキング"
+              type="skill"
+            />
+            <MarketRankingTable
+              columns={priceBandColumns}
+              onRowSelect={selectDrilldown}
+              rows={data.priceBandRankings}
+              selectedRow={selectedRowFor(selectedDrilldown, "priceBand")}
+              title="単価帯別ランキング"
+              type="priceBand"
+            />
+            <MarketRankingTable
+              columns={regionColumns}
+              onRowSelect={selectDrilldown}
+              rows={data.regionRankings}
+              selectedRow={selectedRowFor(selectedDrilldown, "region")}
+              title="地域・勤務形態別ランキング"
+              type="region"
+            />
+            <MarketRankingTable
+              columns={marketCellColumns}
+              onRowSelect={selectDrilldown}
+              rows={data.marketCellRankings}
+              selectedRow={selectedRowFor(selectedDrilldown, "marketCell")}
+              title="市場セル別ランキング"
+              type="marketCell"
+            />
             <MarketQualityAlerts alerts={data.qualityAlerts} />
           </>
         ) : null}

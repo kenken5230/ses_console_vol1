@@ -50,6 +50,15 @@ const tdStyle = {
   verticalAlign: "top",
 };
 
+const clickableRowStyle = {
+  cursor: "pointer",
+};
+
+const selectedRowStyle = {
+  background: "#eff6ff",
+  boxShadow: "inset 4px 0 0 #2563eb",
+};
+
 const emptyStyle = {
   color: "#64748b",
   fontSize: 14,
@@ -95,8 +104,9 @@ function valueFor(row, column) {
   return formatNumber(row[column.key]);
 }
 
-export default function MarketRankingTable({ columns, rows = [], title }) {
+export default function MarketRankingTable({ columns, onRowSelect, rows = [], selectedRow = null, title, type }) {
   const visibleRows = rows.slice(0, 20);
+  const isClickable = Boolean(onRowSelect);
 
   return (
     <section style={sectionStyle}>
@@ -118,7 +128,23 @@ export default function MarketRankingTable({ columns, rows = [], title }) {
             </thead>
             <tbody>
               {visibleRows.map((row, index) => (
-                <tr key={row.key || `${title}-${index}`}>
+                <tr
+                  aria-selected={selectedRow === row}
+                  key={row.key || `${title}-${index}`}
+                  onClick={isClickable ? () => onRowSelect({ row, title, type }) : undefined}
+                  onKeyDown={isClickable ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onRowSelect({ row, title, type });
+                    }
+                  } : undefined}
+                  role={isClickable ? "button" : undefined}
+                  style={{
+                    ...(isClickable ? clickableRowStyle : {}),
+                    ...(selectedRow === row ? selectedRowStyle : {}),
+                  }}
+                  tabIndex={isClickable ? 0 : undefined}
+                >
                   {columns.map((column) => (
                     <td key={column.key} style={tdStyle}>
                       {valueFor(row, column)}
