@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import MarketShareButton from "./MarketShareButton";
+
 const limitOptions = [100, 500, 1000];
 const emptyFilters = {
   fromMonth: "",
@@ -298,6 +300,7 @@ export default function MarketFilterBar({
         <button className="outline-primary" disabled={isLoading} onClick={onReload} type="button">
           再読み込み
         </button>
+        <MarketShareButton disabled={isLoading} />
       </div>
     </section>
   );
