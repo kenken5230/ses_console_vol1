@@ -205,6 +205,50 @@ If the API returns `migrationRequired`, the UI shows a safe unavailable state wi
 
 The saved suggestion UI does not add save buttons, approve/reject/archive controls, POST/PUT/PATCH/DELETE endpoints, DB writes, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
 
+## Supervised Match Suggestion Save API
+
+The supervised save API persists a saved match suggestion for later human review:
+
+- `POST /api/matches/suggestions`
+
+This endpoint is disabled by default and must not write unless all guard conditions are satisfied:
+
+- `MATCH_SUGGESTION_SAVE_ENABLED=true`
+- `MATCH_SUGGESTION_WRITE_TARGET=staging`
+- authenticated user has ADMIN or MANAGER role
+- request body includes `confirmSave: true`
+
+If the guard is missing, unsafe, production-like, or unknown, the endpoint returns a safe disabled response and does not parse request data for a DB write. Production writes are not enabled by this PR.
+
+Accepted input is intentionally narrow:
+
+- `projectId`: valid UUID
+- `personId`: valid UUID
+- `score`: integer from 0 to 100
+- `scoreBand`: safe short value
+- `scoringVersion`: safe short value
+- `sourceSnapshotHash`: 64-character hash
+- `suggestionKey`: optional 64-character hash; otherwise derived server-side
+- `attentionState`: optional safe short value
+- `warningCount` and `reviewReasonCount`: non-negative integers
+- `reasonCodes`, `warningCodes`, `reviewFlags`: safe code arrays
+- `compatibilitySummary`, `skillOverlapSummary`, `redactedPreview`: sanitized JSON only
+- `sourceEvidence`: optional validated SourceRecord UUIDs with safe evidence roles
+
+The endpoint rejects unsafe top-level raw or PII fields, including raw Project text, raw Person text, company names, person names, emails, CSV raw values, email bodies, source raw payloads, normalized payloads, local paths, secrets, and full notes. Nested summary JSON is sanitized before persistence.
+
+Idempotency uses the existing `suggestionKey` unique constraint and the Project/Person/scoring-version/source-snapshot uniqueness policy. Repeating the same save returns a safe skipped-existing response instead of creating duplicates.
+
+On a new save, the endpoint creates:
+
+- one `MatchSuggestion`
+- one initial `MatchSuggestionReviewEvent` with action `CREATED`, no note text, and `toStatus` of `SUGGESTED` or `NEEDS_REVIEW`
+- optional `MatchSuggestionSourceRecord` evidence links when valid evidence ids are provided
+
+It does not create or update Projects, Persons, Proposals, drafts, emails, source payloads, or import records. It does not add UI save buttons, approve/reject/archive controls, review update APIs, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
+
+If the target database is missing the match suggestion migration, the endpoint returns the same safe `migrationRequired` style response without leaking database metadata.
+
 ## Filters, Sorting, and Pagination
 
 Supported filters:
