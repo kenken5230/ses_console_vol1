@@ -104,6 +104,8 @@ const DEFAULT_DETAIL_FILTERS = {
   contractType: "",
   toMonth: "",
 };
+const limitOptions = [100, 500, 1000];
+const filterKeys = ["fromMonth", "toMonth", "skill", "region", "priceBand", "workStyle", "contractType"];
 
 const commonMetricColumns = [
   { key: "projectCount", label: "案件数" },
@@ -185,6 +187,56 @@ function appendOptionalParam(params, key, value) {
   if (value) params.set(key, value);
 }
 
+function booleanParam(value) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function parseLimit(value) {
+  const parsed = Number(value);
+  return limitOptions.includes(parsed) ? parsed : DEFAULT_LIMIT;
+}
+
+function filtersFromParams(params) {
+  return filterKeys.reduce((result, key) => {
+    result[key] = params.get(key)?.trim() || "";
+    return result;
+  }, { ...DEFAULT_DETAIL_FILTERS });
+}
+
+function stateFromUrl() {
+  if (typeof window === "undefined") {
+    return {
+      filters: DEFAULT_DETAIL_FILTERS,
+      focusOnly: false,
+      limit: DEFAULT_LIMIT,
+    };
+  }
+  const params = new URLSearchParams(window.location.search);
+  return {
+    filters: filtersFromParams(params),
+    focusOnly: booleanParam(params.get("focusOnly")),
+    limit: parseLimit(params.get("limit")),
+  };
+}
+
+function buildMarketAnalysisSearch({ filters, focusOnly, limit }) {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  if (focusOnly) params.set("focusOnly", "true");
+  for (const key of filterKeys) {
+    appendOptionalParam(params, key, filters[key]);
+  }
+  return params.toString();
+}
+
+function replaceMarketAnalysisUrl(nextState) {
+  if (typeof window === "undefined") return;
+  const search = buildMarketAnalysisSearch(nextState);
+  const nextUrl = search ? `${window.location.pathname}?${search}` : window.location.pathname;
+  window.history.replaceState(null, "", nextUrl);
+}
+
 async function fetchMarketAnalysis({ filters, focusOnly, limit, signal }) {
   const params = new URLSearchParams({
     limit: String(limit),
@@ -240,6 +292,7 @@ export default function MarketAnalysisPage() {
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [focusOnly, setFocusOnly] = useState(false);
   const [filters, setFilters] = useState(DEFAULT_DETAIL_FILTERS);
+  const [isUrlStateReady, setIsUrlStateReady] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -254,13 +307,29 @@ export default function MarketAnalysisPage() {
   const applyFilters = useCallback((nextFilters) => {
     setSelectedDrilldown(null);
     setFilters(nextFilters);
-  }, []);
+    replaceMarketAnalysisUrl({ filters: nextFilters, focusOnly, limit });
+  }, [focusOnly, limit]);
+
+  const changeLimit = useCallback((nextLimit) => {
+    setSelectedDrilldown(null);
+    setLimit(nextLimit);
+    replaceMarketAnalysisUrl({ filters, focusOnly, limit: nextLimit });
+  }, [filters, focusOnly]);
+
+  const changeFocusOnly = useCallback((nextFocusOnly) => {
+    setSelectedDrilldown(null);
+    setFocusOnly(nextFocusOnly);
+    replaceMarketAnalysisUrl({ filters, focusOnly: nextFocusOnly, limit });
+  }, [filters, limit]);
 
   const resetFilters = useCallback(() => {
     setLimit(DEFAULT_LIMIT);
     setFocusOnly(false);
     setFilters(DEFAULT_DETAIL_FILTERS);
     setSelectedDrilldown(null);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     setReloadKey((current) => current + 1);
   }, []);
 
@@ -273,6 +342,15 @@ export default function MarketAnalysisPage() {
   }, []);
 
   useEffect(() => {
+    const initialState = stateFromUrl();
+    setLimit(initialState.limit);
+    setFocusOnly(initialState.focusOnly);
+    setFilters(initialState.filters);
+    setIsUrlStateReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isUrlStateReady) return undefined;
     const controller = new AbortController();
     setIsLoading(true);
     setError(null);
@@ -293,7 +371,7 @@ export default function MarketAnalysisPage() {
       });
 
     return () => controller.abort();
-  }, [filters, focusOnly, limit, reloadKey]);
+  }, [filters, focusOnly, isUrlStateReady, limit, reloadKey]);
 
   useEffect(() => {
     setSelectedDrilldown(null);
@@ -323,8 +401,8 @@ export default function MarketAnalysisPage() {
           isLoading={isLoading}
           limit={limit}
           onApplyFilters={applyFilters}
-          onFocusOnlyChange={setFocusOnly}
-          onLimitChange={setLimit}
+          onFocusOnlyChange={changeFocusOnly}
+          onLimitChange={changeLimit}
           onReload={reload}
           onResetFilters={resetFilters}
         />
