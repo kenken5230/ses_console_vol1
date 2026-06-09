@@ -3,8 +3,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   buildSavedSuggestionQuery,
+  buildMatchSuggestionSaveBody,
   countLabel as safeCountLabel,
+  interpretMatchSuggestionSaveResponse,
   isSafeUuid,
+  isMatchSuggestionSaveUiEnabled,
   safeJsonText,
   sanitizeSuggestionUiValue,
   shortDate as safeShortDate,
@@ -50,6 +53,7 @@ const savedScoreBandOptions = ["", "HIGH", "MEDIUM", "LOW", "REVIEW"];
 const attentionStateOptions = ["", "HIGH_SCORE", "NEEDS_REVIEW", "WARNING"];
 const savedSortOptions = ["newest", "score-desc", "score-asc"];
 const savedLimitOptions = ["20", "50", "100"];
+const saveUiEnabled = isMatchSuggestionSaveUiEnabled(process.env.NEXT_PUBLIC_MATCH_SUGGESTION_SAVE_UI_ENABLED);
 
 const scoreBandHelp = [
   ["HIGH", "75+; strong deterministic fit"],
@@ -137,6 +141,17 @@ async function fetchSavedJson(url) {
   if (response.status === 503 && result?.migrationRequired) return result;
   if (!response.ok) throw new Error(result.message || "Saved match suggestion request failed");
   return result;
+}
+
+async function postSavedSuggestion(body) {
+  const response = await fetch("/api/matches/suggestions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  const result = await response.json().catch(() => ({}));
+  return interpretMatchSuggestionSaveResponse(response.status, result);
 }
 
 function optionLabel(value, fallback) {
@@ -437,6 +452,34 @@ function CandidateTable({ candidates, onSelectCandidate, selectedCandidate }) {
   );
 }
 
+function SaveSuggestionPanel({ isSaving, onOpenConfirm, saveDraft, saveState, uiEnabled }) {
+  const canSave = Boolean(uiEnabled && saveDraft?.canSave);
+  const disabledReason = uiEnabled ? saveDraft?.disabledReason : "Save controls are disabled in this environment.";
+  const stateClass = saveState?.state ? `match-save-state-${saveState.state}` : "";
+
+  return (
+    <div className="match-save-panel" aria-label="Supervised match suggestion save">
+      <div>
+        <h3>Supervised save</h3>
+        <p>{canSave ? "Ready to save this candidate for later review." : disabledReason}</p>
+      </div>
+      <button
+        className="primary-button"
+        disabled={!canSave || isSaving}
+        onClick={onOpenConfirm}
+        type="button"
+      >
+        {isSaving ? "Saving" : "Save suggestion"}
+      </button>
+      {saveState?.message ? (
+        <p className={`match-save-message ${stateClass}`} role={saveState.state === "error" ? "alert" : "status"}>
+          {saveState.message}{saveState.shortId ? ` ${saveState.shortId}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function DetailList({ items }) {
   return (
     <dl className="import-detail-list">
@@ -450,7 +493,7 @@ function DetailList({ items }) {
   );
 }
 
-function CandidateDetail({ candidate, response }) {
+function CandidateDetail({ candidate, isSaving, onOpenSaveConfirm, response, saveDraft, saveState, saveUiEnabled }) {
   if (!candidate) {
     return (
       <aside className="import-review-detail">
@@ -516,9 +559,45 @@ function CandidateDetail({ candidate, response }) {
         <h3>Review flags</h3>
         <CodeFlow codes={candidate.reviewFlags} describe />
       </div>
+      <SaveSuggestionPanel
+        isSaving={isSaving}
+        onOpenConfirm={onOpenSaveConfirm}
+        saveDraft={saveDraft}
+        saveState={saveState}
+        uiEnabled={saveUiEnabled}
+      />
       <CountBlock counts={response?.summary?.warningCounts} title="Warning counts" />
       <CountBlock counts={response?.summary?.reviewReasonCounts} title="Reason counts" />
     </aside>
+  );
+}
+
+function SaveConfirmationDialog({ isSaving, onCancel, onConfirm, saveDraft }) {
+  if (!saveDraft?.canSave) return null;
+
+  return (
+    <div className="match-save-dialog-backdrop" role="presentation">
+      <section className="match-save-dialog" role="dialog" aria-modal="true" aria-labelledby="match-save-dialog-title">
+        <h2 id="match-save-dialog-title">Confirm supervised save</h2>
+        <p>This will call the guarded save endpoint with redacted match metadata only.</p>
+        <DetailList
+          items={[
+            ["Score", saveDraft.body?.score],
+            ["Band", saveDraft.body?.scoreBand],
+            ["Attention", saveDraft.body?.attentionState],
+            ["Warnings", saveDraft.body?.warningCount],
+            ["Review reasons", saveDraft.body?.reviewReasonCount],
+            ["Source evidence", "0"],
+          ]}
+        />
+        <div className="match-save-dialog-actions">
+          <button className="ghost-button" disabled={isSaving} onClick={onCancel} type="button">Cancel</button>
+          <button className="primary-button" disabled={isSaving} onClick={onConfirm} type="button">
+            {isSaving ? "Saving" : "Confirm save"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -875,6 +954,9 @@ export default function MatchingReviewPage({
   const [detailError, setDetailError] = useState("");
   const [isSavedLoading, setIsSavedLoading] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [isSavingSuggestion, setIsSavingSuggestion] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveState, setSaveState] = useState({ state: "idle", message: "", shortId: null });
 
   useEffect(() => {
     if (initialSession) return;
@@ -909,6 +991,7 @@ export default function MatchingReviewPage({
 
   const savedQuery = useMemo(() => buildSavedSuggestionQuery(savedFilters, savedPage), [savedFilters, savedPage]);
   const queueQuery = useMemo(() => buildSavedSuggestionQuery(savedFilters, queuePage, { reviewQueue: true }), [savedFilters, queuePage]);
+  const saveDraft = useMemo(() => buildMatchSuggestionSaveBody(selectedCandidate, filters), [filters, selectedCandidate]);
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !isReviewer(currentUser)) return;
@@ -1054,6 +1137,33 @@ export default function MatchingReviewPage({
     setError("");
     setSavedError("");
     setDetailError("");
+    setSaveDialogOpen(false);
+  }
+
+  function openSaveConfirm() {
+    if (!saveUiEnabled || !saveDraft.canSave || isSavingSuggestion) return;
+    setSaveState({ state: "confirming", message: "Confirm before saving.", shortId: null });
+    setSaveDialogOpen(true);
+  }
+
+  async function confirmSaveSuggestion() {
+    if (!saveUiEnabled || !saveDraft.canSave || !saveDraft.body || isSavingSuggestion) return;
+    setIsSavingSuggestion(true);
+    setSaveState({ state: "saving", message: "Saving through guarded endpoint.", shortId: null });
+    try {
+      const nextState = await postSavedSuggestion(saveDraft.body);
+      setSaveState(nextState);
+      if (["success", "skippedExisting"].includes(nextState.state)) {
+        setSavedPage(1);
+        setQueuePage(1);
+        setRefreshToken((current) => current + 1);
+      }
+    } catch {
+      setSaveState({ state: "error", message: "Supervised save failed.", shortId: null });
+    } finally {
+      setIsSavingSuggestion(false);
+      setSaveDialogOpen(false);
+    }
   }
 
   if (authStatus === "checking") {
@@ -1158,8 +1268,24 @@ export default function MatchingReviewPage({
               ) : null}
               <Pager onPageChange={setPage} response={response} />
             </div>
-            <CandidateDetail candidate={selectedCandidate} response={response} />
+            <CandidateDetail
+              candidate={selectedCandidate}
+              isSaving={isSavingSuggestion}
+              onOpenSaveConfirm={openSaveConfirm}
+              response={response}
+              saveDraft={saveDraft}
+              saveState={saveState}
+              saveUiEnabled={saveUiEnabled}
+            />
           </div>
+          {saveDialogOpen ? (
+            <SaveConfirmationDialog
+              isSaving={isSavingSuggestion}
+              onCancel={() => setSaveDialogOpen(false)}
+              onConfirm={confirmSaveSuggestion}
+              saveDraft={saveDraft}
+            />
+          ) : null}
         </>
       ) : (
         <>
