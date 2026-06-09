@@ -105,7 +105,7 @@ const DEFAULT_DETAIL_FILTERS = {
   toMonth: "",
 };
 const limitOptions = [100, 500, 1000];
-const filterKeys = ["skill", "region", "priceBand", "workStyle", "contractType"];
+const filterKeys = ["fromMonth", "toMonth", "skill", "region", "priceBand", "workStyle", "contractType"];
 
 const commonMetricColumns = [
   { key: "projectCount", label: "案件数" },
