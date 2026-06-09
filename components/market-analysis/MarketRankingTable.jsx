@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 const sectionStyle = {
   background: "#fff",
   border: "1px solid var(--line)",
@@ -11,6 +13,7 @@ const headerStyle = {
   alignItems: "center",
   borderBottom: "1px solid var(--line)",
   display: "flex",
+  gap: 12,
   justifyContent: "space-between",
   padding: "16px 18px",
 };
@@ -59,6 +62,24 @@ const selectedRowStyle = {
   boxShadow: "inset 4px 0 0 #2563eb",
 };
 
+const headerActionsStyle = {
+  alignItems: "center",
+  display: "flex",
+  gap: 10,
+};
+
+const copyButtonStyle = {
+  background: "#fff",
+  border: "1px solid var(--line)",
+  borderRadius: 4,
+  color: "#1f5fc5",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 900,
+  minHeight: 36,
+  padding: "0 12px",
+};
+
 const emptyStyle = {
   color: "#64748b",
   fontSize: 14,
@@ -104,15 +125,36 @@ function valueFor(row, column) {
   return formatNumber(row[column.key]);
 }
 
+async function copyText(text) {
+  if (typeof navigator === "undefined" || !navigator.clipboard) return false;
+  await navigator.clipboard.writeText(text);
+  return true;
+}
+
 export default function MarketRankingTable({ columns, onRowSelect, rows = [], selectedRow = null, title, type }) {
+  const [copied, setCopied] = useState(false);
   const visibleRows = rows.slice(0, 20);
   const isClickable = Boolean(onRowSelect);
+
+  async function handleCopy() {
+    const header = columns.map((column) => column.label).join("\t");
+    const body = visibleRows.map((row) => columns.map((column) => valueFor(row, column)).join("\t")).join("\n");
+    const ok = await copyText([header, body].filter(Boolean).join("\n"));
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
 
   return (
     <section style={sectionStyle}>
       <div style={headerStyle}>
         <h2 style={titleStyle}>{title}</h2>
-        <span style={{ color: "#64748b", fontSize: 13, fontWeight: 800 }}>上位{visibleRows.length}件</span>
+        <div style={headerActionsStyle}>
+          <span style={{ color: "#64748b", fontSize: 13, fontWeight: 800 }}>上位{visibleRows.length}件</span>
+          <button disabled={!visibleRows.length} onClick={handleCopy} style={copyButtonStyle} type="button">
+            {copied ? "コピー済み" : "表をコピー"}
+          </button>
+        </div>
       </div>
       {visibleRows.length ? (
         <div style={tableWrapStyle}>

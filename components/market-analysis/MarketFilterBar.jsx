@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 
 const limitOptions = [100, 500, 1000];
 const emptyFilters = {
+  fromMonth: "",
   skill: "",
   region: "",
   priceBand: "",
   workStyle: "",
   contractType: "",
+  toMonth: "",
 };
 
 const regionOptions = [
@@ -74,7 +76,7 @@ const detailsStyle = {
   display: "grid",
   flex: "1 1 100%",
   gap: 12,
-  gridTemplateColumns: "repeat(auto-fit, minmax(154px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(164px, 1fr))",
   width: "100%",
 };
 
@@ -141,9 +143,11 @@ export default function MarketFilterBar({
   function applyFilters() {
     onApplyFilters?.({
       contractType: draftFilters.contractType,
+      fromMonth: draftFilters.fromMonth,
       priceBand: draftFilters.priceBand,
       region: draftFilters.region,
       skill: draftFilters.skill.trim(),
+      toMonth: draftFilters.toMonth,
       workStyle: draftFilters.workStyle,
     });
   }
@@ -184,6 +188,28 @@ export default function MarketFilterBar({
       </div>
 
       <div style={detailsStyle}>
+        <label style={stackedLabelStyle}>
+          統計開始月
+          <input
+            aria-label="統計開始月"
+            disabled={isLoading}
+            onChange={(event) => updateDraftFilter("fromMonth", event.target.value)}
+            style={inputStyle}
+            type="month"
+            value={draftFilters.fromMonth}
+          />
+        </label>
+        <label style={stackedLabelStyle}>
+          統計終了月
+          <input
+            aria-label="統計終了月"
+            disabled={isLoading}
+            onChange={(event) => updateDraftFilter("toMonth", event.target.value)}
+            style={inputStyle}
+            type="month"
+            value={draftFilters.toMonth}
+          />
+        </label>
         <label style={stackedLabelStyle}>
           スキル
           <input

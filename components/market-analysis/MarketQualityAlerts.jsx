@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 const sectionStyle = {
   background: "#fff",
   border: "1px solid var(--line)",
@@ -8,7 +10,11 @@ const sectionStyle = {
 };
 
 const headerStyle = {
+  alignItems: "center",
   borderBottom: "1px solid var(--line)",
+  display: "flex",
+  gap: 12,
+  justifyContent: "space-between",
   padding: "16px 18px",
 };
 
@@ -54,6 +60,18 @@ const severityColor = {
   info: { background: "#dbeafe", color: "#1d4ed8" },
 };
 
+const copyButtonStyle = {
+  background: "#fff",
+  border: "1px solid var(--line)",
+  borderRadius: 4,
+  color: "#1f5fc5",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 900,
+  minHeight: 36,
+  padding: "0 12px",
+};
+
 const emptyStyle = {
   color: "#64748b",
   fontSize: 14,
@@ -68,11 +86,37 @@ const emptyTitleStyle = {
   marginBottom: 6,
 };
 
+async function copyText(text) {
+  if (typeof navigator === "undefined" || !navigator.clipboard) return false;
+  await navigator.clipboard.writeText(text);
+  return true;
+}
+
 export default function MarketQualityAlerts({ alerts = [] }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    const header = ["code", "severity", "target", "count", "message"].join("\t");
+    const body = alerts.map((alert) => [
+      alert.code,
+      alert.severity,
+      alert.target,
+      alert.count || 0,
+      alert.message,
+    ].join("\t")).join("\n");
+    const ok = await copyText([header, body].filter(Boolean).join("\n"));
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
   return (
     <section style={sectionStyle}>
       <div style={headerStyle}>
         <h2 style={titleStyle}>データ品質アラート</h2>
+        <button disabled={!alerts.length} onClick={handleCopy} style={copyButtonStyle} type="button">
+          {copied ? "コピー済み" : "表をコピー"}
+        </button>
       </div>
       {alerts.length ? (
         <table style={tableStyle}>

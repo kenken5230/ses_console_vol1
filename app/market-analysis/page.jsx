@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import MarketChartPanel from "../../components/market-analysis/MarketChartPanel";
 import MarketDrilldownPanel from "../../components/market-analysis/MarketDrilldownPanel";
 import MarketFilterBar from "../../components/market-analysis/MarketFilterBar";
+import MarketPeriodInfo from "../../components/market-analysis/MarketPeriodInfo";
 import MarketQualityAlerts from "../../components/market-analysis/MarketQualityAlerts";
 import MarketRankingTable from "../../components/market-analysis/MarketRankingTable";
 import MarketSummaryCards from "../../components/market-analysis/MarketSummaryCards";
@@ -94,11 +96,13 @@ const contractTypeLabels = {
 
 const DEFAULT_LIMIT = 500;
 const DEFAULT_DETAIL_FILTERS = {
+  fromMonth: "",
   skill: "",
   region: "",
   priceBand: "",
   workStyle: "",
   contractType: "",
+  toMonth: "",
 };
 
 const commonMetricColumns = [
@@ -186,6 +190,8 @@ async function fetchMarketAnalysis({ filters, focusOnly, limit, signal }) {
     limit: String(limit),
     focusOnly: focusOnly ? "true" : "false",
   });
+  appendOptionalParam(params, "fromMonth", filters.fromMonth);
+  appendOptionalParam(params, "toMonth", filters.toMonth);
   appendOptionalParam(params, "skill", filters.skill);
   appendOptionalParam(params, "region", filters.region);
   appendOptionalParam(params, "priceBand", filters.priceBand);
@@ -336,7 +342,15 @@ export default function MarketAnalysisPage() {
 
         {data ? (
           <>
+            <MarketPeriodInfo period={data.period} />
             <MarketSummaryCards summary={data.summary} />
+            <MarketChartPanel
+              priceBandLabels={priceBandLabels}
+              priceBandRankings={data.priceBandRankings}
+              regionRankings={data.regionRankings}
+              skillRankings={data.skillRankings}
+              workStyleLabels={workStyleLabels}
+            />
             <MarketDrilldownPanel selection={selectedDrilldown} />
             <MarketRankingTable
               columns={skillColumns}
