@@ -6,6 +6,7 @@ Current files:
 
 - `README.md`: deterministic matching dry-run and read-only matching review UI/API notes.
 - `match-suggestion-persistence-design.md`: match suggestion persistence, review workflow, schema/API/UI/safety design, PR #28 schema foundation, and staged implementation plan.
+- `match-suggestion-review-update-design.md`: docs-only design for guarded saved suggestion review status updates.
 
 ## Deterministic Matching Dry-run MVP
 
@@ -292,6 +293,41 @@ Response handling is safe and aggregate-only:
 - validation or generic failure: shows a safe failure message without server internals
 
 Review update, approve/reject/archive, Proposal creation, email draft generation, and email sending remain deferred to separate owner-approved PRs.
+
+## Supervised Match Suggestion Review Update Design
+
+Review update implementation remains deferred, but the next phase is designed in `match-suggestion-review-update-design.md`.
+
+Planned actions:
+
+- keep active as `SUGGESTED`
+- mark `NEEDS_REVIEW`
+- approve as `APPROVED`
+- reject as `REJECTED`
+- archive as `ARCHIVED`
+- optionally restore archived rows to `NEEDS_REVIEW`
+
+The design defines an explicit status transition matrix. Invalid transitions must be rejected, and no-op transitions should return a safe skipped/no-op result without writing a new review event.
+
+Future state-changing updates should create exactly one `MatchSuggestionReviewEvent` with:
+
+- previous status
+- next status
+- mapped review action
+- actor user id
+- safe reason codes when provided or required
+- no raw notes in the first implementation
+
+The future endpoint is expected to be disabled by default and staging-only at first. Suggested server guard:
+
+- `MATCH_SUGGESTION_REVIEW_UPDATE_ENABLED=true`
+- `MATCH_SUGGESTION_REVIEW_WRITE_TARGET=staging`
+- ADMIN/MANAGER auth
+- `confirmReviewAction: true`
+
+The planned request body is intentionally narrow: suggestion id, action, target status, confirm flag, safe reason codes, and optional stale-update fields. It must reject raw Project text, raw Person text, company names, person names, emails, CSV raw values, email bodies, source raw payloads, normalized payloads, local paths, secrets, connection strings, and full notes.
+
+The UI rollout should add approve/reject/archive controls only behind a separate disabled-by-default frontend flag and should show a confirmation dialog before mutation. It should refresh saved suggestions, review queue, and selected detail after success. Proposal creation, email draft generation, and email sending remain out of scope.
 
 ## Filters, Sorting, and Pagination
 
