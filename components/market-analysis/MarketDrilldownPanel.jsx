@@ -1,5 +1,7 @@
 "use client";
 
+import MarketAnonymousExampleList from "./MarketAnonymousExampleList";
+
 const panelStyle = {
   background: "#fff",
   border: "1px solid var(--line)",
@@ -193,6 +195,8 @@ export default function MarketDrilldownPanel({ selection }) {
           <li key={reason}>{reason}</li>
         ))}
       </ul>
+
+      <MarketAnonymousExampleList examples={row.anonymousExamples} />
     </section>
   );
 }
