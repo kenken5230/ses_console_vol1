@@ -17,9 +17,15 @@ const SENSITIVE_VALUE_PATTERNS = [
 const STATUS_OPTIONS = new Set(["SUGGESTED", "NEEDS_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"]);
 const SCORE_BAND_OPTIONS = new Set(["HIGH", "MEDIUM", "LOW", "REVIEW"]);
 const SORT_OPTIONS = new Set(["newest", "score-desc", "score-asc"]);
+const SAVE_SCORING_VERSION = "match-review-ui-v1";
+const SAFE_CODE_PATTERN = /^[A-Z][A-Z0-9_:-]{1,95}$/;
 
 export function isSafeUuid(value: unknown) {
   return typeof value === "string" && UUID_PATTERN.test(value.trim());
+}
+
+export function isMatchSuggestionSaveUiEnabled(value: unknown) {
+  return value === "true";
 }
 
 function safeToken(value: unknown) {
@@ -107,6 +113,153 @@ export function sanitizeSuggestionUiValue(value: unknown, depth = 0): unknown {
 
 export function safeJsonText(value: unknown) {
   return JSON.stringify(sanitizeSuggestionUiValue(value) || {}, null, 2);
+}
+
+function safeCodeArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  const codes: string[] = [];
+  for (const item of value.slice(0, 50)) {
+    if (typeof item !== "string") continue;
+    const code = item.trim();
+    if (!SAFE_CODE_PATTERN.test(code)) continue;
+    if (SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(code))) continue;
+    if (!codes.includes(code)) codes.push(code);
+  }
+  return codes;
+}
+
+function safeInteger(value: unknown, fallback = 0, min = 0, max = 1000) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function stableHash64(value: unknown) {
+  const text = JSON.stringify(value);
+  let left = 0x811c9dc5;
+  let right = 0x9e3779b9;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    left ^= code;
+    left = Math.imul(left, 16777619);
+    right ^= code + index;
+    right = Math.imul(right, 2246822519);
+  }
+  const chunk = `${(left >>> 0).toString(16).padStart(8, "0")}${(right >>> 0).toString(16).padStart(8, "0")}`;
+  return `${chunk}${chunk}${chunk}${chunk}`.slice(0, 64);
+}
+
+export function buildMatchSuggestionSaveBody(candidate: Record<string, unknown> | null | undefined, filters: Record<string, unknown>) {
+  if (!candidate) {
+    return { canSave: false, disabledReason: "Select a match candidate before supervised save.", body: null };
+  }
+
+  const projectId = typeof filters.projectId === "string" ? filters.projectId.trim() : "";
+  const personId = typeof filters.personId === "string" ? filters.personId.trim() : "";
+  if (!isSafeUuid(projectId) || !isSafeUuid(personId)) {
+    return {
+      canSave: false,
+      disabledReason: "Enter valid Project and Person UUID filters to enable supervised save.",
+      body: null,
+    };
+  }
+
+  const score = safeInteger(candidate.score, -1, 0, 100);
+  const scoreBand = safeToken(candidate.scoreBand).toUpperCase();
+  if (score < 0 || !SCORE_BAND_OPTIONS.has(scoreBand)) {
+    return { canSave: false, disabledReason: "Selected candidate is missing safe score metadata.", body: null };
+  }
+
+  const reasonCodes = safeCodeArray(candidate.reasonCodes);
+  const warningCodes = safeCodeArray(candidate.missingFieldCodes ?? candidate.warningCodes);
+  const reviewFlags = safeCodeArray(candidate.reviewFlags);
+  const attentionState = safeToken(candidate.attention ?? candidate.attentionState) || (scoreBand === "HIGH" ? "HIGH_SCORE" : "NEEDS_REVIEW");
+  const warningCount = safeInteger(candidate.warningCount, warningCodes.length, 0, 1000);
+  const reviewReasonCount = safeInteger(candidate.reviewReasonCount, reasonCodes.length, 0, 1000);
+
+  const compatibilitySummary = sanitizeSuggestionUiValue({
+    rateCompatibility: candidate.rateCompatibility,
+    dateCompatibility: candidate.dateCompatibility,
+    locationCompatibility: candidate.locationCompatibility,
+    roleCompatible: Boolean(candidate.roleCompatible),
+    scoreBand,
+  });
+  const skillOverlapSummary = sanitizeSuggestionUiValue({
+    skillOverlapCount: candidate.skillOverlapCount,
+    requiredSkillOverlapCount: candidate.requiredSkillOverlapCount,
+    niceToHaveSkillOverlapCount: candidate.niceToHaveSkillOverlapCount,
+    technologyOverlapCount: candidate.technologyOverlapCount,
+  });
+  const redactedPreview = sanitizeSuggestionUiValue(candidate.redactedPreview ?? {
+    project: { shortId: candidate.projectShortId },
+    person: { shortId: candidate.personShortId },
+    match: { score, scoreBand },
+  });
+
+  const sourceSnapshotHash = stableHash64({
+    projectId,
+    personId,
+    score,
+    scoreBand,
+    scoringVersion: SAVE_SCORING_VERSION,
+    attentionState,
+    warningCount,
+    reviewReasonCount,
+    reasonCodes,
+    warningCodes,
+    reviewFlags,
+    compatibilitySummary,
+    skillOverlapSummary,
+    redactedPreview,
+  });
+
+  return {
+    canSave: true,
+    disabledReason: "",
+    body: {
+      confirmSave: true,
+      projectId,
+      personId,
+      score,
+      scoreBand,
+      scoringVersion: SAVE_SCORING_VERSION,
+      sourceSnapshotHash,
+      attentionState,
+      warningCount,
+      reviewReasonCount,
+      reasonCodes,
+      warningCodes,
+      reviewFlags,
+      compatibilitySummary,
+      skillOverlapSummary,
+      redactedPreview,
+      sourceEvidence: [],
+    },
+  };
+}
+
+export function interpretMatchSuggestionSaveResponse(status: number, result: Record<string, unknown>) {
+  if (status === 503 && result?.migrationRequired) {
+    return { state: "migrationRequired", message: "Saved suggestion tables are unavailable in this environment.", shortId: null };
+  }
+  if (status === 403) {
+    return { state: "disabled", message: "Server save guard is disabled.", shortId: null };
+  }
+  if (status === 400) {
+    return { state: "validation", message: "Save request was rejected by validation.", shortId: null };
+  }
+  if (status < 200 || status >= 300) {
+    return { state: "error", message: "Supervised save failed.", shortId: null };
+  }
+  const suggestion = result?.suggestion && typeof result.suggestion === "object" ? result.suggestion as Record<string, unknown> : {};
+  const shortId = typeof suggestion.shortId === "string" ? suggestion.shortId : null;
+  if (result?.skippedExisting) {
+    return { state: "skippedExisting", message: "Already saved.", shortId };
+  }
+  if (result?.created || result?.saved) {
+    return { state: "success", message: "Saved for supervised review.", shortId };
+  }
+  return { state: "unknown", message: "Supervised save response received.", shortId };
 }
 
 export function countLabel(value: unknown) {

@@ -211,7 +211,8 @@ async function main() {
   assert.doesNotMatch(route, /export\s+async\s+function\s+(?:PUT|PATCH|DELETE)\b/);
 
   const ui = readFileSync("components/MatchingReviewPage.jsx", "utf8");
-  assert.doesNotMatch(ui, /<button[^>]*>\s*(?:Save|Approve|Reject|Archive|Create proposal|Draft email|Send email)\s*<\/button>/i);
+  assert.match(ui, /NEXT_PUBLIC_MATCH_SUGGESTION_SAVE_UI_ENABLED/);
+  assert.doesNotMatch(ui, /<button[^>]*>\s*(?:Approve|Reject|Archive|Create proposal|Draft email|Send email)\s*<\/button>/i);
 
   console.log("match suggestion save tests passed");
 }

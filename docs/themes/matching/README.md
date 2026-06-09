@@ -245,9 +245,53 @@ On a new save, the endpoint creates:
 - one initial `MatchSuggestionReviewEvent` with action `CREATED`, no note text, and `toStatus` of `SUGGESTED` or `NEEDS_REVIEW`
 - optional `MatchSuggestionSourceRecord` evidence links when valid evidence ids are provided
 
-It does not create or update Projects, Persons, Proposals, drafts, emails, source payloads, or import records. It does not add UI save buttons, approve/reject/archive controls, review update APIs, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
+It does not create or update Projects, Persons, Proposals, drafts, emails, source payloads, or import records. It does not add approve/reject/archive controls, review update APIs, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
 
 If the target database is missing the match suggestion migration, the endpoint returns the same safe `migrationRequired` style response without leaking database metadata.
+
+## Guarded Match Suggestion Save UI
+
+The `/matches` dry-run review detail can show a supervised save control for selected candidates, but the UI is disabled by default.
+
+Frontend flag:
+
+- `NEXT_PUBLIC_MATCH_SUGGESTION_SAVE_UI_ENABLED=true`
+
+When the frontend flag is missing or not exactly `true`, the UI shows a disabled save state and does not expose an active save button.
+
+The server-side save guard remains authoritative even when the frontend flag is enabled:
+
+- `MATCH_SUGGESTION_SAVE_ENABLED=true`
+- `MATCH_SUGGESTION_WRITE_TARGET=staging`
+
+This PR does not set or modify Vercel environment variables and does not enable production saves.
+
+The dry-run API still returns only short Project and Person references. To avoid weakening redaction, the save control is active only when the reviewer has entered valid full Project and Person UUID filters and selected a candidate from that filtered dry-run review. If those safe identifiers are not available, the control stays disabled and explains that valid UUID filters are required.
+
+The UI requires an explicit confirmation dialog before calling:
+
+- `POST /api/matches/suggestions`
+
+The request body is built only from safe deterministic match metadata:
+
+- `confirmSave: true`
+- valid `projectId` and `personId` from filters
+- score, score band, scoring version, source snapshot hash, attention state, warning/review counts
+- reason codes, warning codes, review flags
+- sanitized compatibility summary, skill overlap summary, and redacted preview
+- `sourceEvidence: []`
+
+The UI never includes raw Project text, raw Person text, company names, person names, email addresses, CSV raw values, email bodies, source raw payloads, normalized payloads, local paths, secrets, or full notes.
+
+Response handling is safe and aggregate-only:
+
+- created: shows a saved message and short suggestion id if returned
+- skipped existing: shows an already-saved message
+- disabled guard: shows a server-save-guard-disabled message
+- migration required: shows an unavailable state
+- validation or generic failure: shows a safe failure message without server internals
+
+Review update, approve/reject/archive, Proposal creation, email draft generation, and email sending remain deferred to separate owner-approved PRs.
 
 ## Filters, Sorting, and Pagination
 

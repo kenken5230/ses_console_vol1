@@ -2974,6 +2974,89 @@ input[type="radio"] {
   padding: 4px 8px;
 }
 
+.match-save-panel {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.match-save-panel h3 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
+.match-save-panel p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.match-save-panel .primary-button {
+  justify-self: start;
+}
+
+.match-save-message {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: #344054;
+  padding: 8px 10px;
+}
+
+.match-save-state-success,
+.match-save-state-skippedExisting {
+  background: #ecfdf3;
+  border-color: #abefc6;
+}
+
+.match-save-state-disabled,
+.match-save-state-migrationRequired,
+.match-save-state-validation,
+.match-save-state-error {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.match-save-dialog-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.38);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 50;
+}
+
+.match-save-dialog {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+  padding: 20px;
+  width: min(520px, 100%);
+}
+
+.match-save-dialog h2 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.match-save-dialog p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.match-save-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .import-link-list {
   display: grid;
   gap: 8px;
