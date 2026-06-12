@@ -58,6 +58,8 @@ describe("match suggestion write API helpers", () => {
     assert.equal(calls.createdEvents[0].data.systemSnapshot.payloadHash, buildSavePayloadHash(TENANT_ID, payload));
     assert.equal(calls.createdIdempotencyRecords[0].data.requestFingerprint, buildSavePayloadHash(TENANT_ID, payload));
     assert.equal(calls.createdIdempotencyRecords[0].data.resultType, "CREATED");
+    assert.deepEqual(calls.projectFindFirstArgs[0].where, { id: PROJECT_ID, tenantId: TENANT_ID });
+    assert.deepEqual(calls.personFindFirstArgs[0].where, { id: PERSON_ID, tenantId: TENANT_ID });
     assertNoForbiddenKeys(result.item);
   });
 
@@ -230,7 +232,7 @@ describe("match suggestion write API helpers", () => {
     assert.equal(calls.transactions, 0);
   });
 
-  it("validates referenced project and person exist before creating a suggestion", async () => {
+  it("validates referenced project belongs to the save tenant before creating a suggestion", async () => {
     const payload = withConfirmationToken(makeSavePayload());
     const calls = createSaveCalls();
     const prismaMock = createSavePrismaMock({
@@ -245,6 +247,25 @@ describe("match suggestion write API helpers", () => {
     );
     assert.equal(calls.transactions, 0);
     assert.equal(calls.createdSuggestions.length, 0);
+    assert.deepEqual(calls.projectFindFirstArgs[0].where, { id: PROJECT_ID, tenantId: TENANT_ID });
+  });
+
+  it("validates referenced person belongs to the save tenant before creating a suggestion", async () => {
+    const payload = withConfirmationToken(makeSavePayload());
+    const calls = createSaveCalls();
+    const prismaMock = createSavePrismaMock({
+      calls,
+      projectRecord: { id: PROJECT_ID },
+      personRecord: null,
+    });
+
+    await assert.rejects(
+      () => saveMatchSuggestion(prismaMock, TENANT_ID, payload, ACTOR, idempotentHeaders()),
+      (error) => error instanceof MatchSuggestionWriteApiError && error.code === "PERSON_NOT_FOUND",
+    );
+    assert.equal(calls.transactions, 0);
+    assert.equal(calls.createdSuggestions.length, 0);
+    assert.deepEqual(calls.personFindFirstArgs[0].where, { id: PERSON_ID, tenantId: TENANT_ID });
   });
 
   it("validates source record enums for supervised saves", async () => {
@@ -573,6 +594,8 @@ function createSaveCalls() {
     createdEvents: [] as any[],
     createdIdempotencyRecords: [] as any[],
     duplicateFindFirstArgs: [] as any[],
+    projectFindFirstArgs: [] as any[],
+    personFindFirstArgs: [] as any[],
   };
 }
 
@@ -591,10 +614,16 @@ function createSavePrismaMock(options: {
       findFirst: async () => options.existingIdempotency ?? null,
     },
     project: {
-      findFirst: async () => (options.projectRecord === undefined ? { id: PROJECT_ID } : options.projectRecord),
+      findFirst: async (args: any) => {
+        options.calls.projectFindFirstArgs.push(args);
+        return options.projectRecord === undefined ? { id: PROJECT_ID } : options.projectRecord;
+      },
     },
     person: {
-      findFirst: async () => (options.personRecord === undefined ? { id: PERSON_ID } : options.personRecord),
+      findFirst: async (args: any) => {
+        options.calls.personFindFirstArgs.push(args);
+        return options.personRecord === undefined ? { id: PERSON_ID } : options.personRecord;
+      },
     },
     matchSuggestion: {
       findFirst: async (args: any) => {

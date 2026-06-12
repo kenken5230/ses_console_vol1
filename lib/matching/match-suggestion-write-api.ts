@@ -149,7 +149,7 @@ export async function saveMatchSuggestion(
     };
   }
 
-  await assertReferencedEntitiesExist(prismaClient, payload);
+  await assertReferencedEntitiesExist(prismaClient, tenantId, payload);
 
   const duplicate = await prismaClient.matchSuggestion.findFirst({
     where: {
@@ -596,14 +596,14 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-async function assertReferencedEntitiesExist(prismaClient: any, payload: MatchSuggestionSavePayload) {
+async function assertReferencedEntitiesExist(prismaClient: any, tenantId: string, payload: MatchSuggestionSavePayload) {
   const [project, person] = await Promise.all([
     prismaClient.project.findFirst({
-      where: { id: payload.projectId },
+      where: { id: payload.projectId, tenantId },
       select: { id: true },
     }),
     prismaClient.person.findFirst({
-      where: { id: payload.personId },
+      where: { id: payload.personId, tenantId },
       select: { id: true },
     }),
   ]);

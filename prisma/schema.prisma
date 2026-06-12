@@ -661,6 +661,7 @@ model CompanyContact {
 
 model Project {
   id                  String        @id @default(uuid()) @db.Uuid
+  tenantId            String        @default("default") @map("tenant_id") @db.VarChar(80)
   projectCode         String?       @unique @map("project_code") @db.VarChar(80)
   title               String        @db.VarChar(255)
   summary             String?       @db.Text
@@ -688,6 +689,7 @@ model Project {
   tags             ProjectTag[]
 
   @@index([status, createdAt])
+  @@index([tenantId])
   @@index([sourceMailId])
   @@index([ownerUserId])
   @@index([isFocus])
@@ -798,6 +800,7 @@ model ProjectTag {
 
 model Person {
   id                String       @id @default(uuid()) @db.Uuid
+  tenantId          String       @default("default") @map("tenant_id") @db.VarChar(80)
   personCode        String?      @unique @map("person_code") @db.VarChar(80)
   name              String?      @db.VarChar(160)
   initials          String?      @db.VarChar(40)
@@ -827,6 +830,7 @@ model Person {
   skills           PersonSkill[]
 
   @@index([sourceMailId])
+  @@index([tenantId])
   @@index([ownerCompanyId])
   @@index([ownerContactId])
   @@index([status])
