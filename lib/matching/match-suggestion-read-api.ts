@@ -96,7 +96,6 @@ export type MatchSuggestionSafeDetail = MatchSuggestionSafeListItem & {
     reasonCode: string | null;
     createdAt: string;
     requestId: string;
-    idempotencyKey: string | null;
   }>;
   sourceRecords: Array<{
     id: string;
@@ -278,7 +277,6 @@ export function serializeSuggestionDetail(record: any): MatchSuggestionSafeDetai
       reasonCode: event.reasonCode ?? null,
       createdAt: toIsoString(event.createdAt),
       requestId: event.requestId,
-      idempotencyKey: event.idempotencyKey ?? null,
     })),
     sourceRecords: (record.sourceRecords || []).map((sourceRecord: any) => ({
       id: sourceRecord.id,
@@ -483,7 +481,6 @@ const detailSelect = {
       reasonCode: true,
       createdAt: true,
       requestId: true,
-      idempotencyKey: true,
     },
   },
   sourceRecords: {

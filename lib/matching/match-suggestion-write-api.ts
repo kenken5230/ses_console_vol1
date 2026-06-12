@@ -77,6 +77,7 @@ export class MatchSuggestionWriteApiError extends Error {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SCORE_BANDS = ["HIGH", "MEDIUM", "LOW", "REVIEW"] as const;
 const CODE_PATTERN = /^[A-Z0-9_:-]{1,80}$/;
+const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9_.:-]{1,180}$/;
 const SAFE_TEXT_MAX_LENGTH = 500;
 const SERVER_SCORING_VERSION = "manual-v1";
 const SERVER_TAXONOMY_VERSION = "match-taxonomy-v1";
@@ -154,7 +155,6 @@ export async function saveMatchSuggestion(
     where: {
       tenantId,
       suggestionPairKey: payload.suggestionPairKey,
-      status: { in: ["SUGGESTED", "NEEDS_REVIEW", "APPROVED"] },
     },
     select: detailSelect,
   });
@@ -468,10 +468,13 @@ async function transitionMatchSuggestion(
 
 function validateSavePayload(payload: MatchSuggestionSavePayload) {
   assertNoForbiddenPayloadKeys(payload);
+  if (payload.organizationId) validateSafeIdentifier(payload.organizationId, "organizationId");
   requireUuid(payload.projectId, "projectId");
   requireUuid(payload.personId, "personId");
   requireNonEmpty(payload.suggestionPairKey, "suggestionPairKey");
+  validateSafeIdentifier(payload.suggestionPairKey, "suggestionPairKey");
   requireNonEmpty(payload.suggestionRevisionKey, "suggestionRevisionKey");
+  validateSafeIdentifier(payload.suggestionRevisionKey, "suggestionRevisionKey");
   normalizeScore(payload.score);
   if (payload.scoreBand) validateEnum(payload.scoreBand, SCORE_BANDS, "scoreBand");
   validateCodeArray(payload.systemReasonCodes, "systemReasonCodes");
@@ -484,6 +487,7 @@ function validateSavePayload(payload: MatchSuggestionSavePayload) {
   validateEnum(payload.attentionState || "NORMAL", MATCH_ATTENTION_STATES, "attentionState");
   for (const record of payload.sourceRecords || []) {
     requireNonEmpty(record.sourceRecordId, "sourceRecordId");
+    validateSafeIdentifier(record.sourceRecordId, "sourceRecordId");
     validateEnum(record.sourceType, MATCH_SUGGESTION_SOURCE_TYPES, "sourceType");
     validateEnum(record.evidenceRole, MATCH_SUGGESTION_EVIDENCE_ROLES, "evidenceRole");
     validateSafeText(record.safeSummary, "safeSummary");
@@ -536,6 +540,9 @@ function requireIdempotencyKey(headers: Headers) {
   if (value.length > 160) {
     throw new MatchSuggestionWriteApiError(400, "IDEMPOTENCY_KEY_INVALID", "Idempotency-Key is too long");
   }
+  if (!SAFE_IDENTIFIER_PATTERN.test(value)) {
+    throw new MatchSuggestionWriteApiError(400, "IDEMPOTENCY_KEY_INVALID", "Idempotency-Key contains unsafe text");
+  }
   return value;
 }
 
@@ -587,13 +594,6 @@ function stableStringify(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value);
-}
-
-function readPayloadHash(value: unknown) {
-  if (!value || typeof value !== "object") return null;
-  return typeof (value as Record<string, unknown>).payloadHash === "string"
-    ? ((value as Record<string, string>).payloadHash)
-    : null;
 }
 
 async function assertReferencedEntitiesExist(prismaClient: any, payload: MatchSuggestionSavePayload) {
@@ -662,6 +662,13 @@ function validateCodeArray(value: unknown, label: string) {
   }
 }
 
+function validateSafeIdentifier(value: unknown, label: string, maxLength = 180) {
+  const text = optionalString(value);
+  if (!text || text.length > maxLength || !SAFE_IDENTIFIER_PATTERN.test(text)) {
+    throw new MatchSuggestionWriteApiError(422, "INVALID_PAYLOAD", `${label} contains unsafe identifier text`);
+  }
+}
+
 function validateSafeText(value: unknown, label: string) {
   const text = optionalString(value);
   if (!text) return;
@@ -678,11 +685,7 @@ function assertNoForbiddenPayloadKeys(value: unknown, path = "payload") {
   const forbiddenKeys = new Set<string>(MATCH_SUGGESTION_FORBIDDEN_PII_FIELDS as readonly string[]);
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     if (forbiddenKeys.has(key)) {
-      throw new MatchSuggestionWriteApiError(
-        422,
-        "INVALID_PAYLOAD",
-        `${path}.${key} must not be saved in match suggestions`,
-      );
+      throw new MatchSuggestionWriteApiError(422, "INVALID_PAYLOAD", "payload contains forbidden raw or PII field");
     }
     assertNoForbiddenPayloadKeys(child, `${path}.${key}`);
   }
@@ -736,7 +739,6 @@ const detailSelect = {
       reasonCode: true,
       createdAt: true,
       requestId: true,
-      idempotencyKey: true,
     },
   },
   sourceRecords: {

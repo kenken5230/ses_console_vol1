@@ -166,6 +166,7 @@ describe("match suggestion read API helpers", () => {
     assert.equal(detail.reviewEvents[0].eventType, "SAVED");
     assert.equal(detail.sourceRecords[0].safeSummary, "skill overlap summary");
     assert.equal("systemSnapshot" in detail.reviewEvents[0], false);
+    assert.equal("idempotencyKey" in detail.reviewEvents[0], false);
     assertNoForbiddenKeys(detail);
   });
 

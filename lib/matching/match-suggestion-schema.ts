@@ -96,6 +96,7 @@ export const MATCH_SUGGESTION_FORBIDDEN_PII_FIELDS = [
   "rawCsvRow",
   "rawNotionPayload",
   "localPath",
+  "idempotencyKey",
   "token",
   "password",
   "apiKey",

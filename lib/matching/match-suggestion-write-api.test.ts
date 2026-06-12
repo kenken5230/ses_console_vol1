@@ -100,10 +100,23 @@ describe("match suggestion write API helpers", () => {
     );
   });
 
+  it("rejects unsafe Idempotency-Key values before persistence", async () => {
+    const payload = withConfirmationToken(makeSavePayload());
+    const calls = createSaveCalls();
+    const prismaMock = createSavePrismaMock({ calls });
+
+    await assert.rejects(
+      () => saveMatchSuggestion(prismaMock, TENANT_ID, payload, ACTOR, idempotentHeaders("owner@example.test")),
+      (error) => error instanceof MatchSuggestionWriteApiError && error.code === "IDEMPOTENCY_KEY_INVALID",
+    );
+    assert.equal(calls.transactions, 0);
+    assert.equal(calls.createdSuggestions.length, 0);
+  });
+
   it("records duplicate saves under the Idempotency-Key without creating suggestion or review event spam", async () => {
     const payload = withConfirmationToken(makeSavePayload());
     const calls = createSaveCalls();
-    const duplicateRecord = makeSuggestionRecord({ id: SUGGESTION_ID, status: "NEEDS_REVIEW" });
+    const duplicateRecord = makeSuggestionRecord({ id: SUGGESTION_ID, status: "REJECTED" });
     const prismaMock = createSavePrismaMock({
       calls,
       existingIdempotency: null,
@@ -120,6 +133,7 @@ describe("match suggestion write API helpers", () => {
     assert.equal(calls.createdIdempotencyRecords.length, 1);
     assert.equal(calls.createdIdempotencyRecords[0].data.suggestionId, SUGGESTION_ID);
     assert.equal(calls.createdIdempotencyRecords[0].data.resultType, "DUPLICATE");
+    assert.equal("status" in calls.duplicateFindFirstArgs[0].where, false);
   });
 
   it("replays duplicate idempotency without adding another review event", async () => {
@@ -157,6 +171,32 @@ describe("match suggestion write API helpers", () => {
         },
       ],
     } as unknown as MatchSuggestionSavePayload);
+    const calls = createSaveCalls();
+    const prismaMock = createSavePrismaMock({ calls });
+
+    await assert.rejects(
+      () => saveMatchSuggestion(prismaMock, TENANT_ID, payload, ACTOR, idempotentHeaders()),
+      (error) =>
+        error instanceof MatchSuggestionWriteApiError &&
+        error.code === "INVALID_PAYLOAD" &&
+        !error.message.includes("rawCsvRow"),
+    );
+    assert.equal(calls.transactions, 0);
+    assert.equal(calls.createdSuggestions.length, 0);
+  });
+
+  it("rejects unsafe identifiers before persistence", async () => {
+    const payload = withConfirmationToken({
+      ...makeSavePayload(),
+      sourceRecords: [
+        {
+          sourceType: "MANUAL",
+          sourceRecordId: "C:\\Users\\local\\raw.csv",
+          evidenceRole: "OPTIONAL",
+          safeSummary: "safe summary only",
+        },
+      ],
+    });
     const calls = createSaveCalls();
     const prismaMock = createSavePrismaMock({ calls });
 
@@ -532,6 +572,7 @@ function createSaveCalls() {
     createdSourceRecords: [] as any[],
     createdEvents: [] as any[],
     createdIdempotencyRecords: [] as any[],
+    duplicateFindFirstArgs: [] as any[],
   };
 }
 
@@ -558,6 +599,7 @@ function createSavePrismaMock(options: {
     matchSuggestion: {
       findFirst: async (args: any) => {
         if (args.where?.id) return options.replayRecord || savedRecord;
+        options.calls.duplicateFindFirstArgs.push(args);
         return options.duplicateRecord ?? null;
       },
     },

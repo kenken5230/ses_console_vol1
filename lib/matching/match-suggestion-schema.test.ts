@@ -109,6 +109,7 @@ describe("match suggestion Phase 1-A schema contract", () => {
     assert.ok(MATCH_SUGGESTION_FORBIDDEN_PII_FIELDS.includes("mailBody"));
     assert.ok(MATCH_SUGGESTION_FORBIDDEN_PII_FIELDS.includes("rawCsvRow"));
     assert.ok(MATCH_SUGGESTION_FORBIDDEN_PII_FIELDS.includes("localPath"));
+    assert.ok(MATCH_SUGGESTION_FORBIDDEN_PII_FIELDS.includes("idempotencyKey"));
     assert.ok(MATCH_SUGGESTION_FORBIDDEN_PII_FIELDS.includes("secret"));
   });
 
@@ -120,4 +121,3 @@ describe("match suggestion Phase 1-A schema contract", () => {
     ]);
   });
 });
-
