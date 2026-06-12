@@ -1,0 +1,71 @@
+import type {
+  MatchSuggestionQueueItem,
+  MatchSuggestionSafeListItem,
+} from "./match-suggestion-read-api";
+
+export const matchSuggestionListFixture: MatchSuggestionSafeListItem[] = [
+  {
+    id: "fixture-suggestion-1",
+    tenantId: "tenant-fixture",
+    organizationId: null,
+    projectRef: { id: "fixture-project-1" },
+    personRef: { id: "fixture-person-1" },
+    status: "APPROVED",
+    score: "0.8400",
+    scoreBand: "HIGH",
+    systemReasonCodes: ["SKILL_MATCH", "RATE_MATCH"],
+    systemWarningCodes: [],
+    warningSeverity: "NONE",
+    stalenessState: "FRESH",
+    duplicateState: "NONE",
+    sourceEvidenceState: "OPTIONAL_PRESENT",
+    attentionState: "NORMAL",
+    promotionBlockers: ["TARGET_CONTACT_MISSING"],
+    promotionEligible: false,
+    downstreamReadiness: "NEEDS_CHECK",
+    createdAt: "2026-06-09T00:00:00.000Z",
+    updatedAt: "2026-06-09T00:00:00.000Z",
+    lastReviewedAt: "2026-06-09T01:00:00.000Z",
+    lockVersion: 0,
+  },
+  {
+    id: "fixture-suggestion-2",
+    tenantId: "tenant-fixture",
+    organizationId: null,
+    projectRef: { id: "fixture-project-2" },
+    personRef: { id: "fixture-person-2" },
+    status: "NEEDS_REVIEW",
+    score: "0.6200",
+    scoreBand: "MEDIUM",
+    systemReasonCodes: ["ROLE_MATCH"],
+    systemWarningCodes: ["STALE_PROJECT"],
+    warningSeverity: "HIGH",
+    stalenessState: "STALE",
+    duplicateState: "POSSIBLE_DUPLICATE",
+    sourceEvidenceState: "OPTIONAL_MISSING",
+    attentionState: "NEEDS_ATTENTION",
+    promotionBlockers: ["STALE_PROJECT"],
+    promotionEligible: false,
+    downstreamReadiness: "BLOCKED",
+    createdAt: "2026-06-08T00:00:00.000Z",
+    updatedAt: "2026-06-08T00:00:00.000Z",
+    lastReviewedAt: null,
+    lockVersion: 0,
+  },
+];
+
+export const reviewQueueFixture: MatchSuggestionQueueItem[] = [
+  {
+    ...matchSuggestionListFixture[1],
+    queuePriority: 105,
+    queueReasons: [
+      "STATUS_NEEDS_REVIEW",
+      "WARNING_HIGH",
+      "STALE",
+      "POSSIBLE_DUPLICATE",
+      "REVIEW_AGE_OVER_24H",
+    ],
+    reviewAgeHours: 48,
+  },
+];
+

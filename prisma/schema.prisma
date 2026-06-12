@@ -283,6 +283,95 @@ enum ReviewStatus {
   @@map("review_status")
 }
 
+enum MatchSuggestionStatus {
+  SUGGESTED    @map("suggested")
+  NEEDS_REVIEW @map("needs_review")
+  APPROVED     @map("approved")
+  REJECTED     @map("rejected")
+  ARCHIVED     @map("archived")
+
+  @@map("match_suggestion_status")
+}
+
+enum MatchSuggestionReviewEventType {
+  SAVED             @map("saved")
+  APPROVED          @map("approved")
+  REJECTED          @map("rejected")
+  ARCHIVED          @map("archived")
+  REOPENED          @map("reopened")
+  VIEWED_PII_DETAIL @map("viewed_pii_detail")
+
+  @@map("match_suggestion_review_event_type")
+}
+
+enum MatchStalenessState {
+  FRESH   @map("fresh")
+  STALE   @map("stale")
+  UNKNOWN @map("unknown")
+
+  @@map("match_staleness_state")
+}
+
+enum MatchDuplicateState {
+  NONE               @map("none")
+  POSSIBLE_DUPLICATE @map("possible_duplicate")
+  DUPLICATE_CONFIRMED @map("duplicate_confirmed")
+
+  @@map("match_duplicate_state")
+}
+
+enum MatchSourceEvidenceState {
+  NONE             @map("none")
+  OPTIONAL_PRESENT @map("optional_present")
+  OPTIONAL_MISSING @map("optional_missing")
+  REQUIRED_MISSING @map("required_missing")
+  STALE            @map("stale")
+
+  @@map("match_source_evidence_state")
+}
+
+enum MatchWarningSeverity {
+  NONE     @map("none")
+  LOW      @map("low")
+  MEDIUM   @map("medium")
+  HIGH     @map("high")
+  CRITICAL @map("critical")
+
+  @@map("match_warning_severity")
+}
+
+enum MatchAttentionState {
+  NORMAL          @map("normal")
+  NEEDS_ATTENTION @map("needs_attention")
+
+  @@map("match_attention_state")
+}
+
+enum MatchDownstreamReadiness {
+  READY       @map("ready")
+  BLOCKED     @map("blocked")
+  NEEDS_CHECK @map("needs_check")
+
+  @@map("match_downstream_readiness")
+}
+
+enum MatchSuggestionSourceType {
+  CSV_IMPORT @map("csv_import")
+  MANUAL     @map("manual")
+  SYSTEM     @map("system")
+  EXTERNAL   @map("external")
+
+  @@map("match_suggestion_source_type")
+}
+
+enum MatchSuggestionEvidenceRole {
+  PRIMARY    @map("primary")
+  SUPPORTING @map("supporting")
+  OPTIONAL   @map("optional")
+
+  @@map("match_suggestion_evidence_role")
+}
+
 enum MailEntityType {
   PROJECT          @map("project")
   PERSON           @map("person")
@@ -328,6 +417,9 @@ model User {
   sentDistributionLogs      DistributionLog[]       @relation("DistributionLogSender")
   passwordResetTokens       PasswordResetToken[]
   triggeredMailSyncRuns     MailSyncRun[]           @relation("MailSyncRunTriggeredBy")
+  createdMatchSuggestions   MatchSuggestion[]       @relation("MatchSuggestionCreatedBy")
+  reviewedMatchSuggestions  MatchSuggestion[]       @relation("MatchSuggestionLastReviewedBy")
+  matchSuggestionEvents     MatchSuggestionReviewEvent[] @relation("MatchSuggestionReviewEventActor")
 
   @@map("users")
 }
@@ -590,6 +682,7 @@ model Project {
   condition        ProjectCondition?
   companyRoles     ProjectCompanyRole[]
   distributionLogs DistributionLog[]
+  matchSuggestions MatchSuggestion[]
   proposals        Proposal[]
   skills           ProjectSkill[]
   tags             ProjectTag[]
@@ -729,6 +822,7 @@ model Person {
   ownerContact     CompanyContact?   @relation("PersonOwnerContact", fields: [ownerContactId], references: [id], onDelete: SetNull)
   sourceMail       MailNotification? @relation("PersonSourceMail", fields: [sourceMailId], references: [id], onDelete: SetNull)
   distributionLogs DistributionLog[]
+  matchSuggestions MatchSuggestion[]
   proposals        Proposal[]
   skills           PersonSkill[]
 
@@ -754,6 +848,125 @@ model PersonSkill {
   @@index([personId])
   @@index([skillName])
   @@map("person_skills")
+}
+
+model MatchSuggestion {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  tenantId               String                    @map("tenant_id") @db.VarChar(80)
+  organizationId         String?                   @map("organization_id") @db.VarChar(80)
+  projectId              String                    @map("project_id") @db.Uuid
+  personId               String                    @map("person_id") @db.Uuid
+  suggestionPairKey      String                    @map("suggestion_pair_key") @db.VarChar(160)
+  suggestionRevisionKey  String                    @map("suggestion_revision_key") @db.VarChar(160)
+  status                 MatchSuggestionStatus     @default(SUGGESTED)
+  score                  Decimal?                  @db.Decimal(8, 4)
+  scoreBand              String?                   @map("score_band") @db.VarChar(40)
+  systemReasonCodes      String[]                  @default([]) @map("system_reason_codes")
+  systemWarningCodes     String[]                  @default([]) @map("system_warning_codes")
+  warningSeverity        MatchWarningSeverity      @default(NONE) @map("warning_severity")
+  stalenessState         MatchStalenessState       @default(UNKNOWN) @map("staleness_state")
+  duplicateState         MatchDuplicateState       @default(NONE) @map("duplicate_state")
+  sourceEvidenceState    MatchSourceEvidenceState  @default(NONE) @map("source_evidence_state")
+  attentionState         MatchAttentionState       @default(NORMAL) @map("attention_state")
+  promotionBlockers      String[]                  @default([]) @map("promotion_blockers")
+  promotionEligible      Boolean                   @default(false) @map("promotion_eligible")
+  downstreamReadiness    MatchDownstreamReadiness  @default(NEEDS_CHECK) @map("downstream_readiness")
+  scoringVersion         String                    @map("scoring_version") @db.VarChar(80)
+  taxonomyVersion        String                    @map("taxonomy_version") @db.VarChar(80)
+  redactionPolicyVersion String                    @map("redaction_policy_version") @db.VarChar(80)
+  createdByUserId        String                    @map("created_by_user_id") @db.Uuid
+  createdAt              DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastReviewedAt         DateTime?                 @map("last_reviewed_at") @db.Timestamptz(6)
+  lastReviewedByUserId   String?                   @map("last_reviewed_by_user_id") @db.Uuid
+  lockVersion            Int                       @default(0) @map("lock_version")
+
+  createdBy      User                          @relation("MatchSuggestionCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lastReviewedBy User?                         @relation("MatchSuggestionLastReviewedBy", fields: [lastReviewedByUserId], references: [id], onDelete: SetNull)
+  person         Person                        @relation(fields: [personId], references: [id], onDelete: Restrict)
+  project        Project                       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  reviewEvents   MatchSuggestionReviewEvent[]
+  sourceRecords  MatchSuggestionSourceRecord[]
+  idempotencyRecords MatchSuggestionIdempotencyRecord[]
+
+  @@unique([tenantId, suggestionPairKey], map: "match_suggestions_tenant_pair_key")
+  @@unique([tenantId, suggestionRevisionKey], map: "match_suggestions_tenant_revision_key")
+  @@index([tenantId, status, createdAt], map: "match_suggestions_tenant_status_created_idx")
+  @@index([tenantId, status, lastReviewedAt], map: "match_suggestions_tenant_status_reviewed_idx")
+  @@index([tenantId, warningSeverity], map: "match_suggestions_tenant_warning_idx")
+  @@index([tenantId, stalenessState], map: "match_suggestions_tenant_stale_idx")
+  @@index([tenantId, duplicateState], map: "match_suggestions_tenant_duplicate_idx")
+  @@index([tenantId, sourceEvidenceState], map: "match_suggestions_tenant_source_evidence_idx")
+  @@index([tenantId, promotionEligible], map: "match_suggestions_tenant_promotion_idx")
+  @@index([tenantId, organizationId], map: "match_suggestions_tenant_org_idx")
+  @@index([projectId], map: "match_suggestions_project_idx")
+  @@index([personId], map: "match_suggestions_person_idx")
+  @@index([createdByUserId], map: "match_suggestions_created_by_idx")
+  @@index([lastReviewedByUserId], map: "match_suggestions_last_reviewed_by_idx")
+  @@map("match_suggestions")
+}
+
+model MatchSuggestionReviewEvent {
+  id              String                         @id @default(uuid()) @db.Uuid
+  tenantId        String                         @map("tenant_id") @db.VarChar(80)
+  organizationId  String?                        @map("organization_id") @db.VarChar(80)
+  suggestionId    String                         @map("suggestion_id") @db.Uuid
+  eventType       MatchSuggestionReviewEventType @map("event_type")
+  fromStatus      MatchSuggestionStatus?         @map("from_status")
+  toStatus        MatchSuggestionStatus?         @map("to_status")
+  actorUserId     String                         @map("actor_user_id") @db.Uuid
+  reasonCode      String?                        @map("reason_code") @db.VarChar(80)
+  systemSnapshot  Json?                          @map("system_snapshot")
+  createdAt       DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  requestId       String                         @map("request_id") @db.VarChar(120)
+  idempotencyKey  String?                        @map("idempotency_key") @db.VarChar(160)
+
+  actor     User            @relation("MatchSuggestionReviewEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  suggestion MatchSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, suggestionId, createdAt], map: "match_suggestion_events_tenant_suggestion_idx")
+  @@index([tenantId, eventType, createdAt], map: "match_suggestion_events_tenant_type_idx")
+  @@index([tenantId, actorUserId, createdAt], map: "match_suggestion_events_tenant_actor_idx")
+  @@index([requestId], map: "match_suggestion_events_request_idx")
+  @@unique([tenantId, idempotencyKey], map: "match_suggestion_events_tenant_idempotency_key")
+  @@map("match_suggestion_review_events")
+}
+
+model MatchSuggestionSourceRecord {
+  id             String                      @id @default(uuid()) @db.Uuid
+  tenantId       String                      @map("tenant_id") @db.VarChar(80)
+  organizationId String?                     @map("organization_id") @db.VarChar(80)
+  suggestionId   String                      @map("suggestion_id") @db.Uuid
+  sourceType     MatchSuggestionSourceType   @map("source_type")
+  sourceRecordId String                      @map("source_record_id") @db.VarChar(160)
+  evidenceRole   MatchSuggestionEvidenceRole @map("evidence_role")
+  safeSummary    String?                     @map("safe_summary") @db.Text
+  createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  suggestion MatchSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, suggestionId, sourceType, sourceRecordId, evidenceRole], map: "match_suggestion_sources_unique_source_key")
+  @@index([tenantId, sourceType, sourceRecordId], map: "match_suggestion_sources_tenant_source_idx")
+  @@index([tenantId, suggestionId], map: "match_suggestion_sources_tenant_suggestion_idx")
+  @@index([tenantId, organizationId], map: "match_suggestion_sources_tenant_org_idx")
+  @@map("match_suggestion_source_records")
+}
+
+model MatchSuggestionIdempotencyRecord {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.VarChar(80)
+  organizationId     String?  @map("organization_id") @db.VarChar(80)
+  idempotencyKey     String   @map("idempotency_key") @db.VarChar(160)
+  requestFingerprint String   @map("request_fingerprint") @db.VarChar(64)
+  suggestionId       String?  @map("suggestion_id") @db.Uuid
+  resultType         String   @map("result_type") @db.VarChar(40)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  suggestion MatchSuggestion? @relation(fields: [suggestionId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, idempotencyKey], map: "match_suggestion_idempotency_tenant_key")
+  @@index([tenantId, suggestionId, createdAt], map: "match_suggestion_idempotency_tenant_suggestion_idx")
+  @@map("match_suggestion_idempotency_records")
 }
 
 model Proposal {

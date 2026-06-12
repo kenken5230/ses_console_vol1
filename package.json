@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test lib/matching/match-suggestion-schema.test.ts lib/matching/match-suggestion-read-api.test.ts lib/matching/match-suggestion-write-api.test.ts components/matching/MatchSuggestionPanels.test.ts",
     "postinstall": "prisma generate",
     "start": "next start",
     "seed": "tsx prisma/seed.ts",
