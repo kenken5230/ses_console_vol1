@@ -39,9 +39,9 @@ import type {
   WorkStyleKey,
 } from "./types";
 
-export const MARKET_ANALYSIS_DEFAULT_LIMIT = 1000;
-export const MARKET_ANALYSIS_MAX_LIMIT = 1000;
 export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
+export const MARKET_ANALYSIS_CUMULATIVE_FROM_MONTH = "2026-01";
+export const MARKET_ANALYSIS_DEFAULT_MONTH_WINDOW = 3;
 
 export const MARKET_ANALYSIS_PROJECT_SELECT = {
   id: true,
@@ -89,7 +89,7 @@ export const MARKET_ANALYSIS_PERSON_SELECT = {
 } as const;
 
 export type MarketAnalysisQuery = {
-  limit: number;
+  limit?: number;
   focusOnly: boolean;
   fromMonth?: string;
   toMonth?: string;
@@ -145,7 +145,9 @@ export type MarketAnalysisApiResponse = {
     personCount: number;
     focusProjectCount: number;
     qualityAlertCount: number;
-    limit: number;
+    cumulativeProjectCount: number;
+    cumulativePersonCount: number;
+    cumulativeFromMonth: string;
     focusOnly: boolean;
   };
   period: {
@@ -161,7 +163,7 @@ export type MarketAnalysisApiResponse = {
     personToMonth: string | null;
   };
   appliedFilters: {
-    limit: number;
+    limit: number | null;
     focusOnly: boolean;
     fromMonth: string | null;
     toMonth: string | null;
@@ -179,11 +181,37 @@ export type MarketAnalysisApiResponse = {
   generatedAt: string;
 };
 
-function clampLimit(value: string | null) {
-  if (!value) return MARKET_ANALYSIS_DEFAULT_LIMIT;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return MARKET_ANALYSIS_DEFAULT_LIMIT;
-  return Math.min(Math.trunc(parsed), MARKET_ANALYSIS_MAX_LIMIT);
+type MarketAnalysisResponseOptions = Partial<MarketAnalysisQuery> & {
+  cumulativeCounts?: {
+    projectCount: number;
+    personCount: number;
+    fromMonth?: string | null;
+  };
+  generatedAt?: string;
+  today?: Date;
+};
+
+export function defaultMarketAnalysisMonthRange(today = new Date()) {
+  const anchor = dateValue(today) ?? new Date();
+  const endMonth = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1));
+  const startMonth = new Date(Date.UTC(
+    endMonth.getUTCFullYear(),
+    endMonth.getUTCMonth() - (MARKET_ANALYSIS_DEFAULT_MONTH_WINDOW - 1),
+    1,
+  ));
+
+  return {
+    fromMonth: monthKeyFromDate(startMonth) ?? "",
+    toMonth: monthKeyFromDate(endMonth) ?? "",
+  };
+}
+
+function parseLimitParam(value: string | null) {
+  const normalized = optionalParam(value);
+  if (!normalized) return undefined;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return Math.trunc(parsed);
 }
 
 function booleanParam(value: string | null) {
@@ -256,17 +284,21 @@ function firstKnownPriceBand(metrics: PriceBandMetric[]): PriceBandKey | null {
 }
 
 export function parseMarketAnalysisQuery(params: URLSearchParams): MarketAnalysisQuery {
-  const monthRange = normalizeMonthRange(monthParam(params.get("fromMonth")), monthParam(params.get("toMonth")));
+  const monthRange = monthRangeWithDefaults(
+    monthParam(params.get("fromMonth")),
+    monthParam(params.get("toMonth")),
+  );
   const query: MarketAnalysisQuery = {
-    limit: clampLimit(params.get("limit")),
     focusOnly: booleanParam(params.get("focusOnly")),
   };
+  const limit = parseLimitParam(params.get("limit"));
   const skill = skillParam(params.get("skill"));
   const region = regionParam(params.get("region"));
   const priceBand = priceBandParam(params.get("priceBand"));
   const workStyle = workStyleParam(params.get("workStyle"));
   const contractType = contractTypeParam(params.get("contractType"));
 
+  if (limit) query.limit = limit;
   if (monthRange.fromMonth) query.fromMonth = monthRange.fromMonth;
   if (monthRange.toMonth) query.toMonth = monthRange.toMonth;
   if (skill) query.skill = skill;
@@ -329,7 +361,7 @@ export function marketPersonFromDb(row: MarketPersonDbRow): MarketPersonInput {
 export function buildMarketAnalysisResponse(
   projectRows: MarketProjectDbRow[],
   personRows: MarketPersonDbRow[],
-  options: Partial<MarketAnalysisQuery> & { generatedAt?: string } = {},
+  options: MarketAnalysisResponseOptions = {},
 ): MarketAnalysisApiResponse {
   const filters = appliedFiltersFromOptions(options);
   const projectPairs = projectRows
@@ -375,7 +407,9 @@ export function buildMarketAnalysisResponse(
       personCount: persons.length,
       focusProjectCount,
       qualityAlertCount: qualityAlerts.reduce((total, alert) => total + alert.count, 0),
-      limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
+      cumulativeProjectCount: options.cumulativeCounts?.projectCount ?? projects.length,
+      cumulativePersonCount: options.cumulativeCounts?.personCount ?? persons.length,
+      cumulativeFromMonth: options.cumulativeCounts?.fromMonth ?? MARKET_ANALYSIS_CUMULATIVE_FROM_MONTH,
       focusOnly: Boolean(options.focusOnly),
     },
     period,
@@ -393,10 +427,10 @@ export function buildMarketAnalysisResponse(
   };
 }
 
-function appliedFiltersFromOptions(options: Partial<MarketAnalysisQuery>) {
-  const monthRange = normalizeMonthRange(options.fromMonth, options.toMonth);
+function appliedFiltersFromOptions(options: MarketAnalysisResponseOptions) {
+  const monthRange = monthRangeWithDefaults(options.fromMonth, options.toMonth, options.today);
   return {
-    limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
+    limit: options.limit ?? null,
     focusOnly: Boolean(options.focusOnly),
     fromMonth: monthRange.fromMonth ?? null,
     toMonth: monthRange.toMonth ?? null,
@@ -406,6 +440,15 @@ function appliedFiltersFromOptions(options: Partial<MarketAnalysisQuery>) {
     workStyle: options.workStyle ?? null,
     contractType: options.contractType ?? null,
   };
+}
+
+function monthRangeWithDefaults(
+  fromMonth: string | null | undefined,
+  toMonth: string | null | undefined,
+  today?: Date,
+) {
+  const defaults = defaultMarketAnalysisMonthRange(today);
+  return normalizeMonthRange(fromMonth ?? defaults.fromMonth, toMonth ?? defaults.toMonth);
 }
 
 function normalizeMonthRange(fromMonth: string | null | undefined, toMonth: string | null | undefined) {

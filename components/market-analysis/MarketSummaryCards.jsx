@@ -23,7 +23,7 @@ const titleStyle = {
 const gridStyle = {
   display: "grid",
   gap: 14,
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
 };
 
 const cardStyle = {
@@ -73,11 +73,14 @@ async function copyText(text) {
 
 export default function MarketSummaryCards({ summary }) {
   const [copied, setCopied] = useState(false);
+  const cumulativeFromMonth = summary?.cumulativeFromMonth || "2026-01";
   const items = [
     { label: "案件数", value: summary?.projectCount },
     { label: "要員数", value: summary?.personCount },
     { label: "注力案件数", value: summary?.focusProjectCount },
     { label: "データ品質アラート件数", value: summary?.qualityAlertCount },
+    { label: `累計案件数（${cumulativeFromMonth}以降）`, value: summary?.cumulativeProjectCount },
+    { label: `累計要員数（${cumulativeFromMonth}以降）`, value: summary?.cumulativePersonCount },
   ];
 
   async function handleCopy() {

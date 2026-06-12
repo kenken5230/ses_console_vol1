@@ -94,18 +94,35 @@ const contractTypeLabels = {
   UNKNOWN: "未設定",
 };
 
-const DEFAULT_LIMIT = 500;
-const DEFAULT_DETAIL_FILTERS = {
-  fromMonth: "",
-  skill: "",
-  region: "",
-  priceBand: "",
-  workStyle: "",
-  contractType: "",
-  toMonth: "",
-};
-const limitOptions = [100, 500, 1000];
 const filterKeys = ["fromMonth", "toMonth", "skill", "region", "priceBand", "workStyle", "contractType"];
+
+function monthKeyFromDate(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function defaultMonthRange(today = new Date()) {
+  const endMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const startMonth = new Date(Date.UTC(endMonth.getUTCFullYear(), endMonth.getUTCMonth() - 2, 1));
+  return {
+    fromMonth: monthKeyFromDate(startMonth),
+    toMonth: monthKeyFromDate(endMonth),
+  };
+}
+
+function defaultDetailFilters() {
+  const range = defaultMonthRange();
+  return {
+    fromMonth: range.fromMonth,
+    skill: "",
+    region: "",
+    priceBand: "",
+    workStyle: "",
+    contractType: "",
+    toMonth: range.toMonth,
+  };
+}
 
 const commonMetricColumns = [
   { key: "projectCount", label: "案件数" },
@@ -194,27 +211,30 @@ function booleanParam(value) {
 
 function parseLimit(value) {
   const parsed = Number(value);
-  return limitOptions.includes(parsed) ? parsed : DEFAULT_LIMIT;
+  if (!Number.isFinite(parsed) || parsed <= 0) return "";
+  return String(Math.trunc(parsed));
 }
 
-function filtersFromParams(params) {
+function filtersFromParams(params, defaults = defaultDetailFilters()) {
   return filterKeys.reduce((result, key) => {
-    result[key] = params.get(key)?.trim() || "";
+    const value = params.get(key)?.trim();
+    if (value) result[key] = value;
     return result;
-  }, { ...DEFAULT_DETAIL_FILTERS });
+  }, { ...defaults });
 }
 
 function stateFromUrl() {
+  const defaultFilters = defaultDetailFilters();
   if (typeof window === "undefined") {
     return {
-      filters: DEFAULT_DETAIL_FILTERS,
+      filters: defaultFilters,
       focusOnly: false,
-      limit: DEFAULT_LIMIT,
+      limit: "",
     };
   }
   const params = new URLSearchParams(window.location.search);
   return {
-    filters: filtersFromParams(params),
+    filters: filtersFromParams(params, defaultFilters),
     focusOnly: booleanParam(params.get("focusOnly")),
     limit: parseLimit(params.get("limit")),
   };
@@ -222,7 +242,7 @@ function stateFromUrl() {
 
 function buildMarketAnalysisSearch({ filters, focusOnly, limit }) {
   const params = new URLSearchParams();
-  params.set("limit", String(limit));
+  appendOptionalParam(params, "limit", limit);
   if (focusOnly) params.set("focusOnly", "true");
   for (const key of filterKeys) {
     appendOptionalParam(params, key, filters[key]);
@@ -239,9 +259,9 @@ function replaceMarketAnalysisUrl(nextState) {
 
 async function fetchMarketAnalysis({ filters, focusOnly, limit, signal }) {
   const params = new URLSearchParams({
-    limit: String(limit),
     focusOnly: focusOnly ? "true" : "false",
   });
+  appendOptionalParam(params, "limit", limit);
   appendOptionalParam(params, "fromMonth", filters.fromMonth);
   appendOptionalParam(params, "toMonth", filters.toMonth);
   appendOptionalParam(params, "skill", filters.skill);
@@ -289,9 +309,9 @@ function selectedRowFor(selection, type) {
 }
 
 export default function MarketAnalysisPage() {
-  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [limit, setLimit] = useState("");
   const [focusOnly, setFocusOnly] = useState(false);
-  const [filters, setFilters] = useState(DEFAULT_DETAIL_FILTERS);
+  const [filters, setFilters] = useState(() => defaultDetailFilters());
   const [isUrlStateReady, setIsUrlStateReady] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -304,17 +324,13 @@ export default function MarketAnalysisPage() {
     setReloadKey((current) => current + 1);
   }, []);
 
-  const applyFilters = useCallback((nextFilters) => {
+  const applyFilters = useCallback((nextFilters, nextLimit = limit) => {
+    const normalizedLimit = parseLimit(nextLimit);
     setSelectedDrilldown(null);
+    setLimit(normalizedLimit);
     setFilters(nextFilters);
-    replaceMarketAnalysisUrl({ filters: nextFilters, focusOnly, limit });
+    replaceMarketAnalysisUrl({ filters: nextFilters, focusOnly, limit: normalizedLimit });
   }, [focusOnly, limit]);
-
-  const changeLimit = useCallback((nextLimit) => {
-    setSelectedDrilldown(null);
-    setLimit(nextLimit);
-    replaceMarketAnalysisUrl({ filters, focusOnly, limit: nextLimit });
-  }, [filters, focusOnly]);
 
   const changeFocusOnly = useCallback((nextFocusOnly) => {
     setSelectedDrilldown(null);
@@ -323,13 +339,12 @@ export default function MarketAnalysisPage() {
   }, [filters, limit]);
 
   const resetFilters = useCallback(() => {
-    setLimit(DEFAULT_LIMIT);
+    const defaultFilters = defaultDetailFilters();
+    setLimit("");
     setFocusOnly(false);
-    setFilters(DEFAULT_DETAIL_FILTERS);
+    setFilters(defaultFilters);
     setSelectedDrilldown(null);
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", window.location.pathname);
-    }
+    replaceMarketAnalysisUrl({ filters: defaultFilters, focusOnly: false, limit: "" });
     setReloadKey((current) => current + 1);
   }, []);
 
@@ -346,6 +361,7 @@ export default function MarketAnalysisPage() {
     setLimit(initialState.limit);
     setFocusOnly(initialState.focusOnly);
     setFilters(initialState.filters);
+    replaceMarketAnalysisUrl(initialState);
     setIsUrlStateReady(true);
   }, []);
 
@@ -402,7 +418,6 @@ export default function MarketAnalysisPage() {
           limit={limit}
           onApplyFilters={applyFilters}
           onFocusOnlyChange={changeFocusOnly}
-          onLimitChange={changeLimit}
           onReload={reload}
           onResetFilters={resetFilters}
         />

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import MarketShareButton from "./MarketShareButton";
 
-const limitOptions = [100, 500, 1000];
 const emptyFilters = {
   fromMonth: "",
   skill: "",
@@ -125,37 +124,45 @@ export default function MarketFilterBar({
   filters = emptyFilters,
   focusOnly,
   isLoading,
-  limit,
+  limit = "",
   onApplyFilters,
   onFocusOnlyChange,
-  onLimitChange,
   onReload,
   onResetFilters,
 }) {
   const [draftFilters, setDraftFilters] = useState({ ...emptyFilters, ...filters });
+  const [draftLimit, setDraftLimit] = useState(limit);
 
   useEffect(() => {
     setDraftFilters({ ...emptyFilters, ...filters });
   }, [filters]);
+
+  useEffect(() => {
+    setDraftLimit(limit);
+  }, [limit]);
 
   function updateDraftFilter(key, value) {
     setDraftFilters((current) => ({ ...current, [key]: value }));
   }
 
   function applyFilters() {
-    onApplyFilters?.({
-      contractType: draftFilters.contractType,
-      fromMonth: draftFilters.fromMonth,
-      priceBand: draftFilters.priceBand,
-      region: draftFilters.region,
-      skill: draftFilters.skill.trim(),
-      toMonth: draftFilters.toMonth,
-      workStyle: draftFilters.workStyle,
-    });
+    onApplyFilters?.(
+      {
+        contractType: draftFilters.contractType,
+        fromMonth: draftFilters.fromMonth,
+        priceBand: draftFilters.priceBand,
+        region: draftFilters.region,
+        skill: draftFilters.skill.trim(),
+        toMonth: draftFilters.toMonth,
+        workStyle: draftFilters.workStyle,
+      },
+      draftLimit,
+    );
   }
 
   function resetFilters() {
     setDraftFilters(emptyFilters);
+    setDraftLimit("");
     onResetFilters?.();
   }
 
@@ -163,20 +170,18 @@ export default function MarketFilterBar({
     <section style={barStyle} aria-label="市場分析フィルター">
       <div style={controlsStyle}>
         <label style={labelStyle}>
-          取得件数
-          <select
-            aria-label="取得件数"
+          件数指定
+          <input
+            aria-label="件数指定"
             disabled={isLoading}
-            onChange={(event) => onLimitChange(Number(event.target.value))}
-            style={selectStyle}
-            value={limit}
-          >
-            {limitOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            inputMode="numeric"
+            min="1"
+            onChange={(event) => setDraftLimit(event.target.value)}
+            placeholder="未指定"
+            style={{ ...inputStyle, maxWidth: 132 }}
+            type="number"
+            value={draftLimit}
+          />
         </label>
         <label style={labelStyle}>
           <input

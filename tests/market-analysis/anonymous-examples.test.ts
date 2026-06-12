@@ -107,7 +107,6 @@ const response = buildMarketAnalysisResponse(
   [dangerousProject, archivedProject, nonFocusProject, otherProject],
   [dangerousPerson, archivedPerson, otherPerson],
   {
-    limit: 100,
     focusOnly: true,
     fromMonth: "2026-08",
     toMonth: "2026-08",
@@ -198,27 +197,34 @@ const manyPersons = Array.from({ length: 7 }, (_, index) => ({
   id: `many-person-${index}`,
   createdAt: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
 }));
-const limitedResponse = buildMarketAnalysisResponse(manyProjects, manyPersons, {
-  limit: 100,
+const cappedExamplesResponse = buildMarketAnalysisResponse(manyProjects, manyPersons, {
+  fromMonth: "2026-08",
+  toMonth: "2026-08",
   skill: "Java",
 });
-const limitedJavaRanking = limitedResponse.skillRankings.find((ranking) => ranking.skill === "Java");
-assert.ok(limitedJavaRanking);
-assert.equal(limitedJavaRanking.anonymousExamples.projects.length, 5);
-assert.equal(limitedJavaRanking.anonymousExamples.persons.length, 5);
+const cappedJavaRanking = cappedExamplesResponse.skillRankings.find((ranking) => ranking.skill === "Java");
+assert.ok(cappedJavaRanking);
+assert.equal(cappedJavaRanking.anonymousExamples.projects.length, 5);
+assert.equal(cappedJavaRanking.anonymousExamples.persons.length, 5);
 assert.deepEqual(
-  limitedJavaRanking.anonymousExamples.projects.map((example) => example.anonymousId),
+  cappedJavaRanking.anonymousExamples.projects.map((example) => example.anonymousId),
   ["PJ-001", "PJ-002", "PJ-003", "PJ-004", "PJ-005"],
 );
 assert.deepEqual(
-  limitedJavaRanking.anonymousExamples.persons.map((example) => example.anonymousId),
+  cappedJavaRanking.anonymousExamples.persons.map((example) => example.anonymousId),
   ["PS-001", "PS-002", "PS-003", "PS-004", "PS-005"],
 );
-assert.equal(JSON.stringify(limitedJavaRanking.anonymousExamples).includes("many-project-0"), false);
-assert.equal(JSON.stringify(limitedJavaRanking.anonymousExamples).includes("many-person-0"), false);
+assert.equal(JSON.stringify(cappedJavaRanking.anonymousExamples).includes("many-project-0"), false);
+assert.equal(JSON.stringify(cappedJavaRanking.anonymousExamples).includes("many-person-0"), false);
 
-const baseWithoutExamples = buildMarketAnalysisResponse([dangerousProject], [dangerousPerson], { limit: 100 });
-const sameInputWithExamples = buildMarketAnalysisResponse([dangerousProject], [dangerousPerson], { limit: 100 });
+const baseWithoutExamples = buildMarketAnalysisResponse([dangerousProject], [dangerousPerson], {
+  fromMonth: "2026-08",
+  toMonth: "2026-08",
+});
+const sameInputWithExamples = buildMarketAnalysisResponse([dangerousProject], [dangerousPerson], {
+  fromMonth: "2026-08",
+  toMonth: "2026-08",
+});
 assert.equal(sameInputWithExamples.skillRankings[0].projectCount, baseWithoutExamples.skillRankings[0].projectCount);
 assert.equal(sameInputWithExamples.skillRankings[0].personCount, baseWithoutExamples.skillRankings[0].personCount);
 assert.equal(sameInputWithExamples.skillRankings[0].recruitingCount, baseWithoutExamples.skillRankings[0].recruitingCount);
