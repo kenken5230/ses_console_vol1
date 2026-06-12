@@ -3,11 +3,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   buildSavedSuggestionQuery,
+  buildMatchSuggestionReviewUpdateBody,
   buildMatchSuggestionSaveBody,
   countLabel as safeCountLabel,
+  getMatchSuggestionReviewActionOptions,
   interpretMatchSuggestionSaveResponse,
+  isMatchSuggestionReviewUiEnabled,
   isSafeUuid,
   isMatchSuggestionSaveUiEnabled,
+  MATCH_SUGGESTION_REVIEW_REASON_CODES,
+  requestMatchSuggestionReviewUpdate,
   safeJsonText,
   sanitizeSuggestionUiValue,
   shortDate as safeShortDate,
@@ -54,6 +59,7 @@ const attentionStateOptions = ["", "HIGH_SCORE", "NEEDS_REVIEW", "WARNING"];
 const savedSortOptions = ["newest", "score-desc", "score-asc"];
 const savedLimitOptions = ["20", "50", "100"];
 const saveUiEnabled = isMatchSuggestionSaveUiEnabled(process.env.NEXT_PUBLIC_MATCH_SUGGESTION_SAVE_UI_ENABLED);
+const reviewUiEnabled = isMatchSuggestionReviewUiEnabled(process.env.NEXT_PUBLIC_MATCH_SUGGESTION_REVIEW_UI_ENABLED);
 
 const scoreBandHelp = [
   ["HIGH", "75+; strong deterministic fit"],
@@ -152,6 +158,10 @@ async function postSavedSuggestion(body) {
   });
   const result = await response.json().catch(() => ({}));
   return interpretMatchSuggestionSaveResponse(response.status, result);
+}
+
+async function patchSavedSuggestionReview(suggestionId, body) {
+  return requestMatchSuggestionReviewUpdate(fetch, suggestionId, body);
 }
 
 function optionLabel(value, fallback) {
@@ -601,6 +611,109 @@ function SaveConfirmationDialog({ isSaving, onCancel, onConfirm, saveDraft }) {
   );
 }
 
+function ReviewReasonSelector({ disabled, onToggleReason, selectedReasons }) {
+  return (
+    <div className="import-detail-block" aria-label="Review reason codes">
+      <h3>Review reason codes</h3>
+      <div className="import-code-flow match-code-flow-descriptive">
+        {MATCH_SUGGESTION_REVIEW_REASON_CODES.map((code) => {
+          const selected = selectedReasons.includes(code);
+          return (
+            <label key={code}>
+              <input
+                checked={selected}
+                disabled={disabled}
+                onChange={() => onToggleReason(code)}
+                type="checkbox"
+              />
+              <span>{code}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MatchSuggestionReviewControls({
+  isUpdating,
+  onOpenConfirm,
+  onToggleReason,
+  reviewState,
+  selectedReasons,
+  suggestion,
+  uiEnabled,
+}) {
+  const options = getMatchSuggestionReviewActionOptions(suggestion);
+  const stateClass = reviewState?.state ? `match-save-state-${reviewState.state}` : "";
+
+  return (
+    <div className="match-save-panel" aria-label="Saved match suggestion review update controls">
+      <div>
+        <h3>Review update</h3>
+        <p>
+          {uiEnabled
+            ? "Review actions call the guarded endpoint after confirmation."
+            : "Review update controls are disabled in this environment."}
+        </p>
+      </div>
+      <ReviewReasonSelector disabled={!uiEnabled || isUpdating} onToggleReason={onToggleReason} selectedReasons={selectedReasons} />
+      <div className="match-save-dialog-actions">
+        {options.map((option) => {
+          const draft = buildMatchSuggestionReviewUpdateBody(suggestion, option.action, selectedReasons);
+          const disabled = !uiEnabled || isUpdating || option.disabled || !draft.canSubmit;
+          return (
+            <button
+              className={option.action === "APPROVE" ? "primary-button" : "outline-button"}
+              disabled={disabled}
+              key={option.action}
+              onClick={() => onOpenConfirm(option.action)}
+              title={option.disabled ? option.disabledReason : draft.disabledReason || option.label}
+              type="button"
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      {reviewState?.message ? (
+        <p className={`match-save-message ${stateClass}`} role={reviewState.state === "error" ? "alert" : "status"}>
+          {reviewState.message}{reviewState.shortId ? ` ${reviewState.shortId}` : ""}
+        </p>
+      ) : null}
+      <p className="match-save-message">Server guard remains authoritative.</p>
+    </div>
+  );
+}
+
+function ReviewUpdateConfirmationDialog({ isUpdating, onCancel, onConfirm, reviewDraft, selectedAction }) {
+  if (!reviewDraft?.canSubmit) return null;
+
+  return (
+    <div className="match-save-dialog-backdrop" role="presentation">
+      <section className="match-save-dialog" role="dialog" aria-modal="true" aria-labelledby="match-review-dialog-title">
+        <h2 id="match-review-dialog-title">Confirm review update</h2>
+        <p>This will call the guarded review update endpoint with safe reason codes only.</p>
+        <DetailList
+          items={[
+            ["Action", selectedAction],
+            ["Target status", reviewDraft.body?.toStatus],
+            ["Expected status", reviewDraft.body?.expectedStatus],
+            ["Reason codes", (reviewDraft.body?.reasonCodes || []).length],
+            ["Confirm", reviewDraft.body?.confirmReviewAction ? "yes" : "no"],
+          ]}
+        />
+        <div className="match-save-dialog-actions">
+          <button className="ghost-button" disabled={isUpdating} onClick={onCancel} type="button">Cancel</button>
+          <button className="primary-button" disabled={isUpdating} onClick={onConfirm} type="button">
+            {isUpdating ? "Updating" : "Confirm review update"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SavedSuggestionSummary({ queueResponse, suggestionsResponse }) {
   const savedTotal = suggestionsResponse?.total ?? suggestionsResponse?.items?.length ?? 0;
   const queueTotal = queueResponse?.total ?? queueResponse?.items?.length ?? 0;
@@ -795,7 +908,17 @@ function SourceEvidence({ evidence }) {
   );
 }
 
-function SavedSuggestionDetail({ detail, isLoading, selectedSuggestion }) {
+function SavedSuggestionDetail({
+  detail,
+  isLoading,
+  isUpdatingReview,
+  onOpenReviewConfirm,
+  onToggleReviewReason,
+  reviewState,
+  reviewUiEnabled,
+  selectedReviewReasons,
+  selectedSuggestion,
+}) {
   if (isLoading) {
     return (
       <aside className="import-review-detail">
@@ -885,6 +1008,15 @@ function SavedSuggestionDetail({ detail, isLoading, selectedSuggestion }) {
         <h3>Redacted preview</h3>
         <pre>{safeJsonText(suggestion.redactedPreview)}</pre>
       </div>
+      <MatchSuggestionReviewControls
+        isUpdating={isUpdatingReview}
+        onOpenConfirm={onOpenReviewConfirm}
+        onToggleReason={onToggleReviewReason}
+        reviewState={reviewState}
+        selectedReasons={selectedReviewReasons}
+        suggestion={suggestion}
+        uiEnabled={reviewUiEnabled}
+      />
       <ReviewEvents events={suggestion.reviewEvents} />
       <SourceEvidence evidence={suggestion.sourceEvidence} />
     </aside>
@@ -957,6 +1089,11 @@ export default function MatchingReviewPage({
   const [isSavingSuggestion, setIsSavingSuggestion] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveState, setSaveState] = useState({ state: "idle", message: "", shortId: null });
+  const [isUpdatingReview, setIsUpdatingReview] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [selectedReviewAction, setSelectedReviewAction] = useState("REQUEST_REVIEW");
+  const [selectedReviewReasons, setSelectedReviewReasons] = useState([]);
+  const [reviewState, setReviewState] = useState({ state: "idle", message: "", shortId: null });
 
   useEffect(() => {
     if (initialSession) return;
@@ -992,6 +1129,11 @@ export default function MatchingReviewPage({
   const savedQuery = useMemo(() => buildSavedSuggestionQuery(savedFilters, savedPage), [savedFilters, savedPage]);
   const queueQuery = useMemo(() => buildSavedSuggestionQuery(savedFilters, queuePage, { reviewQueue: true }), [savedFilters, queuePage]);
   const saveDraft = useMemo(() => buildMatchSuggestionSaveBody(selectedCandidate, filters), [filters, selectedCandidate]);
+  const activeReviewSuggestion = savedSuggestionDetail?.item || selectedSavedSuggestion;
+  const reviewDraft = useMemo(
+    () => buildMatchSuggestionReviewUpdateBody(activeReviewSuggestion, selectedReviewAction, selectedReviewReasons),
+    [activeReviewSuggestion, selectedReviewAction, selectedReviewReasons],
+  );
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !isReviewer(currentUser)) return;
@@ -1076,7 +1218,14 @@ export default function MatchingReviewPage({
     return () => {
       cancelled = true;
     };
-  }, [activeView, authStatus, currentUser, selectedSavedSuggestion]);
+  }, [activeView, authStatus, currentUser, refreshToken, selectedSavedSuggestion]);
+
+  useEffect(() => {
+    setReviewDialogOpen(false);
+    setSelectedReviewAction("REQUEST_REVIEW");
+    setSelectedReviewReasons([]);
+    setReviewState({ state: "idle", message: "", shortId: null });
+  }, [selectedSavedSuggestion?.id]);
 
   function handleAuthenticated(user) {
     setCurrentUser(user);
@@ -1138,6 +1287,7 @@ export default function MatchingReviewPage({
     setSavedError("");
     setDetailError("");
     setSaveDialogOpen(false);
+    setReviewDialogOpen(false);
   }
 
   function openSaveConfirm() {
@@ -1163,6 +1313,44 @@ export default function MatchingReviewPage({
     } finally {
       setIsSavingSuggestion(false);
       setSaveDialogOpen(false);
+    }
+  }
+
+  function toggleReviewReason(code) {
+    setSelectedReviewReasons((current) => (
+      current.includes(code)
+        ? current.filter((item) => item !== code)
+        : [...current, code]
+    ));
+  }
+
+  function openReviewConfirm(action) {
+    if (!reviewUiEnabled || isUpdatingReview) return;
+    const nextDraft = buildMatchSuggestionReviewUpdateBody(activeReviewSuggestion, action, selectedReviewReasons);
+    if (!nextDraft.canSubmit) {
+      setReviewState({ state: "validation", message: nextDraft.disabledReason, shortId: null });
+      return;
+    }
+    setSelectedReviewAction(action);
+    setReviewState({ state: "confirming", message: "Confirm before updating review status.", shortId: null });
+    setReviewDialogOpen(true);
+  }
+
+  async function confirmReviewUpdate() {
+    if (!reviewUiEnabled || !reviewDraft.canSubmit || !reviewDraft.body || !activeReviewSuggestion?.id || isUpdatingReview) return;
+    setIsUpdatingReview(true);
+    setReviewState({ state: "saving", message: "Updating through guarded endpoint.", shortId: null });
+    try {
+      const nextState = await patchSavedSuggestionReview(activeReviewSuggestion.id, reviewDraft.body);
+      setReviewState(nextState);
+      if (["success", "skippedNoop"].includes(nextState.state)) {
+        setRefreshToken((current) => current + 1);
+      }
+    } catch {
+      setReviewState({ state: "error", message: "Review update failed.", shortId: null });
+    } finally {
+      setIsUpdatingReview(false);
+      setReviewDialogOpen(false);
     }
   }
 
@@ -1321,8 +1509,27 @@ export default function MatchingReviewPage({
                 />
               ) : null}
             </div>
-            <SavedSuggestionDetail detail={savedSuggestionDetail} isLoading={isDetailLoading} selectedSuggestion={selectedSavedSuggestion} />
+            <SavedSuggestionDetail
+              detail={savedSuggestionDetail}
+              isLoading={isDetailLoading}
+              isUpdatingReview={isUpdatingReview}
+              onOpenReviewConfirm={openReviewConfirm}
+              onToggleReviewReason={toggleReviewReason}
+              reviewState={reviewState}
+              reviewUiEnabled={reviewUiEnabled}
+              selectedReviewReasons={selectedReviewReasons}
+              selectedSuggestion={selectedSavedSuggestion}
+            />
           </div>
+          {reviewDialogOpen ? (
+            <ReviewUpdateConfirmationDialog
+              isUpdating={isUpdatingReview}
+              onCancel={() => setReviewDialogOpen(false)}
+              onConfirm={confirmReviewUpdate}
+              reviewDraft={reviewDraft}
+              selectedAction={selectedReviewAction}
+            />
+          ) : null}
         </>
       )}
     </main>

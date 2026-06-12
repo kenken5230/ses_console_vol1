@@ -204,7 +204,7 @@ The UI supports simple read-only filters for status, score band, attention state
 
 If the API returns `migrationRequired`, the UI shows a safe unavailable state without database metadata.
 
-The saved suggestion UI does not add save buttons, approve/reject/archive controls, POST/PUT/PATCH/DELETE endpoints, DB writes, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
+The saved suggestion UI includes disabled-by-default guarded review controls, but it does not enable production review writes. It does not add bulk actions, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or apply behavior.
 
 ## Supervised Match Suggestion Save API
 
@@ -331,7 +331,33 @@ State-changing updates happen in one transaction and create exactly one `MatchSu
 
 The request body is intentionally narrow: action, target status, confirm flag, safe reason codes, optional route-matching suggestion id, and optional stale-update fields. It rejects raw Project text, raw Person text, company names, person names, emails, CSV raw values, email bodies, source raw payloads, normalized payloads, local paths, secrets, connection strings, and full notes. Free-form notes are not supported in this implementation.
 
-This API does not add UI approve/reject/archive controls. Future UI rollout should add controls only behind a separate disabled-by-default frontend flag and should show a confirmation dialog before mutation. It should refresh saved suggestions, review queue, and selected detail after success. Proposal creation, email draft generation, and email sending remain out of scope.
+The saved suggestion UI can show disabled-by-default review controls in the saved detail/review queue area.
+
+Frontend flag:
+
+- `NEXT_PUBLIC_MATCH_SUGGESTION_REVIEW_UI_ENABLED=true`
+
+When the frontend flag is missing or not exactly `true`, review update controls remain disabled and show a safe unavailable message. The server guard remains authoritative even when the frontend flag is enabled:
+
+- `MATCH_SUGGESTION_REVIEW_UPDATE_ENABLED=true`
+- `MATCH_SUGGESTION_REVIEW_WRITE_TARGET=staging`
+
+The UI supports only the guarded review-update actions from the transition matrix. Invalid transitions are disabled in the UI, and the server endpoint still performs authoritative validation. The UI requires an in-app confirmation dialog before calling `PATCH /api/matches/suggestions/[id]/review`.
+
+The UI request body contains only safe review metadata:
+
+- `action`
+- `toStatus`
+- `confirmReviewAction: true`
+- safe predefined `reasonCodes`
+- `expectedStatus`
+- optional safe `expectedUpdatedAt`
+
+Reject, archive, and restore actions require selecting at least one predefined safe reason code before the confirmation can be submitted. Free-form notes are not accepted or sent.
+
+After a successful or skipped/no-op response, the UI refreshes saved suggestions, the review queue, and the selected detail. Disabled guard, migration-required, validation, conflict, not-found, and generic errors are displayed as safe compact messages.
+
+The review controls do not add bulk approve/reject/archive, Proposal creation, email draft generation, email sending, external API calls, AI API calls, CSV/Notion mapping, or production enablement.
 
 ## Filters, Sorting, and Pagination
 
