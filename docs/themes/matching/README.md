@@ -296,38 +296,42 @@ Review update, approve/reject/archive, Proposal creation, email draft generation
 
 ## Supervised Match Suggestion Review Update Design
 
-Review update implementation remains deferred, but the next phase is designed in `match-suggestion-review-update-design.md`.
+The guarded backend review update API follows the plan in `match-suggestion-review-update-design.md`.
 
-Planned actions:
+Endpoint:
+
+- `PATCH /api/matches/suggestions/[id]/review`
+
+The endpoint is disabled by default and requires all server-side guards before reading a request body for mutation:
+
+- `MATCH_SUGGESTION_REVIEW_UPDATE_ENABLED=true`
+- `MATCH_SUGGESTION_REVIEW_WRITE_TARGET=staging`
+- authenticated ADMIN or MANAGER reviewer
+- `confirmReviewAction: true`
+
+Implemented actions:
 
 - keep active as `SUGGESTED`
 - mark `NEEDS_REVIEW`
 - approve as `APPROVED`
 - reject as `REJECTED`
 - archive as `ARCHIVED`
-- optionally restore archived rows to `NEEDS_REVIEW`
+- restore archived rows to `NEEDS_REVIEW`
 
-The design defines an explicit status transition matrix. Invalid transitions must be rejected, and no-op transitions should return a safe skipped/no-op result without writing a new review event.
+The endpoint enforces the explicit status transition matrix from the design. Invalid transitions are rejected. No-op transitions return a safe skipped/no-op result without writing a new review event.
 
-Future state-changing updates should create exactly one `MatchSuggestionReviewEvent` with:
+State-changing updates happen in one transaction and create exactly one `MatchSuggestionReviewEvent` with:
 
 - previous status
 - next status
 - mapped review action
 - actor user id
 - safe reason codes when provided or required
-- no raw notes in the first implementation
+- `noteRedacted: null`
 
-The future endpoint is expected to be disabled by default and staging-only at first. Suggested server guard:
+The request body is intentionally narrow: action, target status, confirm flag, safe reason codes, optional route-matching suggestion id, and optional stale-update fields. It rejects raw Project text, raw Person text, company names, person names, emails, CSV raw values, email bodies, source raw payloads, normalized payloads, local paths, secrets, connection strings, and full notes. Free-form notes are not supported in this implementation.
 
-- `MATCH_SUGGESTION_REVIEW_UPDATE_ENABLED=true`
-- `MATCH_SUGGESTION_REVIEW_WRITE_TARGET=staging`
-- ADMIN/MANAGER auth
-- `confirmReviewAction: true`
-
-The planned request body is intentionally narrow: suggestion id, action, target status, confirm flag, safe reason codes, and optional stale-update fields. It must reject raw Project text, raw Person text, company names, person names, emails, CSV raw values, email bodies, source raw payloads, normalized payloads, local paths, secrets, connection strings, and full notes.
-
-The UI rollout should add approve/reject/archive controls only behind a separate disabled-by-default frontend flag and should show a confirmation dialog before mutation. It should refresh saved suggestions, review queue, and selected detail after success. Proposal creation, email draft generation, and email sending remain out of scope.
+This API does not add UI approve/reject/archive controls. Future UI rollout should add controls only behind a separate disabled-by-default frontend flag and should show a confirmation dialog before mutation. It should refresh saved suggestions, review queue, and selected detail after success. Proposal creation, email draft generation, and email sending remain out of scope.
 
 ## Filters, Sorting, and Pagination
 
