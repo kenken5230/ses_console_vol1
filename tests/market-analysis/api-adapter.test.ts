@@ -176,9 +176,13 @@ assert.deepEqual(response.period, {
 });
 assert.equal(response.generatedAt, "2026-06-08T00:00:00.000Z");
 assert.equal(response.skillRankings[0].skill, "Java");
+assert.equal(response.skillRankings[0].anonymousExamples.projects[0].anonymousId, "PJ-001");
+assert.equal(response.skillRankings[0].anonymousExamples.persons[0].anonymousId, "PS-001");
 assert.equal(response.priceBandRankings[0].priceBand, "80_over");
+assert.equal(response.priceBandRankings[0].anonymousExamples.projects.length, 1);
 assert.ok(response.regionRankings.some((metric) => metric.region === "東京"));
 assert.ok(response.marketCellRankings.length > 0);
+assert.equal(response.marketCellRankings[0].anonymousExamples.projects[0].anonymousId.startsWith("PJ-"), true);
 assert.ok(Array.isArray(response.qualityAlerts));
 
 const insights = buildFocusInsights(response);
@@ -315,5 +319,13 @@ assert.doesNotMatch(routeSource, /\b(?:create|createMany|update|updateMany|upser
 assert.doesNotMatch(routeSource, /\$executeRaw|\$queryRaw|db push|migrate deploy|seed/i);
 assert.match(routeSource, /ProjectStatus\.ARCHIVED/);
 assert.match(routeSource, /PersonStatus\.ARCHIVED/);
+
+const adapterSource = readFileSync("lib/market-analysis/api-adapter.ts", "utf8");
+assert.match(adapterSource, /status: true/);
+assert.doesNotMatch(adapterSource, /title:\s*true/);
+assert.doesNotMatch(adapterSource, /name:\s*true/);
+assert.doesNotMatch(adapterSource, /company/i);
+assert.doesNotMatch(adapterSource, /email/i);
+assert.doesNotMatch(adapterSource, /rawText|raw_text|sourcePayload|source_payload/i);
 
 console.log("market analysis api adapter tests passed");

@@ -6,6 +6,12 @@ import {
   buildQualityAlerts,
 } from "./aggregate";
 import {
+  attachAnonymousExamplesToMarketCellRankings,
+  attachAnonymousExamplesToPriceBandRankings,
+  attachAnonymousExamplesToRegionRankings,
+  attachAnonymousExamplesToSkillRankings,
+} from "./anonymous-examples";
+import {
   CONTRACT_TYPE_KEYS,
   PRICE_BANDS,
   UNKNOWN_REGION,
@@ -21,15 +27,15 @@ import {
 } from "./normalize";
 import type {
   ContractTypeKey,
-  MarketCellMetric,
+  MarketCellRanking,
   MarketPersonInput,
   MarketProjectInput,
   PriceBandKey,
   PriceBandMetric,
+  PriceBandRanking,
   QualityAlert,
-  RegionMarketMetric,
-  SalesPriorityScore,
-  SkillMarketMetric,
+  RegionMarketRanking,
+  SkillMarketRanking,
   WorkStyleKey,
 } from "./types";
 
@@ -40,6 +46,7 @@ export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
 export const MARKET_ANALYSIS_PROJECT_SELECT = {
   id: true,
   createdAt: true,
+  status: true,
   isFocus: true,
   condition: {
     select: {
@@ -68,6 +75,7 @@ export const MARKET_ANALYSIS_PROJECT_SELECT = {
 export const MARKET_ANALYSIS_PERSON_SELECT = {
   id: true,
   createdAt: true,
+  status: true,
   desiredUnitPrice: true,
   availableFrom: true,
   preferredLocation: true,
@@ -95,6 +103,7 @@ export type MarketAnalysisQuery = {
 export type MarketProjectDbRow = {
   id: string;
   createdAt?: string | Date | null;
+  status?: string | null;
   isFocus?: boolean | null;
   condition?: {
     unitPriceMin?: number | null;
@@ -119,6 +128,7 @@ export type MarketProjectDbRow = {
 export type MarketPersonDbRow = {
   id: string;
   createdAt?: string | Date | null;
+  status?: string | null;
   desiredUnitPrice?: number | null;
   availableFrom?: string | Date | null;
   preferredLocation?: string | null;
@@ -127,10 +137,6 @@ export type MarketPersonDbRow = {
     skillName?: string | null;
     years?: unknown;
   }> | null;
-};
-
-export type MarketCellRanking = MarketCellMetric & {
-  salesPriorityScore: SalesPriorityScore;
 };
 
 export type MarketAnalysisApiResponse = {
@@ -165,9 +171,9 @@ export type MarketAnalysisApiResponse = {
     workStyle: WorkStyleKey | null;
     contractType: ContractTypeKey | null;
   };
-  skillRankings: SkillMarketMetric[];
-  priceBandRankings: PriceBandMetric[];
-  regionRankings: RegionMarketMetric[];
+  skillRankings: SkillMarketRanking[];
+  priceBandRankings: PriceBandRanking[];
+  regionRankings: RegionMarketRanking[];
   marketCellRankings: MarketCellRanking[];
   qualityAlerts: QualityAlert[];
   generatedAt: string;
@@ -327,23 +333,41 @@ export function buildMarketAnalysisResponse(
 ): MarketAnalysisApiResponse {
   const filters = appliedFiltersFromOptions(options);
   const projectPairs = projectRows
-    .filter((row) => rowMatchesPeriod(row.createdAt, filters))
-    .map((row) => ({ row, project: marketProjectFromDb(row) }))
+    .map((row, sourceIndex) => ({ row, sourceIndex, project: marketProjectFromDb(row) }))
+    .filter(({ row }) => rowIsActive(row.status))
+    .filter(({ row }) => rowMatchesPeriod(row.createdAt, filters))
+    .filter(({ project }) => !filters.focusOnly || Boolean(project.isFocus))
     .filter(({ project }) => projectMatchesFilters(project, filters));
   const personPairs = personRows
-    .filter((row) => rowMatchesPeriod(row.createdAt, filters))
-    .map((row) => ({ row, person: marketPersonFromDb(row) }))
+    .map((row, sourceIndex) => ({ row, sourceIndex, person: marketPersonFromDb(row) }))
+    .filter(({ row }) => rowIsActive(row.status))
+    .filter(({ row }) => rowMatchesPeriod(row.createdAt, filters))
     .filter(({ person }) => personMatchesFilters(person, filters));
   const projects = projectPairs.map(({ project }) => project);
   const persons = personPairs.map(({ person }) => person);
   const qualityAlerts = buildQualityAlerts(projects, persons);
   const priceBandRankings = aggregatePriceBandMarket(projects, persons);
+  const skillRankings = aggregateSkillMarket(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT);
+  const regionRankings = aggregateRegionMarket(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT);
+  const marketCellRankings = aggregateMarketCells(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT);
   const focusProjectCount = projects.filter((project) => project.isFocus).length;
   const period = buildPeriodSummary(
     filters,
     projectPairs.map(({ row }) => row.createdAt),
     personPairs.map(({ row }) => row.createdAt),
   );
+  const projectExampleSources = projectPairs.map(({ project, row, sourceIndex }) => ({
+    project,
+    createdAt: row.createdAt,
+    status: row.status ?? null,
+    sourceIndex,
+  }));
+  const personExampleSources = personPairs.map(({ person, row, sourceIndex }) => ({
+    person,
+    createdAt: row.createdAt,
+    status: row.status ?? null,
+    sourceIndex,
+  }));
 
   return {
     summary: {
@@ -356,10 +380,14 @@ export function buildMarketAnalysisResponse(
     },
     period,
     appliedFilters: filters,
-    skillRankings: aggregateSkillMarket(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
-    priceBandRankings: priceBandRankings.slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
-    regionRankings: aggregateRegionMarket(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
-    marketCellRankings: aggregateMarketCells(projects, persons).slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
+    skillRankings: attachAnonymousExamplesToSkillRankings(skillRankings, projectExampleSources, personExampleSources),
+    priceBandRankings: attachAnonymousExamplesToPriceBandRankings(
+      priceBandRankings.slice(0, MARKET_ANALYSIS_RANKING_LIMIT),
+      projectExampleSources,
+      personExampleSources,
+    ),
+    regionRankings: attachAnonymousExamplesToRegionRankings(regionRankings, projectExampleSources, personExampleSources),
+    marketCellRankings: attachAnonymousExamplesToMarketCellRankings(marketCellRankings, projectExampleSources, personExampleSources),
     qualityAlerts,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
   };
@@ -385,6 +413,10 @@ function normalizeMonthRange(fromMonth: string | null | undefined, toMonth: stri
     return { fromMonth: toMonth, toMonth: fromMonth };
   }
   return { fromMonth, toMonth };
+}
+
+function rowIsActive(status: string | null | undefined) {
+  return String(status ?? "").trim().toUpperCase() !== "ARCHIVED";
 }
 
 function monthToDate(month: string | null | undefined) {
