@@ -115,3 +115,40 @@ export type SalesPriorityScore = {
     qualityPenalty: number;
   };
 };
+
+export type MarketAnonymousExample = {
+  kind: "project" | "person";
+  anonymousId: string;
+  registeredMonth: string | null;
+  priceBand: PriceBandKey;
+  region: string;
+  workStyle: WorkStyleKey;
+  skillCount: number;
+  requiredSkillCount: number;
+  preferredSkillCount: number;
+  usedTechnologySkillCount: number;
+  isFocus?: boolean;
+  status?: string | null;
+};
+
+export type MarketAnonymousExamples = {
+  projects: MarketAnonymousExample[];
+  persons: MarketAnonymousExample[];
+};
+
+export type SkillMarketRanking = SkillMarketMetric & {
+  anonymousExamples: MarketAnonymousExamples;
+};
+
+export type PriceBandRanking = PriceBandMetric & {
+  anonymousExamples: MarketAnonymousExamples;
+};
+
+export type RegionMarketRanking = RegionMarketMetric & {
+  anonymousExamples: MarketAnonymousExamples;
+};
+
+export type MarketCellRanking = MarketCellMetric & {
+  salesPriorityScore: SalesPriorityScore;
+  anonymousExamples: MarketAnonymousExamples;
+};
