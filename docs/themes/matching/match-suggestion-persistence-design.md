@@ -555,23 +555,38 @@ STOP conditions before proposal/email:
    - Production writes remain disabled by guard.
    - Owner decides when to enable and execute the staging write path.
 
-5. `Add supervised match suggestion review updates`
+5. `Design supervised match suggestion review update workflow`
+   - Implemented as docs-only planning before write code.
+   - Defines keep/needs-review/approve/reject/archive/restore action semantics.
+   - Defines status transition matrix and `MatchSuggestionReviewEvent` creation rules.
+   - Defines disabled-by-default, staging-only guard design.
+   - Defines request/response safety, UI rollout, and test strategy.
+   - No mutation endpoint, DB write code, migration, Proposal creation, email draft, or email sending.
+
+6. `Add guarded match suggestion review update API`
    - Writes status changes and review events.
    - Requires role checks and safe reason codes.
    - No proposal creation.
    - No email draft.
 
-6. `Design proposal draft from approved suggestions`
+7. `Add guarded match suggestion review controls`
+   - Adds disabled-by-default UI controls and confirmation dialogs.
+   - Uses the guarded review update API.
+   - Refreshes saved suggestion list, review queue, and detail after success.
+   - No production enablement.
+   - No Proposal/email behavior.
+
+8. `Design proposal draft from approved suggestions`
    - Docs first.
    - Defines target company/contact and sales mail account policy.
    - No implementation yet.
 
-7. `Add supervised proposal draft creation from approved suggestions`
+9. `Add supervised proposal draft creation from approved suggestions`
    - First PR that may write Proposal records.
    - Requires approved suggestion and explicit confirmation.
    - No email sending.
 
-8. `Design supervised email draft/send flow`
+10. `Design supervised email draft/send flow`
    - Docs first.
    - Defines human approval, draft content policy, and send STOP conditions.
 
