@@ -7,6 +7,8 @@ Current files:
 - `README.md`: deterministic matching dry-run and read-only matching review UI/API notes.
 - `match-suggestion-persistence-design.md`: match suggestion persistence, review workflow, schema/API/UI/safety design, PR #28 schema foundation, and staged implementation plan.
 - `match-suggestion-review-update-design.md`: docs-only design for guarded saved suggestion review status updates.
+- `proposal-draft-from-approved-match-suggestions-design.md`: docs-only design for future Proposal draft creation from approved saved MatchSuggestions.
+- `proposal-traceability-and-draft-status-prerequisites.md`: docs-only prerequisite design for Proposal traceability, draft status, target company resolution, and sales mail account resolution.
 
 ## Deterministic Matching Dry-run MVP
 
@@ -333,6 +335,23 @@ The request body is intentionally narrow: action, target status, confirm flag, s
 
 This API does not add UI approve/reject/archive controls. Future UI rollout should add controls only behind a separate disabled-by-default frontend flag and should show a confirmation dialog before mutation. It should refresh saved suggestions, review queue, and selected detail after success. Proposal creation, email draft generation, and email sending remain out of scope.
 
+## Proposal Draft Design And Prerequisites
+
+Proposal draft work remains deferred and split into docs-first stages:
+
+- `proposal-draft-from-approved-match-suggestions-design.md` defines the future guarded flow for turning an `APPROVED` saved MatchSuggestion into a Proposal draft.
+- `proposal-traceability-and-draft-status-prerequisites.md` defines the prerequisite decisions for Proposal traceability, draft status, target company resolution, and sales mail account resolution.
+
+Current recommendation:
+
+- Prefer a future traceability migration before Proposal draft creation. A bridge table from Proposal to MatchSuggestion gives the strongest audit trail; a nullable `Proposal.matchSuggestionId` is a smaller alternative if one approved suggestion should produce at most one active Proposal draft.
+- Avoid storing match suggestion lineage only in `Proposal.notes` or safe metadata because it weakens auditability and duplicate prevention.
+- Consider adding a future `DRAFT` Proposal status if `PROPOSED` means externally proposed rather than internal draft.
+- Resolve `targetCompanyId` only from reviewed structured Project company roles or future manual safe selection. Do not infer it from raw Project text.
+- Resolve `salesMailAccountId` only from an existing active sales mail account selected by a reviewer or from one deterministic structured rule. Do not create or modify mail accounts in the Proposal draft endpoint.
+
+Proposal creation is still not implemented. No Proposal records, email drafts, DistributionLogs, or send actions should be created until a separate owner-approved guarded implementation PR.
+
 ## Filters, Sorting, and Pagination
 
 Supported filters:
@@ -438,6 +457,7 @@ Each match sample includes only:
 - The review UI/API does not write to the database.
 - The review UI/API does not generate email drafts.
 - The review UI/API does not call external APIs or AI APIs.
+- Proposal draft creation remains deferred until traceability, draft status, target company, and sales mail account prerequisites are resolved.
 
 ## Future Flow
 
@@ -447,6 +467,10 @@ Each match sample includes only:
 4. Add read-only saved suggestion APIs.
 5. Add saved suggestion review UI.
 6. Add supervised match suggestion save.
-7. Generate proposal drafts after owner approval.
-8. Human approval.
-9. Send messages only after explicit owner approval.
+7. Add guarded match suggestion review update and disabled-by-default review controls.
+8. Design Proposal draft creation from approved suggestions.
+9. Resolve Proposal traceability, draft status, target company, and sales mail account prerequisites.
+10. Add any owner-approved schema migration needed for Proposal traceability or draft status.
+11. Add supervised Proposal draft creation after owner approval.
+12. Human approval.
+13. Send messages only after explicit owner approval.
