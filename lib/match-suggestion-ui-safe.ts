@@ -19,12 +19,70 @@ const SCORE_BAND_OPTIONS = new Set(["HIGH", "MEDIUM", "LOW", "REVIEW"]);
 const SORT_OPTIONS = new Set(["newest", "score-desc", "score-asc"]);
 const SAVE_SCORING_VERSION = "match-review-ui-v1";
 const SAFE_CODE_PATTERN = /^[A-Z][A-Z0-9_:-]{1,95}$/;
+const REQUIRED_REVIEW_REASON_ACTIONS = new Set(["REJECT", "ARCHIVE", "RESTORE"]);
+const REVIEW_ACTIONS = [
+  { action: "KEEP_SUGGESTED", label: "Keep suggested", toStatus: "SUGGESTED" },
+  { action: "REQUEST_REVIEW", label: "Needs review", toStatus: "NEEDS_REVIEW" },
+  { action: "APPROVE", label: "Approve", toStatus: "APPROVED" },
+  { action: "REJECT", label: "Reject", toStatus: "REJECTED" },
+  { action: "ARCHIVE", label: "Archive", toStatus: "ARCHIVED" },
+  { action: "RESTORE", label: "Restore", toStatus: "NEEDS_REVIEW" },
+];
+const REVIEW_TRANSITIONS: Record<string, Record<string, string>> = {
+  SUGGESTED: {
+    KEEP_SUGGESTED: "SUGGESTED",
+    REQUEST_REVIEW: "NEEDS_REVIEW",
+    APPROVE: "APPROVED",
+    REJECT: "REJECTED",
+    ARCHIVE: "ARCHIVED",
+  },
+  NEEDS_REVIEW: {
+    KEEP_SUGGESTED: "SUGGESTED",
+    REQUEST_REVIEW: "NEEDS_REVIEW",
+    APPROVE: "APPROVED",
+    REJECT: "REJECTED",
+    ARCHIVE: "ARCHIVED",
+  },
+  APPROVED: {
+    REQUEST_REVIEW: "NEEDS_REVIEW",
+    APPROVE: "APPROVED",
+    ARCHIVE: "ARCHIVED",
+  },
+  REJECTED: {
+    REQUEST_REVIEW: "NEEDS_REVIEW",
+    REJECT: "REJECTED",
+    ARCHIVE: "ARCHIVED",
+  },
+  ARCHIVED: {
+    ARCHIVE: "ARCHIVED",
+    RESTORE: "NEEDS_REVIEW",
+  },
+};
+export const MATCH_SUGGESTION_REVIEW_REASON_CODES = [
+  "REVIEWED_OK",
+  "NEEDS_MORE_CONTEXT",
+  "SKILL_GAP",
+  "RATE_MISMATCH",
+  "DATE_MISMATCH",
+  "LOCATION_MISMATCH",
+  "WRONG_ROLE",
+  "DUPLICATE",
+  "STALE_PROJECT",
+  "STALE_PERSON",
+  "NO_LONGER_RELEVANT",
+  "REVIEW_AGAIN",
+  "OTHER",
+];
 
 export function isSafeUuid(value: unknown) {
   return typeof value === "string" && UUID_PATTERN.test(value.trim());
 }
 
 export function isMatchSuggestionSaveUiEnabled(value: unknown) {
+  return value === "true";
+}
+
+export function isMatchSuggestionReviewUiEnabled(value: unknown) {
   return value === "true";
 }
 
@@ -126,6 +184,10 @@ function safeCodeArray(value: unknown) {
     if (!codes.includes(code)) codes.push(code);
   }
   return codes;
+}
+
+function safeReasonCodeArray(value: unknown) {
+  return safeCodeArray(value).filter((code) => MATCH_SUGGESTION_REVIEW_REASON_CODES.includes(code));
 }
 
 function safeInteger(value: unknown, fallback = 0, min = 0, max = 1000) {
@@ -260,6 +322,126 @@ export function interpretMatchSuggestionSaveResponse(status: number, result: Rec
     return { state: "success", message: "Saved for supervised review.", shortId };
   }
   return { state: "unknown", message: "Supervised save response received.", shortId };
+}
+
+function safeSuggestionStatus(value: unknown) {
+  const status = safeToken(value).toUpperCase();
+  return STATUS_OPTIONS.has(status) ? status : "";
+}
+
+function safeIsoTimestamp(value: unknown) {
+  if (typeof value !== "string" || SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value))) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString();
+}
+
+export function getMatchSuggestionReviewActionOptions(suggestion: Record<string, unknown> | null | undefined) {
+  const status = safeSuggestionStatus(suggestion?.status);
+  return REVIEW_ACTIONS.map((option) => {
+    const toStatus = REVIEW_TRANSITIONS[status]?.[option.action] || option.toStatus;
+    const transitionAllowed = Boolean(status && REVIEW_TRANSITIONS[status]?.[option.action] === option.toStatus);
+    const reasonRequired = REQUIRED_REVIEW_REASON_ACTIONS.has(option.action);
+    return {
+      ...option,
+      toStatus,
+      reasonRequired,
+      disabled: !transitionAllowed,
+      disabledReason: transitionAllowed ? "" : "This transition is not available for the current status.",
+    };
+  });
+}
+
+export function buildMatchSuggestionReviewUpdateBody(
+  suggestion: Record<string, unknown> | null | undefined,
+  action: unknown,
+  reasonCodesLike: unknown,
+) {
+  if (!suggestion) {
+    return { canSubmit: false, disabledReason: "Select a saved suggestion before review update.", body: null };
+  }
+
+  const suggestionId = typeof suggestion.id === "string" ? suggestion.id.trim() : "";
+  if (!isSafeUuid(suggestionId)) {
+    return { canSubmit: false, disabledReason: "Saved suggestion detail is missing a safe review identifier.", body: null };
+  }
+
+  const status = safeSuggestionStatus(suggestion.status);
+  const requestedAction = safeToken(action).toUpperCase();
+  const toStatus = REVIEW_TRANSITIONS[status]?.[requestedAction];
+  if (!status || !toStatus) {
+    return { canSubmit: false, disabledReason: "This review action is not valid for the current status.", body: null };
+  }
+
+  const reasonCodes = safeReasonCodeArray(reasonCodesLike);
+  if (REQUIRED_REVIEW_REASON_ACTIONS.has(requestedAction) && reasonCodes.length === 0) {
+    return { canSubmit: false, disabledReason: "Select at least one safe reason code before this review action.", body: null };
+  }
+
+  const expectedUpdatedAt = safeIsoTimestamp(suggestion.updatedAt);
+  const body: Record<string, unknown> = {
+    action: requestedAction,
+    toStatus,
+    confirmReviewAction: true,
+    reasonCodes,
+    expectedStatus: status,
+  };
+  if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt;
+
+  return {
+    canSubmit: true,
+    disabledReason: "",
+    body,
+  };
+}
+
+export function interpretMatchSuggestionReviewUpdateResponse(status: number, result: Record<string, unknown>) {
+  if (status === 503 && result?.migrationRequired) {
+    return { state: "migrationRequired", message: "Saved suggestion review tables are unavailable in this environment.", shortId: null };
+  }
+  if (status === 403) {
+    return { state: "disabled", message: "Server review update guard is disabled.", shortId: null };
+  }
+  if (status === 400) {
+    return { state: "validation", message: "Review update request was rejected by validation.", shortId: null };
+  }
+  if (status === 404) {
+    return { state: "notFound", message: "Saved suggestion was not found.", shortId: null };
+  }
+  if (status === 409) {
+    return { state: "conflict", message: "Saved suggestion changed before review update.", shortId: null };
+  }
+  if (status < 200 || status >= 300) {
+    return { state: "error", message: "Review update failed.", shortId: null };
+  }
+  const suggestion = result?.suggestion && typeof result.suggestion === "object" ? result.suggestion as Record<string, unknown> : {};
+  const shortId = typeof suggestion.shortId === "string" && SAFE_TOKEN_PATTERN.test(suggestion.shortId) ? suggestion.shortId : null;
+  if (result?.skippedNoop) {
+    return { state: "skippedNoop", message: "Review status was already current.", shortId };
+  }
+  if (result?.updated) {
+    return { state: "success", message: "Review status updated.", shortId };
+  }
+  return { state: "unknown", message: "Review update response received.", shortId };
+}
+
+export async function requestMatchSuggestionReviewUpdate(
+  fetchImpl: typeof fetch,
+  suggestionId: unknown,
+  body: Record<string, unknown> | null | undefined,
+) {
+  if (!isSafeUuid(suggestionId) || !body) {
+    return { state: "validation", message: "Review update request is missing safe identifiers.", shortId: null };
+  }
+
+  const response = await fetchImpl(`/api/matches/suggestions/${String(suggestionId).trim()}/review`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  const result = await response.json().catch(() => ({}));
+  return interpretMatchSuggestionReviewUpdateResponse(response.status, result);
 }
 
 export function countLabel(value: unknown) {

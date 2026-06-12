@@ -2,18 +2,24 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
+  buildMatchSuggestionReviewUpdateBody,
   buildMatchSuggestionSaveBody,
   buildSavedSuggestionQuery,
+  getMatchSuggestionReviewActionOptions,
+  interpretMatchSuggestionReviewUpdateResponse,
   interpretMatchSuggestionSaveResponse,
+  isMatchSuggestionReviewUiEnabled,
   isMatchSuggestionSaveUiEnabled,
   isSafeUuid,
+  requestMatchSuggestionReviewUpdate,
   safeJsonText,
   sanitizeSuggestionUiValue,
 } from "../lib/match-suggestion-ui-safe";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const personId = "22222222-2222-4222-8222-222222222222";
-const unsafeAddress = "person" + "@example.test";
+const suggestionId = "33333333-3333-4333-8333-333333333333";
+const unsafeAddress = ["person", "example.invalid"].join("@");
 const localPath = "C:" + "\\Users\\Owner\\Sensitive.csv";
 
 assert.equal(isSafeUuid(projectId), true);
@@ -21,6 +27,9 @@ assert.equal(isSafeUuid("not-a-uuid"), false);
 assert.equal(isMatchSuggestionSaveUiEnabled(undefined), false);
 assert.equal(isMatchSuggestionSaveUiEnabled("false"), false);
 assert.equal(isMatchSuggestionSaveUiEnabled("true"), true);
+assert.equal(isMatchSuggestionReviewUiEnabled(undefined), false);
+assert.equal(isMatchSuggestionReviewUiEnabled("false"), false);
+assert.equal(isMatchSuggestionReviewUiEnabled("true"), true);
 
 const query = new URLSearchParams(buildSavedSuggestionQuery({
   status: "needs_review",
@@ -166,16 +175,117 @@ assert.equal(interpretMatchSuggestionSaveResponse(403, {}).state, "disabled");
 assert.equal(interpretMatchSuggestionSaveResponse(503, { migrationRequired: true }).state, "migrationRequired");
 assert.equal(interpretMatchSuggestionSaveResponse(400, { message: "raw server detail" }).state, "validation");
 
+const savedSuggestion = {
+  id: suggestionId,
+  shortId: "33333333",
+  status: "NEEDS_REVIEW",
+  updatedAt: "2026-06-12T00:00:00.000Z",
+  rawProjectText: "raw payload",
+  email: unsafeAddress,
+};
+const actionOptions = getMatchSuggestionReviewActionOptions(savedSuggestion);
+assert.equal(actionOptions.find((option) => option.action === "APPROVE")?.disabled, false);
+assert.equal(actionOptions.find((option) => option.action === "RESTORE")?.disabled, true);
+
+const approvedOptions = getMatchSuggestionReviewActionOptions({ ...savedSuggestion, status: "APPROVED" });
+assert.equal(approvedOptions.find((option) => option.action === "REJECT")?.disabled, true);
+assert.equal(approvedOptions.find((option) => option.action === "REQUEST_REVIEW")?.disabled, false);
+
+const archivedOptions = getMatchSuggestionReviewActionOptions({ ...savedSuggestion, status: "ARCHIVED" });
+assert.equal(archivedOptions.find((option) => option.action === "RESTORE")?.disabled, false);
+assert.equal(archivedOptions.find((option) => option.action === "APPROVE")?.disabled, true);
+
+const reviewDraft = buildMatchSuggestionReviewUpdateBody(savedSuggestion, "APPROVE", ["REVIEWED_OK"]);
+assert.equal(reviewDraft.canSubmit, true);
+assert.equal(reviewDraft.body?.action, "APPROVE");
+assert.equal(reviewDraft.body?.toStatus, "APPROVED");
+assert.equal(reviewDraft.body?.confirmReviewAction, true);
+assert.deepEqual(reviewDraft.body?.reasonCodes, ["REVIEWED_OK"]);
+assert.equal(reviewDraft.body?.expectedStatus, "NEEDS_REVIEW");
+assert.equal(reviewDraft.body?.expectedUpdatedAt, "2026-06-12T00:00:00.000Z");
+
+const rejectWithoutReason = buildMatchSuggestionReviewUpdateBody(savedSuggestion, "REJECT", []);
+assert.equal(rejectWithoutReason.canSubmit, false);
+assert.match(rejectWithoutReason.disabledReason, /reason code/);
+
+const restoreWithReason = buildMatchSuggestionReviewUpdateBody({ ...savedSuggestion, status: "ARCHIVED" }, "RESTORE", ["REVIEW_AGAIN"]);
+assert.equal(restoreWithReason.canSubmit, true);
+assert.equal(restoreWithReason.body?.toStatus, "NEEDS_REVIEW");
+
+const unsafeReviewBody = JSON.stringify(reviewDraft.body);
+assert.equal(unsafeReviewBody.includes("raw payload"), false);
+assert.equal(unsafeReviewBody.includes(unsafeAddress), false);
+assert.equal(unsafeReviewBody.includes(localPath), false);
+assert.equal(unsafeReviewBody.includes("rawProjectText"), false);
+assert.equal(unsafeReviewBody.includes("note"), false);
+assert.equal(unsafeReviewBody.includes("confirmReviewAction"), true);
+
+assert.deepEqual(interpretMatchSuggestionReviewUpdateResponse(200, {
+  updated: true,
+  suggestion: { shortId: "33333333" },
+}), {
+  state: "success",
+  message: "Review status updated.",
+  shortId: "33333333",
+});
+assert.equal(interpretMatchSuggestionReviewUpdateResponse(200, { skippedNoop: true }).state, "skippedNoop");
+assert.equal(interpretMatchSuggestionReviewUpdateResponse(403, {}).state, "disabled");
+assert.equal(interpretMatchSuggestionReviewUpdateResponse(503, { migrationRequired: true }).state, "migrationRequired");
+assert.equal(interpretMatchSuggestionReviewUpdateResponse(400, {}).state, "validation");
+assert.equal(interpretMatchSuggestionReviewUpdateResponse(404, {}).state, "notFound");
+assert.equal(interpretMatchSuggestionReviewUpdateResponse(409, {}).state, "conflict");
+assert.equal(interpretMatchSuggestionReviewUpdateResponse(500, {}).state, "error");
+
+async function assertReviewRequestHelper() {
+  let requestedUrl = "";
+  let requestedInit: any = null;
+  const result = await requestMatchSuggestionReviewUpdate(
+    async (url: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(url);
+      requestedInit = init;
+      return {
+        status: 200,
+        json: async () => ({ updated: true, suggestion: { shortId: "33333333" } }),
+      } as Response;
+    },
+    suggestionId,
+    reviewDraft.body,
+  );
+  assert.equal(result.state, "success");
+  assert.equal(requestedUrl, `/api/matches/suggestions/${suggestionId}/review`);
+  assert.equal(requestedInit.method, "PATCH");
+  assert.equal(requestedInit.headers["Content-Type"], "application/json");
+  const requestBody = JSON.parse(String(requestedInit.body));
+  assert.equal(requestBody.confirmReviewAction, true);
+  assert.equal(requestBody.action, "APPROVE");
+  assert.equal(requestBody.toStatus, "APPROVED");
+  assert.deepEqual(requestBody.reasonCodes, ["REVIEWED_OK"]);
+  assert.equal(String(requestedInit.body).includes("raw payload"), false);
+  assert.equal(String(requestedInit.body).includes(unsafeAddress), false);
+}
+
 const componentSource = readFileSync("components/MatchingReviewPage.jsx", "utf8");
+const helperSource = readFileSync("lib/match-suggestion-ui-safe.ts", "utf8");
 assert.match(componentSource, /\/api\/matches\/suggestions\?/);
 assert.match(componentSource, /\/api\/matches\/suggestions\/review-queue\?/);
 assert.match(componentSource, /\/api\/matches\/suggestions\/\$\{selectedSavedSuggestion\.id\}/);
 assert.match(componentSource, /NEXT_PUBLIC_MATCH_SUGGESTION_SAVE_UI_ENABLED/);
+assert.match(componentSource, /NEXT_PUBLIC_MATCH_SUGGESTION_REVIEW_UI_ENABLED/);
 assert.match(componentSource, /method:\s*"POST"/);
+assert.match(helperSource, /method:\s*"PATCH"/);
+assert.match(componentSource, /requestMatchSuggestionReviewUpdate/);
 assert.match(componentSource, /confirmSave/);
+assert.match(componentSource, /confirmReviewAction/);
 assert.match(componentSource, /role="dialog"/);
+assert.match(componentSource, /Review update controls are disabled in this environment/);
+assert.match(componentSource, /setRefreshToken\(\(current\) => current \+ 1\)/);
 assert.doesNotMatch(componentSource, /export\s+async\s+function\s+(?:POST|PUT|PATCH|DELETE)\b/);
-assert.doesNotMatch(componentSource, /<button[^>]*>\s*(?:Approve|Reject|Archive|Create proposal|Draft email|Send email)\s*<\/button>/i);
+assert.doesNotMatch(componentSource, /<button[^>]*>\s*(?:Create proposal|Draft email|Send email|Bulk approve|Bulk reject|Bulk archive)\s*<\/button>/i);
 assert.doesNotMatch(componentSource, /\b(?:normalizedPayload|noteRedacted|sourceName|rawCsv|rawValue|fullSubject|fullBody)\b/);
 
-console.log("match suggestion UI safety tests passed");
+assertReviewRequestHelper().then(() => {
+  console.log("match suggestion UI safety tests passed");
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
