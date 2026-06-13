@@ -1,27 +1,33 @@
 import { NextResponse } from "next/server";
 
 import { authErrorResponse, requireAnyRole } from "../../../../../lib/auth";
-import { prisma } from "../../../../../lib/prisma";
 import {
-  buildReadApiErrorResponse,
-  fetchReviewQueue,
-  parseSuggestionListQuery,
-} from "../../../../../lib/matching/match-suggestion-read-api";
+  isMatchSuggestionMigrationRequiredError,
+  listMatchSuggestionReviewQueue,
+  matchSuggestionMigrationRequiredResponse,
+  MatchSuggestionRequestError,
+} from "../../../../../lib/match-suggestions-review";
+import { prisma } from "../../../../../lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
     await requireAnyRole(request, ["ADMIN", "MANAGER"]);
-    const query = parseSuggestionListQuery(new URL(request.url), request.headers, { reviewQueue: true });
-    const result = await fetchReviewQueue(prisma, query);
+    const result = await listMatchSuggestionReviewQueue(prisma, new URL(request.url).searchParams);
     return NextResponse.json(result);
   } catch (error) {
     const authResponse = authErrorResponse(error);
     if (authResponse) return authResponse;
 
-    const response = buildReadApiErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    if (error instanceof MatchSuggestionRequestError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
+
+    if (isMatchSuggestionMigrationRequiredError(error)) {
+      return NextResponse.json(matchSuggestionMigrationRequiredResponse("review-queue"), { status: 503 });
+    }
+
+    return NextResponse.json({ message: "Saved match suggestion review queue fetch failed" }, { status: 500 });
   }
 }
-

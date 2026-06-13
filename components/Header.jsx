@@ -15,6 +15,13 @@ export default function Header({ currentUser, onLogout }) {
         ))}
       </nav>
       <div className="header-actions">
+        <a
+          className="outline-primary"
+          href="/market-analysis"
+          style={{ fontSize: 16, minHeight: 42, padding: "0 16px", textDecoration: "none" }}
+        >
+          市場分析
+        </a>
         <button className="icon-button" type="button" aria-label="設定">
           ⚙
         </button>

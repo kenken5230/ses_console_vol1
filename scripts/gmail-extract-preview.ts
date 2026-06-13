@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { prisma } from "../lib/prisma";
-import { extractFromMail, formatDate, type MailExtractionSource } from "./gmail-extraction";
+import { extractFromMail, formatDate, personDisplayName, type MailExtractionSource } from "./gmail-extraction";
 
 type ExtractPreviewType = "all" | "anken" | "youin";
 
@@ -92,10 +92,16 @@ async function main(): Promise<void> {
       classificationVersion: mail.classificationVersion,
       subject: mail.subject,
       name: extraction.name ?? extraction.initials,
+      finalName: personDisplayName(mail.id, extraction.name, extraction.initials),
+      nameConfidence: extraction.nameConfidence,
+      reviewReasons: extraction.reviewReasons.join(", "),
+      roleHeadline: extraction.roleHeadline,
       company: extraction.ownerCompanyName,
       price: extraction.desiredUnitPrice,
       availableFrom: formatDate(extraction.availableFrom)?.slice(0, 7) ?? null,
+      skillCount: extraction.skills.length,
       skills: extraction.skills.slice(0, 5).join(", "),
+      classificationWarning: extraction.classificationWarning,
       needsReview: extraction.needsReview,
       missing: extraction.missingFields.join(", "),
     };

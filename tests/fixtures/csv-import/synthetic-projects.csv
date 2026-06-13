@@ -1,0 +1,6 @@
+案件名,会社名,作業内容,必須スキル,単価,開始月,勤務地,未使用列
+Synthetic Alpha Project,Synthetic Client Alpha,Build internal workflow,"Java,Spring,AWS",85万,2026-04,Remote,fixture-only
+Synthetic Alpha Project,Synthetic Client Alpha,Build internal workflow,"Java,Spring,AWS",85万,2026-04,Remote,duplicate-fixture
+Synthetic Beta Project,Synthetic Client Beta,Support operations,"Linux,SQL",invalid-price,not-a-date,Tokyo,fixture-only
+,Synthetic Client Gamma,,"",70万,2026-05,Osaka,missing-fields
+Synthetic Clean Project,Synthetic Client Delta,Build reporting workflow,"TypeScript,PostgreSQL",90万,2026-07,Hybrid,clean-fixture
