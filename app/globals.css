@@ -8,6 +8,7 @@
   --chip: #eef0f3;
   --danger: #ff3150;
   --header-height: 76px;
+  --console-scale: 0.75;
 }
 
 * {
@@ -23,6 +24,7 @@ body {
   font-family: "Yu Gothic UI", "Yu Gothic", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
   font-size: 16px;
   letter-spacing: 0;
+  overflow-x: hidden;
 }
 
 button,
@@ -45,8 +47,17 @@ textarea:disabled {
 }
 
 .console-app {
+  min-height: calc(100vh / var(--console-scale));
   min-width: 1180px;
-  min-height: 100vh;
+  width: calc(100% / var(--console-scale));
+  zoom: var(--console-scale);
+}
+
+@supports not (zoom: 1) {
+  .console-app {
+    transform: scale(var(--console-scale));
+    transform-origin: top left;
+  }
 }
 
 .global-header {
