@@ -31,6 +31,7 @@
 |---|---|---|---|---|---|
 | PM setup chat | チャット横断進捗管理の初期整備 | `PROGRESS.md`, `docs/shared/operations/` | Done | 2026-06-13 | なし |
 | Codex GitHub sync chat | GitHub上に進捗共有docsを配置 | `PROGRESS.md`, `docs/shared/operations/`, `docs/shared/README.md` | Done | 2026-06-13 | ローカル `git status` はsandbox制約で未確認 |
+| Codex Windows sandbox preflight docs | Codex Windows sandbox / PowerShell / npm / Prisma / proxy / workspace permission preflight docs追加 | `PROGRESS.md`, `docs/shared/operations/`, `docs/README.md` | Done | 2026-06-14 | docs only。PR #44には触らない |
 
 ## 衝突注意エリア
 
@@ -49,17 +50,27 @@
 
 - `docs/README.md`
 - `docs/shared/README.md`
+- `docs/shared/operations/codex-windows-sandbox-preflight-v0.1.md`
 - `docs/shared/quality/two-pass-task-test-policy-v0.1.md`
 - 作業テーマに該当する `docs/themes/*/README.md`
 
 ## 引き継ぎログ
+
+### 2026-06-14 JST / Codex Windows sandbox preflight docs
+
+- Scope: PR #44 merge後の再発防止として、Codex Windows sandbox / PowerShell / npm / Prisma / proxy / workspace permissionの作業前preflight docsを別PRで追加。
+- Done: `codex/codex-windows-sandbox-preflight-docs` branchでpreflight doc、operations README、docs READMEリンク、PROGRESSログを追加。
+- Changed: `PROGRESS.md`, `docs/shared/operations/codex-windows-sandbox-preflight-v0.1.md`, `docs/shared/operations/README.md`, `docs/README.md`。
+- Validation: docsリンク、必須文言、`"**/backups/**" = "read"` を推奨設定として書いていないこと、secret/token/DB URLの実値がないことを確認。
+- Remaining: PR review / merge。
+- Risk / Need coordination: docs only。code、Prisma、migration、`package.json` は変更しない。production DB、`db push`、`migrate reset` は未実行。PR #44には触らない。
 
 ### 2026-06-13 JST / PM setup chat
 
 - Scope: 複数チャットでの進捗確認・事故防止・連携ルールをPM/PdM観点で整備。
 - Done: `PROGRESS.md` と `docs/shared/operations/chat-progress-coordination-v0.1.md` を追加。
 - Changed: docs入口に参照を追加済み。
-- Validation: ドキュメントのみ。リンク・表記を再読込で確認済み。
+- Validation: ドキュメントのみ。リンク・表記を再読み込みで確認済み。
 - Remaining: 各チャットへ運用開始文を送る場合は、本チャット最終回答の文面を使う。
 - Risk / Need coordination: 既存の未コミット変更が多い可能性があるため、今後のチャットは担当範囲を明示してから編集する。
 

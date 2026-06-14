@@ -7,6 +7,8 @@
 
 ## 追加ドキュメント
 
+- `docs/shared/operations/codex-windows-sandbox-preflight-v0.1.md`
+  - Codexで実装・merge・conflict解消に入る前のWindows sandbox / PowerShell / npm / Prisma / proxy / permission確認手順。
 - `docs/themes/ses-sales-console/requirements/ses-sales-console-integrated-requirements-v0.1.md`
   - Notion移行、案件/要員DB、AIマッチング、提案、メール、履歴、統計、KPI、会社/商流、統合consoleの大テーマ別要件定義。
 - `docs/themes/ses-sales-console/BK/ses-sales-console-theme-backlog-v0.1.md`
