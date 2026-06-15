@@ -103,17 +103,29 @@ textarea:disabled {
 }
 
 .nav-item {
+  align-items: center;
   background: transparent;
   border: 0;
   border-bottom: 4px solid transparent;
   color: #4b4f57;
+  display: inline-flex;
   font-size: 24px;
   font-weight: 800;
   padding: 0 16px;
+  text-decoration: none;
 }
 
 .nav-item.active {
   border-bottom-color: var(--blue);
+}
+
+.nav-item:disabled {
+  color: #9aa3b2;
+  cursor: not-allowed;
+}
+
+.nav-link {
+  color: var(--blue);
 }
 
 .header-actions {
@@ -1043,7 +1055,7 @@ input[type="radio"] {
 .detail-action-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   margin-top: 16px;
 }
 
@@ -1051,13 +1063,30 @@ input[type="radio"] {
 .detail-action-row .outline-primary,
 .detail-action-row .primary-button,
 .detail-action-row .ghost-button {
-  font-size: 16px;
-  min-height: 40px;
-  padding: 0 14px;
+  font-size: 14px;
+  min-height: 36px;
+  padding: 0 10px;
 }
 
 .detail-primary {
   margin-left: auto;
+}
+
+.detail-close-action {
+  margin-left: auto;
+}
+
+.proposal-unavailable-button {
+  gap: 6px;
+}
+
+.proposal-unavailable-pill {
+  background: #eef2f7;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 2px 6px;
 }
 
 .detail-highlight-grid {
@@ -1720,6 +1749,17 @@ input[type="radio"] {
 
 .history-list {
   overflow: auto;
+}
+
+.history-safety-note {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  color: #566173;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.6;
+  margin: 0;
+  padding: 18px 24px;
 }
 
 .history-item {

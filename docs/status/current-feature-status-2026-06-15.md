@@ -2,7 +2,7 @@
 
 ## Summary
 
-`origin/main` 由来の clean branch で再確認した現在地。画面に出ているのに実装がないものは今回の復旧PRで外し、DB writeやmigrationが必要なものは別PRに分離する。
+`origin/main` 由来の clean branch で再確認した現在地。2026-06-15のUI退行確認後は、ユーザー確認済みの baseline snapshot（first-parent `main` `71b9a09b029c1e05dcaf13f0cc9bf159c93d5d6d`、PR `#49` merge直後）で画面に存在していた導線を勝手に削除せず、`implemented` / `no-write placeholder` / `design only` / `deferred` を分けて扱う。`#49` 自体をUI実装PRとみなす意味ではない。
 
 ## Status Matrix
 
@@ -15,8 +15,8 @@
 | Person create/edit | Implemented | `PersonCreateDrawer`, `app/api/persons/route.ts` | DB write系の環境別smoke |
 | Unclassified mail review/move | Implemented | `UnclassifiedMail*`, `app/api/mail-notifications/[id]/extract/route.ts`, `app/api/entities/move-to-unclassified/route.ts` | DB write系の環境別smoke |
 | Keyword include/exclude | Implemented | 案件/要員/未分類メールに `filterValues.exclude` 適用 | Browser visual QA |
-| Search history | Deferred | Prisma modelはあるが API/UI は未実装 | DB-backed API/UI/test を別PR |
-| Proposal start/list/draft | Design/partial | Prisma `Proposal` とmatching docsはある | UIから未実装「提案開始」は撤去済み |
+| Search history | UI restored / DB-backed pending | baseline snapshot時点の検索履歴UI導線を復旧。現hotfixはmock-onlyで、DB-backed版は #55 で追加開発中 | #55 rebase後に `test:search-history` とBrowser visual QA。現hotfixの表示方法は承認待ち |
+| Proposal start/list/draft | No-write placeholder / Design/partial | baseline snapshot時点の提案開始導線を復旧。Prisma `Proposal` とmatching docsはある | 実DB writeの提案作成API/UIは別PR。現hotfixの表示方法は承認待ち |
 | Email draft/send | Design only | SES sales console BK, matching proposal draft docs | UI/APIは未実装のまま出さない |
 | Gmail sync/classify/extract | Implemented/ops-sensitive | `scripts/gmail-*`, admin sync APIs, Gmail quality tests | DB/credential環境別のread-only/dry-run確認 |
 | CSV/import/source tracking | Implemented/partial | `/imports`, import/source-record APIs, source tracking tests | supervised applyの運用確認 |
@@ -30,9 +30,9 @@
 
 | Item | Result |
 |---|---|
-| Mock-only search history UI | Removed from app/components/data. Residual search has no hits. |
-| Proposal start fake action | Removed from table/detail. Residual search has no hits. |
-| Nonexistent `/projects/{id}` copy | Replaced with project ID/title copy. |
+| Mock-only search history UI | `サンプル検索履歴` として表示し、実履歴の保存/取得なしを画面上で明示。DB-backed版は #55 に分離。 |
+| Proposal start no-write action | `提案開始（未実装）` として表示し、クリック時にDB登録なしを明示。実DB writeは別PR。 |
+| Project copy action | `/projects/{id}` ページが存在しないためURLコピーは復旧しない。案件ID/案件名コピーを維持。 |
 | `tsconfig.tsbuildinfo` dirtying worktree | Removed from git and ignored. |
 | Generated Prisma/old worktrees in typecheck | Excluded in `tsconfig.json`. |
 | Top-level market-analysis docs | Moved under `docs/themes/market-analysis/`. |
@@ -45,7 +45,7 @@ Executed after this docs/folder recheck:
 | Gate | Result | Notes |
 |---|---|---|
 | old docs path search | PASS | Old market-analysis docs path and old recovery report path have no live references. |
-| removed UI residual search | PASS | SearchHistory mock UI, fake proposal start, fake project URL copy have no app/component/data hits. |
+| UI restore diff review | PENDING | SearchHistory UI、提案開始、コピー、Header nav/settingsはsafety stateへ変更。実体がない/未確認の導線は通常enabledにしない。 |
 | `git diff --check` | PASS | CRLF warnings only. |
 | `npm.cmd run typecheck` | PASS | TypeScript no-emit passed. |
 | `npm.cmd test` | PASS | Gmail/import/matching tests passed. Gmail quality current accuracy remains 0.96. |
@@ -58,7 +58,7 @@ Executed after this docs/folder recheck:
 | Priority | Task |
 |---|---|
 | P0 | Browser visual QA for `/`, `/imports`, `/matches`, `/market-analysis` |
-| P0 | DB-backed SearchHistory API/UI/test in a separate PR |
+| P0 | DB-backed SearchHistory API/UI/test in #55 after UI regression hotfix |
 | P1 | Dependency security upgrade follow-up monitoring after Next 16 merge |
 | P1 | Per-theme implemented/design-only/deferred status tables |
 | P1 | Environment-specific DB write smoke with explicit DB target and rollback policy |

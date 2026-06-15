@@ -45,7 +45,7 @@ function DetailItemValue({ item }) {
   return <strong className={`${item.emphasis ? "important-value" : ""} ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</strong>;
 }
 
-export default function ProjectDetailPane({ canEdit = true, onClose, onCopyUrl, onDetailAction, project }) {
+export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClose, onCopyUrl, onDetailAction, project }) {
   useEffect(() => {
     if (!project) return undefined;
 
@@ -68,6 +68,10 @@ export default function ProjectDetailPane({ canEdit = true, onClose, onCopyUrl, 
     console.log(`project detail action: ${action}`, project?.id || project?.dbId || "");
     if (action === "copy") {
       onCopyUrl(project);
+      return;
+    }
+    if (action === "proposal") {
+      onAddProposal(project);
       return;
     }
     onDetailAction(action, project);
@@ -125,6 +129,16 @@ export default function ProjectDetailPane({ canEdit = true, onClose, onCopyUrl, 
                 <>
                   <button className="outline-button" onClick={() => handleAction("archive")} type="button">
                     アーカイブ
+                  </button>
+                  <button
+                    aria-label="提案開始（未実装）"
+                    className="outline-button proposal-unavailable-button"
+                    onClick={() => handleAction("proposal")}
+                    title="提案開始は未実装です。DB登録は行われません。"
+                    type="button"
+                  >
+                    <span>提案開始</span>
+                    <span className="proposal-unavailable-pill">未実装</span>
                   </button>
                   <button className="outline-primary" onClick={() => handleAction("unclassify")} type="button">
                     未分類へ移行
