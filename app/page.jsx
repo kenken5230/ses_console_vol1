@@ -12,6 +12,7 @@ import PersonTable from "../components/PersonTable";
 import ProjectCreateDrawer from "../components/ProjectCreateDrawer";
 import ProjectDetailPane from "../components/ProjectDetailPane";
 import ProjectTable from "../components/ProjectTable";
+import SearchHistoryModal from "../components/SearchHistoryModal";
 import SearchToolbar from "../components/SearchToolbar";
 import UnclassifiedMailDetailPane from "../components/UnclassifiedMailDetailPane";
 import UnclassifiedMailTable from "../components/UnclassifiedMailTable";
@@ -711,6 +712,16 @@ export default function Home() {
     });
   };
 
+  const handleAddProposal = (project) => {
+    if (!canEditEntities) {
+      setNotice("この操作を実行する権限がありません");
+      return;
+    }
+    console.log("project proposal unavailable", project?.id || project?.dbId || "");
+    setNotice("提案開始は未実装です。DB登録は行われません。");
+    setMenuProjectId(null);
+  };
+
   const handleCopyUrl = async (project) => {
     console.log("project copy draft", project?.id || project?.dbId || "");
     const projectText = `案件ID: ${project.id}\n案件名: ${project.title}`;
@@ -726,7 +737,7 @@ export default function Home() {
   const handleDetailAction = async (action, project) => {
     console.log(`project ${action} draft`, project?.id || project?.dbId || "");
 
-    if (["edit", "archive", "unclassify"].includes(action) && !canEditEntities) {
+    if (["edit", "archive", "proposal", "unclassify"].includes(action) && !canEditEntities) {
       setNotice("この操作を実行する権限がありません");
       return;
     }
@@ -891,6 +902,10 @@ export default function Home() {
           closeMenus();
           setActiveModal("filter");
         }}
+        onOpenHistory={() => {
+          closeMenus();
+          setActiveModal("history");
+        }}
         onOpenKeyword={() => {
           closeMenus();
           setKeywordDraft({ include: search, exclude: "" });
@@ -953,6 +968,7 @@ export default function Home() {
                 canEdit={canEditEntities}
                 compact={false}
                 menuProjectId={menuProjectId}
+                onAddProposal={handleAddProposal}
                 onCopyUrl={handleCopyUrl}
                 onDetailAction={handleDetailAction}
                 onMenuToggle={(id) => setMenuProjectId(menuProjectId === id ? null : id)}
@@ -996,6 +1012,7 @@ export default function Home() {
         {isProjectTab ? (
           <ProjectDetailPane
             canEdit={canEditEntities}
+            onAddProposal={handleAddProposal}
             onClose={() => setSelectedProject(null)}
             onCopyUrl={handleCopyUrl}
             onDetailAction={handleDetailAction}
@@ -1035,6 +1052,15 @@ export default function Home() {
       ) : null}
       {activeModal === "keyword" ? (
         <KeywordModal keywordDraft={keywordDraft} onApply={applyKeyword} onChange={setKeywordDraft} onClose={() => setActiveModal(null)} />
+      ) : null}
+      {activeModal === "history" ? (
+        <SearchHistoryModal
+          onApply={(history) => {
+            setSearch(history.keyword);
+            setActiveModal(null);
+          }}
+          onClose={() => setActiveModal(null)}
+        />
       ) : null}
       {activeModal === "create" ? <ProjectCreateDrawer mode="create" onClose={() => setActiveModal(null)} onSaved={handleProjectCreated} /> : null}
       {activeModal === "editProject" && selectedProject ? (

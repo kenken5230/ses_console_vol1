@@ -4,6 +4,7 @@ export default function ProjectTable({
   canEdit = true,
   compact,
   menuProjectId,
+  onAddProposal,
   onCopyUrl,
   onDetailAction,
   onMenuToggle,
@@ -64,22 +65,25 @@ export default function ProjectTable({
                   <td className="action-cell" onClick={(event) => event.stopPropagation()}>
                     {canEdit ? (
                       <>
-                    <button className="kebab-button" onClick={() => onMenuToggle(project.id)} type="button" aria-label="案件メニュー">
-                      ⋯
-                    </button>
-                    {menuProjectId === project.id ? (
-                      <div className="row-action-menu">
-                        <button onClick={() => onCopyUrl(project)} type="button">
-                          コピー
+                        <button className="kebab-button" onClick={() => onMenuToggle(project.id)} type="button" aria-label="案件メニュー">
+                          ⋯
                         </button>
-                        <button onClick={() => onDetailAction("edit", project)} type="button">
-                          編集
-                        </button>
-                        <button onClick={() => onDetailAction("archive", project)} type="button">
-                          アーカイブ
-                        </button>
-                      </div>
-                    ) : null}
+                        {menuProjectId === project.id ? (
+                          <div className="row-action-menu">
+                            <button onClick={() => onAddProposal(project)} title="提案開始は未実装です。DB登録は行われません。" type="button">
+                              提案開始（未実装）
+                            </button>
+                            <button onClick={() => onCopyUrl(project)} type="button">
+                              コピー
+                            </button>
+                            <button onClick={() => onDetailAction("edit", project)} type="button">
+                              編集
+                            </button>
+                            <button onClick={() => onDetailAction("archive", project)} type="button">
+                              アーカイブ
+                            </button>
+                          </div>
+                        ) : null}
                       </>
                     ) : null}
                   </td>

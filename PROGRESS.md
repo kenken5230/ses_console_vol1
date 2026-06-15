@@ -33,6 +33,7 @@
 | Codex GitHub sync chat | GitHub上に進捗共有docsを配置 | `PROGRESS.md`, `docs/shared/operations/`, `docs/shared/README.md` | Done | 2026-06-13 | ローカル `git status` はsandbox制約で未確認 |
 | Codex recovery/main alignment | `origin/main` clean worktree で復旧・UI真実性・検証基盤を修正 | `app/page.jsx`, `components/*`, `data/mockProjects.js`, `tsconfig.json`, `.gitignore`, `docs/status/recovery-main-alignment-report-2026-06-15.md` | Done | 2026-06-15 | SearchHistory DB 実装、dependency upgrade、Browser visual QA は別タスク |
 | Codex dependency security audit | npm audit high以上の改善調査と依存更新 | `package.json`, `package-lock.json`, `docs/status/dependency-security-audit-2026-06-15.md` | Done | 2026-06-15 | Next 16更新、overrides、dynamic route型対応、audit 0件 |
+| Codex UI regression restore | #49基準で消えた既存UI導線の復旧と#53/#54/#55変更台帳 | `app/page.jsx`, `components/Header.jsx`, `components/SearchToolbar.jsx`, `components/SearchHistoryModal.jsx`, `components/ProjectTable.jsx`, `components/ProjectDetailPane.jsx`, `data/mockProjects.js`, `docs/status/ui-change-ledger-2026-06-15.md`, `docs/status/ui-regression-restore-2026-06-15.md`, `docs/status/ui-restore-plan-2026-06-15.md` | In Progress | 2026-06-15 | #55 DB-backed SearchHistoryは削除せず別統合。main mergeはユーザー承認後 |
 
 ## 衝突注意エリア
 
