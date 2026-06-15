@@ -1048,7 +1048,7 @@ input[type="radio"] {
 .detail-action-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   margin-top: 16px;
 }
 
@@ -1056,13 +1056,30 @@ input[type="radio"] {
 .detail-action-row .outline-primary,
 .detail-action-row .primary-button,
 .detail-action-row .ghost-button {
-  font-size: 16px;
-  min-height: 40px;
-  padding: 0 14px;
+  font-size: 14px;
+  min-height: 36px;
+  padding: 0 10px;
 }
 
 .detail-primary {
   margin-left: auto;
+}
+
+.detail-close-action {
+  margin-left: auto;
+}
+
+.proposal-unavailable-button {
+  gap: 6px;
+}
+
+.proposal-unavailable-pill {
+  background: #eef2f7;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 2px 6px;
 }
 
 .detail-highlight-grid {

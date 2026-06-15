@@ -130,8 +130,15 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
                   <button className="outline-button" onClick={() => handleAction("archive")} type="button">
                     アーカイブ
                   </button>
-                  <button className="outline-button" onClick={() => handleAction("proposal")} title="提案開始は未実装です。DB登録は行われません。" type="button">
-                    提案開始（未実装）
+                  <button
+                    aria-label="提案開始（未実装）"
+                    className="outline-button proposal-unavailable-button"
+                    onClick={() => handleAction("proposal")}
+                    title="提案開始は未実装です。DB登録は行われません。"
+                    type="button"
+                  >
+                    <span>提案開始</span>
+                    <span className="proposal-unavailable-pill">未実装</span>
                   </button>
                   <button className="outline-primary" onClick={() => handleAction("unclassify")} type="button">
                     未分類へ移行
