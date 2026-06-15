@@ -32,6 +32,7 @@
 | PM setup chat | チャット横断進捗管理の初期整備 | `PROGRESS.md`, `docs/shared/operations/` | Done | 2026-06-13 | なし |
 | Codex GitHub sync chat | GitHub上に進捗共有docsを配置 | `PROGRESS.md`, `docs/shared/operations/`, `docs/shared/README.md` | Done | 2026-06-13 | ローカル `git status` はsandbox制約で未確認 |
 | Codex recovery/main alignment | `origin/main` clean worktree で復旧・UI真実性・検証基盤を修正 | `app/page.jsx`, `components/*`, `data/mockProjects.js`, `tsconfig.json`, `.gitignore`, `docs/status/recovery-main-alignment-report-2026-06-15.md` | Done | 2026-06-15 | SearchHistory DB 実装、dependency upgrade、Browser visual QA は別タスク |
+| Codex dependency security audit | npm audit high以上の改善調査と依存更新 | `package.json`, `package-lock.json`, `docs/status/dependency-security-audit-2026-06-15.md` | Done | 2026-06-15 | Next 16更新、overrides、dynamic route型対応、audit 0件 |
 
 ## 衝突注意エリア
 
@@ -90,6 +91,15 @@
 - Validation: 参照切れ検索 pass、未実装UI残骸検索 pass、`git diff --check` pass(CRLF警告のみ)、`npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、Prisma validate pass、`npm.cmd audit --audit-level=high` fail(8 vulnerabilities)。
 - Remaining: SearchHistory DB-backed実装、dependency security upgrade、Browser visual QA。
 - Risk / Need coordination: フォルダ移動のみ。コード配置、DB、migration、実データ更新は行わない。
+
+### 2026-06-15 JST / Codex dependency security audit
+
+- Scope: `npm.cmd audit --audit-level=high` の8件を調査し、改善可能な依存更新を別branch/別PRで進める。
+- Done: 専用worktree/branchを作成。audit内容、metadata、Node互換性を確認。`next`/`tsx`更新、Hono/esbuild/PostCSS overrides、Next 16 dynamic route型対応、fresh typecheck対応を完了。
+- Changed: `package.json`, `package-lock.json`, `next-env.d.ts`, `tsconfig.json`, dynamic `[id]` route handlers, `docs/status/dependency-security-audit-2026-06-15.md`, `docs/status/README.md`, `docs/status/current-feature-status-2026-06-15.md`, `PROGRESS.md`。
+- Validation: `npm.cmd audit --audit-level=high` pass(0 vulnerabilities)、Prisma validate/generate pass、fresh `.next`なし `npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、local start smoke 200。
+- Remaining: Vercel/PR checks確認、Browser visual QAは別枠。
+- Risk / Need coordination: Next major updateを含むため、復旧PR #53とは別PRにする。
 
 ## 引き継ぎテンプレート
 

@@ -6,10 +6,11 @@ import { prisma } from "../../../../../lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, context: { params: { id: string } }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     await requireAnyRole(request, ["ADMIN", "MANAGER"]);
-    const result = await getSourceRecordDetail(prisma, context.params.id);
+    const { id } = await context.params;
+    const result = await getSourceRecordDetail(prisma, id);
     if (!result) return NextResponse.json({ message: "Source record not found" }, { status: 404 });
     return NextResponse.json(result);
   } catch (error) {

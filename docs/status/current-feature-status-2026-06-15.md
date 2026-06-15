@@ -51,7 +51,7 @@ Executed after this docs/folder recheck:
 | `npm.cmd test` | PASS | Gmail/import/matching tests passed. Gmail quality current accuracy remains 0.96. |
 | `npm.cmd run build` | PASS | Next build and Prisma generate passed. |
 | `npx.cmd prisma validate` | PASS | Schema is valid. |
-| `npm.cmd audit --audit-level=high` | FAIL | 8 vulnerabilities: 5 moderate, 2 high, 1 critical. Next upgrade is breaking and must be separate. |
+| `npm.cmd audit --audit-level=high` | PASS in dependency-security branch | `docs/status/dependency-security-audit-2026-06-15.md` reduced 8 vulnerabilities to 0. |
 
 ## Deferred Backlog
 
@@ -59,6 +59,6 @@ Executed after this docs/folder recheck:
 |---|---|
 | P0 | Browser visual QA for `/`, `/imports`, `/matches`, `/market-analysis` |
 | P0 | DB-backed SearchHistory API/UI/test in a separate PR |
-| P1 | Dependency security upgrade for Next/security audit |
+| P1 | Dependency security upgrade follow-up monitoring after Next 16 merge |
 | P1 | Per-theme implemented/design-only/deferred status tables |
 | P1 | Environment-specific DB write smoke with explicit DB target and rollback policy |
