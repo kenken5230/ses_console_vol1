@@ -33,6 +33,7 @@
 | Codex GitHub sync chat | GitHub上に進捗共有docsを配置 | `PROGRESS.md`, `docs/shared/operations/`, `docs/shared/README.md` | Done | 2026-06-13 | ローカル `git status` はsandbox制約で未確認 |
 | Codex recovery/main alignment | `origin/main` clean worktree で復旧・UI真実性・検証基盤を修正 | `app/page.jsx`, `components/*`, `data/mockProjects.js`, `tsconfig.json`, `.gitignore`, `docs/status/recovery-main-alignment-report-2026-06-15.md` | Done | 2026-06-15 | SearchHistory DB 実装、dependency upgrade、Browser visual QA は別タスク |
 | Codex dependency security audit | npm audit high以上の改善調査と依存更新 | `package.json`, `package-lock.json`, `docs/status/dependency-security-audit-2026-06-15.md` | Done | 2026-06-15 | Next 16更新、overrides、dynamic route型対応、audit 0件 |
+| Codex search history DB-backed | DB-backed SearchHistory API/UI/test | `lib/search-history.ts`, `app/api/search-histories/route.ts`, `components/SearchHistoryModal.jsx`, `app/page.jsx`, `scripts/search-history.test.ts` | Done | 2026-06-15 | Real DB write smoke is approval-gated |
 
 ## 衝突注意エリア
 
@@ -100,6 +101,23 @@
 - Validation: `npm.cmd audit --audit-level=high` pass(0 vulnerabilities)、Prisma validate/generate pass、fresh `.next`なし `npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、local start smoke 200。
 - Remaining: Vercel/PR checks確認、Browser visual QAは別枠。
 - Risk / Need coordination: Next major updateを含むため、復旧PR #53とは別PRにする。
+### 2026-06-15 JST / Codex search history DB-backed
+
+- Scope: mock-onlyだった検索履歴を、既存 `search_histories` model を使うDB-backed API/UIとして実装する。
+- Done: 専用worktree/branchを作成。現状調査し、タスク表を `docs/status/search-history-db-backed-2026-06-15.md` に追加。
+- Changed: `docs/status/search-history-db-backed-2026-06-15.md`, `docs/status/README.md`, `PROGRESS.md`。
+- Validation: 実装後に mocked DB test、typecheck、test、buildを実行予定。
+- Remaining: lib/API/UI/test実装。
+- Risk / Need coordination: 実DB write smokeは明示的なDB target/rollback方針なしに行わない。
+
+### 2026-06-15 JST / Codex search history DB-backed completion
+
+- Scope: Restore SearchHistory as a real DB-backed feature instead of mock-only UI.
+- Done: Added validation/list/save library, `GET/POST /api/search-histories`, `SearchHistoryModal`, toolbar/app wiring, and a mocked DB test suite.
+- Changed: `lib/search-history.ts`, `app/api/search-histories/route.ts`, `components/SearchHistoryModal.jsx`, `components/SearchToolbar.jsx`, `app/page.jsx`, `app/globals.css`, `scripts/search-history.test.ts`, `package.json`, status docs.
+- Validation: `npm.cmd run test:search-history`, `npx.cmd prisma generate`, `npx.cmd prisma validate`, `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run build` all passed.
+- Remaining: real DB write smoke only after explicit DB target and rollback policy approval.
+- Risk / Need coordination: this branch is stacked on recovery PR #53 and intentionally does not include dependency-security PR #54 changes.
 
 ## 引き継ぎテンプレート
 

@@ -8,6 +8,7 @@
 |---|---|
 | `current-feature-status-2026-06-15.md` | 機能ごとの実装済み/設計のみ/未実装/要再テストの現状表 |
 | `dependency-security-audit-2026-06-15.md` | npm audit結果、依存更新タスク、検証結果 |
+| `search-history-db-backed-2026-06-15.md` | SearchHistory DB-backed API/UI 実装タスクと検証結果 |
 | `recovery-main-alignment-report-2026-06-15.md` | clean worktree復旧、未実装UI撤去、検証結果、残課題 |
 
 ## Rules
