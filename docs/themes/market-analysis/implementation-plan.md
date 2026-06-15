@@ -9,7 +9,7 @@
 ## 推奨フォルダ構成
 
 ```text
-docs/market-analysis/
+docs/themes/market-analysis/
   research.md
   data-inventory.md
   analysis-axes.md

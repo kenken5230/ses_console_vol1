@@ -56,7 +56,7 @@ dirty tree へ直接 merge せず、`origin/main` から作成した clean workt
 | A-008 | 依存脆弱性対応 | `npm.cmd ci` で 8 vulnerabilities と Next 14.2.15 の security warning。 | Next/Prisma/TypeScript の互換性を見て upgrade PR を切る。 |
 | A-009 | 実ブラウザ visual QA | このスレッドでは in-app Browser 操作用 tool が公開されなかった。 | Browser tool が使えるスレッドで `/`, `/imports`, `/matches`, `/market-analysis` を確認。 |
 | A-010 | DB migration 実行確認 | DB write/migration は今回実行していない。 | 対象 DB と rollback 方針を明示してから migration/dry-run を確認。 |
-| A-011 | docs と実装の完全同期 | 大テーマ docs は増えているが、機能ごとの「実装済み/設計のみ」一覧がまだ粗い。 | 各 theme README に Status: implemented/design-only/deferred を付ける。 |
+| A-011 | docs と実装の完全同期 | 初期の機能ステータス表は `docs/status/current-feature-status-2026-06-15.md` に追加済み。theme別の詳細Statusはまだ粗い。 | 各 theme README に Status: implemented/design-only/deferred を付ける。 |
 
 ## 邪魔していたもの・不要だったもの
 
@@ -103,4 +103,4 @@ clean worktree で実行:
 | P0 | Browser visual QA | login 後の `/` で検索履歴/提案開始/設定/存在しない URL 導線が出ないことを確認。 |
 | P1 | SearchHistory を別 PR で実装 | DB-backed API/UI、認可、上限、task test、group test が揃う。 |
 | P1 | dependency security upgrade | `npm audit` の critical/high と Next warning を解消し、build/test pass。 |
-| P1 | docs status matrix | theme docs ごとに implemented/design-only/deferred を付ける。 |
+| P1 | theme docs status matrix | theme docs ごとに implemented/design-only/deferred を付ける。 |
