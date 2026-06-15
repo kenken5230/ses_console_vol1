@@ -103,13 +103,16 @@ textarea:disabled {
 }
 
 .nav-item {
+  align-items: center;
   background: transparent;
   border: 0;
   border-bottom: 4px solid transparent;
   color: #4b4f57;
+  display: inline-flex;
   font-size: 24px;
   font-weight: 800;
   padding: 0 16px;
+  text-decoration: none;
 }
 
 .nav-item.active {
@@ -119,6 +122,10 @@ textarea:disabled {
 .nav-item:disabled {
   color: #9aa3b2;
   cursor: not-allowed;
+}
+
+.nav-link {
+  color: var(--blue);
 }
 
 .header-actions {

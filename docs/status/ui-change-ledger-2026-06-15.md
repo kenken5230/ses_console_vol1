@@ -12,8 +12,8 @@
 
 確認できていた主な導線:
 
-- 上位ナビ: 人材マスタ、案件(フリーランス・派遣)、求人(転職)、一斉配信、単価相場、レポート
-- Header右側: 市場分析、設定アイコン、ユーザー名/role
+- 上位ナビ: 人材マスタ、案件(フリーランス・派遣)、求人(転職)、一斉配信、市場分析、レポート
+- Header右側: 設定アイコン、ユーザー名/role
 - 検索エリア: 注力案件/要員、フィルター、検索履歴、情報更新、Gmail同期、並び替え、作成
 - 一覧/詳細: 案件メニュー、コピー、編集、アーカイブ、提案開始、未分類へ移行
 
@@ -47,7 +47,7 @@ PR/branch:
 | 案件一覧の提案開始メニューを削除 | `components/ProjectTable.jsx` | A | 行メニューから提案開始導線が消える。 | hotfixでは `提案開始（未実装）` として復旧する。 |
 | 案件詳細の提案開始ボタンを削除 | `components/ProjectDetailPane.jsx` | A | 詳細ドロワーから提案開始導線が消える。 | hotfixでは `提案開始（未実装）` として復旧する。 |
 | `proposalIds` を削除 | `app/page.jsx`, `components/ProjectTable.jsx` | B | 実データ連動なしに `提案開始済み` を出すと誤解を招く。 | hotfixでは復旧しない。実DB連携後に実データ状態と連動して戻す。 |
-| Header navを案件だけに縮小 | `components/Header.jsx` | A | 人材マスタ、求人、一斉配信、単価相場、レポートが消えたように見える。 | hotfixで基準snapshotのnavへ復旧。ただし実ページ未確認の項目は有効表示にするか要承認。 |
+| Header navを案件だけに縮小 | `components/Header.jsx` | A | 人材マスタ、求人、一斉配信、市場分析、レポートが消えたように見える。 | hotfixで基準snapshotのnavへ復旧。市場分析は実ページがあるため有効リンク、未実装項目はdisabledで表示。 |
 | 設定アイコンを削除 | `components/Header.jsx` | A | 設定導線が消えた。 | hotfixで復旧。設定画面実装状況は別確認。 |
 | 案件コピーをURLからID/案件名テキストに変更 | `app/page.jsx` | B | 基準snapshotと挙動が変わるが、`/projects/{id}`ページが存在しないためURL復旧は危険。 | hotfixでは案件ID/案件名コピーを維持する。URLコピーは実ページ作成後に復旧する。 |
 | 詳細action permissionから `proposal` を除外 | `app/page.jsx` | A | 権限チェック対象から外れ、提案開始導線復旧時に不整合が出る。 | hotfixで `proposal` を戻す。 |
@@ -65,7 +65,7 @@ PR/branch:
 |---|---|---|---|
 | Header nav itemsを6件から1件へ削減 | A | 既存機能が消えたように見える。 | hotfixで復旧。 |
 | 設定アイコン削除 | A | 設定導線が消える。 | hotfixで復旧。 |
-| 市場分析ボタンは残存 | C | `/market-analysis` 導線は維持。 | 変更なし。 |
+| 市場分析導線は残存 | C | `/market-analysis` 導線は維持。 | 画面幅で隠れないよう、Header右側ボタンではなくメインnav内の実リンクとして表示。 |
 
 ### Button / Flow Changes
 
@@ -265,4 +265,4 @@ PR/branch:
 | mock-based `SearchHistoryModal` | `検索履歴` button is restored, modal is explicitly labeled `サンプル検索履歴` | `サンプル条件を反映` sets only the keyword search value and closes the modal. No DB read/write occurs. | Screen text states this is sample data, no real history save/fetch occurs, and DB-backed behavior is planned in #55. | Replace with #55 DB-backed implementation after approval and full test gates. |
 | DB登録しない `提案開始` | Flow is kept visible as `提案開始（未実装）` | Authorized users get `提案開始は未実装です。DB登録は行われません。`; unauthorized users get the existing permission error. No DB write occurs. | `提案開始済み` is not shown because there is no real data link. | Implement real proposal API/write flow in a separate approved PR. |
 | `/projects/{id}` URL copy | Broken URL copy is not restored | Copies `案件ID` and `案件名` text instead of `/projects/{id}`. It does not navigate. | There is no `app/projects/[id]` page, so users are not given a dead URL. | Restore URL copy only after a real project detail route exists. |
-| Header nav/settings | Visual nav/settings are restored in disabled/coming-soon state for unimplemented items | Unimplemented nav/settings buttons are disabled with `aria-disabled` and title text. `市場分析` remains the real link. | No dead link/no-op is presented as a normal function. | Enable each nav/settings item only when its page/action exists. |
+| Header nav/settings | Visual nav/settings are restored in disabled/coming-soon state for unimplemented items | Unimplemented nav/settings buttons are disabled with `aria-disabled` and title text. `市場分析` is shown in the main nav as the real `/market-analysis` link. | No dead link/no-op is presented as a normal function. | Enable each nav/settings item only when its page/action exists. |

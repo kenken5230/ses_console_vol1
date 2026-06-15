@@ -19,9 +19,9 @@
 
 | UI / Flow | Regression source | Classification | Decision | PR / Task | Test |
 |---|---|---|---|---|---|
-| Header nav: 人材マスタ、案件、求人、一斉配信、単価相場、レポート | #53 | A | Restore now | `codex/restore-console-ui-regression-20260615` hotfix | Browser visual QA / typecheck |
+| Header nav: 人材マスタ、案件、求人、一斉配信、市場分析、レポート | #53 | A | Restore now; 市場分析 is an enabled real link, unimplemented items are disabled | `codex/restore-console-ui-regression-20260615` hotfix | Browser visual QA / typecheck |
 | Header settings icon | #53 | A | Restore now | hotfix | Browser visual QA / typecheck |
-| 市場分析ボタン | unchanged | C | Keep | no change | Browser visual QA |
+| 市場分析リンク | #56 hotfix | C | Keep as visible main-nav link to `/market-analysis` | no DB/write changes | Browser visual QA |
 | SearchHistoryModal old UI | #53 | A | Restore now as baseline | hotfix | Browser visual QA / typecheck |
 | Search history DB-backed UI/API | #55 | C | Keep pending | #55 after hotfix | `npm.cmd run test:search-history` / typecheck / build |
 | 検索履歴ボタン | #53 | A | Restore now | hotfix, later #55 upgrades behavior | Browser visual QA |
@@ -74,7 +74,7 @@ Not included:
 | mock-based `SearchHistoryModal` | Button restored; modal is labeled `サンプル検索履歴` and explains no DB read/write | Applies only a sample keyword condition. | Safe as sample UI; real DB-backed history remains #55. |
 | DB登録しない `提案開始` | Visible as `提案開始（未実装）`; no `提案開始済み` state | Shows `提案開始は未実装です。DB登録は行われません。` | Safe as explicit not-implemented notice; real proposal write flow remains separate. |
 | `/projects/{id}` URL copy | Broken URL copy is not restored | Copies案件ID/案件名 text only. | Safe until a real `/projects/[id]` route exists. |
-| Header nav/settings | Unimplemented items are disabled/coming-soon with `aria-disabled` and title | Disabled items do not trigger no-op actions; `市場分析` remains an enabled real link. | Safe as non-clickable visual restoration. |
+| Header nav/settings | Unimplemented items are disabled/coming-soon with `aria-disabled` and title; `市場分析` is a visible enabled nav link | Disabled items do not trigger no-op actions; `市場分析` opens `/market-analysis`. | Safe as non-clickable visual restoration with the real market analysis feature preserved. |
 
 ## Test Plan
 
