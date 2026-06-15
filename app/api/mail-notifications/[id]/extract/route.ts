@@ -85,9 +85,10 @@ function forcePersonReview(extraction: PersonExtraction, mail: any): PersonExtra
   };
 }
 
-export async function POST(request: Request, context: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     await requireAnyRole(request, ["ADMIN", "MANAGER", "SALES"]);
+    const { id } = await context.params;
     const body = await request.json().catch(() => ({}));
     const target = asTarget(body?.target);
     if (!target) {
@@ -95,7 +96,7 @@ export async function POST(request: Request, context: { params: { id: string } }
     }
 
     const mail = await prisma.mailNotification.findUnique({
-      where: { id: context.params.id },
+      where: { id },
       select: {
         id: true,
         externalMessageId: true,
