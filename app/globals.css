@@ -1719,7 +1719,43 @@ input[type="radio"] {
 }
 
 .history-list {
+  flex: 1;
   overflow: auto;
+}
+
+.history-actions {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  padding: 20px 24px;
+}
+
+.history-actions div {
+  display: grid;
+  gap: 4px;
+}
+
+.history-actions strong {
+  font-size: 22px;
+}
+
+.history-actions span,
+.history-message,
+.history-empty {
+  color: #566173;
+}
+
+.history-message {
+  border-bottom: 1px solid var(--line);
+  margin: 0;
+  padding: 14px 24px;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 32px 24px;
 }
 
 .history-item {

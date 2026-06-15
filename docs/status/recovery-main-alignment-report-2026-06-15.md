@@ -52,7 +52,7 @@ dirty tree へ直接 merge せず、`origin/main` から作成した clean workt
 
 | ID | 課題 | 理由 | 次タスク |
 |---|---|---|---|
-| A-004 | DB-backed SearchHistory API/UI | Prisma model はあるが、API/UI/テストが未完成。DB write テストが必要なので別 PR に分離。 | `GET/POST /api/search-histories`、認可、上限件数、DB write test を設計してから実装。 |
+| A-004 | DB-backed SearchHistory API/UI | Implemented in `codex/search-history-db-backed-20260615`: API/UI/test complete with mocked DB write boundary checks. | Real DB write smoke remains separate and requires explicit DB target/rollback approval. |
 | A-008 | 依存脆弱性対応 | `npm.cmd ci` で 8 vulnerabilities と Next 14.2.15 の security warning。 | Next/Prisma/TypeScript の互換性を見て upgrade PR を切る。 |
 | A-009 | 実ブラウザ visual QA | このスレッドでは in-app Browser 操作用 tool が公開されなかった。 | Browser tool が使えるスレッドで `/`, `/imports`, `/matches`, `/market-analysis` を確認。 |
 | A-010 | DB migration 実行確認 | DB write/migration は今回実行していない。 | 対象 DB と rollback 方針を明示してから migration/dry-run を確認。 |
@@ -62,7 +62,7 @@ dirty tree へ直接 merge せず、`origin/main` から作成した clean workt
 
 | 対象 | 問題 | 対応 |
 |---|---|---|
-| `components/SearchHistoryModal.jsx` | mock data だけで実 DB 機能ではないのに UI 上は機能に見える。 | 削除。 |
+| `components/SearchHistoryModal.jsx` | 以前は mock data だけで実 DB 機能ではなかった。 | `codex/search-history-db-backed-20260615` で DB-backed API/UI として復活。 |
 | `data/mockProjects.js` の `searchHistories` | 固定履歴で、ユーザー実行結果や DB と無関係。 | 削除。 |
 | `提案開始` ボタン | DB 登録せず notice だけ出す。実装済み機能に見える。 | 一覧/詳細から撤去。 |
 | `/projects/{id}` コピー | 実 route がない。クリック後の期待と実態がズレる。 | 案件ID/案件名コピーへ変更。 |
@@ -93,7 +93,7 @@ clean worktree で実行:
 - `npm.cmd test`: pass
 - `npm.cmd run build`: pass
 - `git diff --check`: pass with CRLF warnings only
-- 残骸検索: `SearchHistoryModal|検索履歴|onOpenHistory|searchHistories|提案開始|proposalIds|handleAddProposal|/projects/` は app/components/data/package で hit なし
+- 残骸検索: mock-only `data/mockProjects.js` の `searchHistories` は復活していない。`SearchHistoryModal` / `onOpenHistory` は DB-backed API/UI として期待される live hit。
 
 ## 次の Sprint Backlog
 

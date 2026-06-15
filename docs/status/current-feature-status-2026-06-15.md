@@ -15,7 +15,7 @@
 | Person create/edit | Implemented | `PersonCreateDrawer`, `app/api/persons/route.ts` | DB write系の環境別smoke |
 | Unclassified mail review/move | Implemented | `UnclassifiedMail*`, `app/api/mail-notifications/[id]/extract/route.ts`, `app/api/entities/move-to-unclassified/route.ts` | DB write系の環境別smoke |
 | Keyword include/exclude | Implemented | 案件/要員/未分類メールに `filterValues.exclude` 適用 | Browser visual QA |
-| Search history | Deferred | Prisma modelはあるが API/UI は未実装 | DB-backed API/UI/test を別PR |
+| Search history | Implemented in `codex/search-history-db-backed-20260615` | `lib/search-history.ts`, `app/api/search-histories/route.ts`, `components/SearchHistoryModal.jsx`, `scripts/search-history.test.ts` | Real DB write smoke with explicit DB target and rollback policy |
 | Proposal start/list/draft | Design/partial | Prisma `Proposal` とmatching docsはある | UIから未実装「提案開始」は撤去済み |
 | Email draft/send | Design only | SES sales console BK, matching proposal draft docs | UI/APIは未実装のまま出さない |
 | Gmail sync/classify/extract | Implemented/ops-sensitive | `scripts/gmail-*`, admin sync APIs, Gmail quality tests | DB/credential環境別のread-only/dry-run確認 |
@@ -58,7 +58,7 @@ Executed after this docs/folder recheck:
 | Priority | Task |
 |---|---|
 | P0 | Browser visual QA for `/`, `/imports`, `/matches`, `/market-analysis` |
-| P0 | DB-backed SearchHistory API/UI/test in a separate PR |
+| P1 | SearchHistory real DB write smoke with explicit DB target and rollback policy |
 | P1 | Dependency security upgrade for Next/security audit |
 | P1 | Per-theme implemented/design-only/deferred status tables |
 | P1 | Environment-specific DB write smoke with explicit DB target and rollback policy |

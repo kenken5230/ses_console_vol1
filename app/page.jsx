@@ -12,6 +12,7 @@ import PersonTable from "../components/PersonTable";
 import ProjectCreateDrawer from "../components/ProjectCreateDrawer";
 import ProjectDetailPane from "../components/ProjectDetailPane";
 import ProjectTable from "../components/ProjectTable";
+import SearchHistoryModal from "../components/SearchHistoryModal";
 import SearchToolbar from "../components/SearchToolbar";
 import UnclassifiedMailDetailPane from "../components/UnclassifiedMailDetailPane";
 import UnclassifiedMailTable from "../components/UnclassifiedMailTable";
@@ -69,6 +70,49 @@ function createDefaultFilterValues() {
     ...createEmptyFilterValues(),
     createdFrom: getOneMonthAgoDate()
   };
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function stringArray(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+}
+
+function savedFilterValues(value) {
+  if (!isPlainObject(value)) return createEmptyFilterValues();
+
+  return {
+    ...createEmptyFilterValues(),
+    createdFrom: typeof value.createdFrom === "string" ? value.createdFrom : "",
+    createdTo: typeof value.createdTo === "string" ? value.createdTo : "",
+    projectId: typeof value.projectId === "string" ? value.projectId : "",
+    exclude: typeof value.exclude === "string" ? value.exclude : "",
+    startMonthFrom: typeof value.startMonthFrom === "string" ? value.startMonthFrom : "",
+    startMonthTo: typeof value.startMonthTo === "string" ? value.startMonthTo : "",
+    skill: typeof value.skill === "string" ? value.skill : "",
+    unitMin: typeof value.unitMin === "string" ? value.unitMin : "",
+    unitMax: typeof value.unitMax === "string" ? value.unitMax : "",
+    unitUndecidedOnly: Boolean(value.unitUndecidedOnly),
+    prefecture: typeof value.prefecture === "string" ? value.prefecture : "",
+    remote: stringArray(value.remote),
+    statuses: stringArray(value.statuses),
+    workDays: stringArray(value.workDays)
+  };
+}
+
+function savedCheckedFilters(value) {
+  if (!isPlainObject(value)) return defaultQuickFilters;
+  return Object.fromEntries(
+    Object.entries(defaultQuickFilters).map(([key, defaultValue]) => [key, typeof value[key] === "boolean" ? value[key] : defaultValue])
+  );
+}
+
+function getSearchHistoryTarget(activeTab) {
+  if (activeTab === "要員") return { targetLabel: "要員", targetScope: "PERSONS" };
+  if (activeTab === "未分類") return { targetLabel: "未分類メール", targetScope: "MAILS" };
+  return { targetLabel: "案件", targetScope: "PROJECTS" };
 }
 
 function getProjectDate(project, label) {
@@ -652,6 +696,16 @@ export default function Home() {
   const focusCount = isProjectTab
     ? projects.filter((project) => focusOptions.some((option) => matchesProjectFocus(project, option.id))).length
     : 0;
+  const currentSearchHistoryTarget = getSearchHistoryTarget(activeTab);
+  const currentSearchHistoryFilters = useMemo(
+    () => ({
+      checkedFilters,
+      filterValues,
+      pageSize,
+      selectedFocus
+    }),
+    [checkedFilters, filterValues, pageSize, selectedFocus]
+  );
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, checkedFilters, filterValues, pageSize, search, selectedFocus, selectedSort]);
@@ -838,6 +892,23 @@ export default function Home() {
     setActiveModal(null);
   };
 
+  const applySearchHistory = (item) => {
+    const filters = isPlainObject(item?.filters) ? item.filters : {};
+    setSearch(typeof item?.queryText === "string" ? item.queryText : "");
+    setFilterValues(savedFilterValues(filters.filterValues));
+    setCheckedFilters(savedCheckedFilters(filters.checkedFilters));
+    setSelectedFocus(stringArray(filters.selectedFocus));
+    if (Number.isInteger(filters.pageSize) && filters.pageSize > 0 && filters.pageSize <= 200) {
+      setPageSize(filters.pageSize);
+    }
+    if (typeof item?.sortKey === "string" && item.sortKey) {
+      setSelectedSort(item.sortKey);
+    }
+    setCurrentPage(1);
+    setActiveModal(null);
+    setNotice("検索履歴を適用しました");
+  };
+
   if (authStatus === "checking") {
     return (
       <main className="auth-page">
@@ -890,6 +961,10 @@ export default function Home() {
         onOpenFilter={() => {
           closeMenus();
           setActiveModal("filter");
+        }}
+        onOpenHistory={() => {
+          closeMenus();
+          setActiveModal("history");
         }}
         onOpenKeyword={() => {
           closeMenus();
@@ -1035,6 +1110,19 @@ export default function Home() {
       ) : null}
       {activeModal === "keyword" ? (
         <KeywordModal keywordDraft={keywordDraft} onApply={applyKeyword} onChange={setKeywordDraft} onClose={() => setActiveModal(null)} />
+      ) : null}
+      {activeModal === "history" ? (
+        <SearchHistoryModal
+          currentFilters={currentSearchHistoryFilters}
+          currentResultCount={activeRows.length}
+          currentSearch={search}
+          currentSortKey={selectedSort}
+          onApply={applySearchHistory}
+          onClose={() => setActiveModal(null)}
+          onSaved={setNotice}
+          targetLabel={currentSearchHistoryTarget.targetLabel}
+          targetScope={currentSearchHistoryTarget.targetScope}
+        />
       ) : null}
       {activeModal === "create" ? <ProjectCreateDrawer mode="create" onClose={() => setActiveModal(null)} onSaved={handleProjectCreated} /> : null}
       {activeModal === "editProject" && selectedProject ? (
