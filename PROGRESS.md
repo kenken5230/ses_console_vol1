@@ -31,6 +31,7 @@
 |---|---|---|---|---|---|
 | PM setup chat | チャット横断進捗管理の初期整備 | `PROGRESS.md`, `docs/shared/operations/` | Done | 2026-06-13 | なし |
 | Codex GitHub sync chat | GitHub上に進捗共有docsを配置 | `PROGRESS.md`, `docs/shared/operations/`, `docs/shared/README.md` | Done | 2026-06-13 | ローカル `git status` はsandbox制約で未確認 |
+| Codex recovery/main alignment | `origin/main` clean worktree で復旧・UI真実性・検証基盤を修正 | `app/page.jsx`, `components/*`, `data/mockProjects.js`, `tsconfig.json`, `.gitignore`, `docs/status/recovery-main-alignment-report-2026-06-15.md` | Done | 2026-06-15 | SearchHistory DB 実装、dependency upgrade、Browser visual QA は別タスク |
 
 ## 衝突注意エリア
 
@@ -71,6 +72,24 @@
 - Validation: GitHub connectorで `main` 上の欠落を確認。ローカルgit/npm検証はsandbox制約により未実行。
 - Remaining: PRをmergeして `main` に反映する。merge後、各チャットは作業開始時に `PROGRESS.md` を読む。
 - Risk / Need coordination: ローカル未コミット差分はこの環境では未確認。実装作業前には通常環境で `git status` を確認する。
+
+### 2026-06-15 JST / Codex recovery/main alignment
+
+- Scope: dirty tree に直接 merge せず、`origin/main` から clean worktree/branch を作って復旧作業を開始。
+- Done: dirty tree backup 作成、clean worktree 作成、未実装 UI 導線撤去、未分類メール除外キーワード修正、`tsconfig.tsbuildinfo` hygiene、復旧レポート追加。
+- Changed: `.gitignore`, `app/page.jsx`, `components/Header.jsx`, `components/ProjectDetailPane.jsx`, `components/ProjectTable.jsx`, `components/SearchToolbar.jsx`, `data/mockProjects.js`, `tsconfig.json`, `docs/README.md`, `docs/status/recovery-main-alignment-report-2026-06-15.md`, `PROGRESS.md`。
+- Validation: `npm.cmd ci --ignore-scripts`, Prisma validate/generate, `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run build`, `git diff --check`, 未実装 UI 残骸検索 pass。
+- Remaining: SearchHistory は DB-backed 実装として別 PR、dependency security upgrade、Browser visual QA、docs status matrix。
+- Risk / Need coordination: DB write/migration は今回未実行。Browser 操作用 tool はこのスレッドで公開されなかったため visual QA は未実施。
+
+### 2026-06-15 JST / Codex docs/status recheck
+
+- Scope: docs入口とテーマ別フォルダを再整理し、怪しい箇所を再テストする。
+- Done: `docs/status/` を追加し、復旧レポートを移動。市場分析docsを `docs/themes/market-analysis/` へ移動。docs入口とテーマ入口を更新。現状機能ステータス表を追加。
+- Changed: `docs/README.md`, `docs/themes/README.md`, `docs/status/`, `docs/themes/market-analysis/`, `PROGRESS.md`。
+- Validation: 参照切れ検索 pass、未実装UI残骸検索 pass、`git diff --check` pass(CRLF警告のみ)、`npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、Prisma validate pass、`npm.cmd audit --audit-level=high` fail(8 vulnerabilities)。
+- Remaining: SearchHistory DB-backed実装、dependency security upgrade、Browser visual QA。
+- Risk / Need coordination: フォルダ移動のみ。コード配置、DB、migration、実データ更新は行わない。
 
 ## 引き継ぎテンプレート
 

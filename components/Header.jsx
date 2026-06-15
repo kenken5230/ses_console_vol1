@@ -1,4 +1,4 @@
-const navItems = ["人材マスタ", "案件(フリーランス・派遣)", "求人(転職)", "一斉配信", "単価相場 ↗", "レポート ↗"];
+const navItems = ["案件(フリーランス・派遣)"];
 
 export default function Header({ currentUser, onLogout }) {
   return (
@@ -22,9 +22,6 @@ export default function Header({ currentUser, onLogout }) {
         >
           市場分析
         </a>
-        <button className="icon-button" type="button" aria-label="設定">
-          ⚙
-        </button>
         <button className="user-menu" onClick={onLogout} type="button" title="ログアウト">
           {currentUser?.name || "ログイン中"} <span>{currentUser?.role || ""}</span>
         </button>

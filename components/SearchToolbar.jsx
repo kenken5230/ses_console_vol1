@@ -14,7 +14,6 @@ export default function SearchToolbar({
   onFocusToggle,
   onOpenCreate,
   onOpenFilter,
-  onOpenHistory,
   onOpenKeyword,
   onQuickFilterChange,
   onRefresh,
@@ -94,9 +93,6 @@ export default function SearchToolbar({
             フィルター
           </button>
         ) : null}
-        <button className="toolbar-button" onClick={onOpenHistory} type="button">
-          検索履歴
-        </button>
         <button className="toolbar-button refresh" onClick={onRefresh} type="button">
           ↻ {hasPendingRefresh ? "表示を更新" : `${entityLabel}情報を更新`}
         </button>
