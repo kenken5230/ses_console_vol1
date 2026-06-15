@@ -4,13 +4,11 @@ export default function ProjectTable({
   canEdit = true,
   compact,
   menuProjectId,
-  onAddProposal,
   onCopyUrl,
   onDetailAction,
   onMenuToggle,
   onSelectProject,
   projects,
-  proposalIds,
   selectedProjectId
 }) {
   const visibleColumns = compact
@@ -71,9 +69,6 @@ export default function ProjectTable({
                     </button>
                     {menuProjectId === project.id ? (
                       <div className="row-action-menu">
-                        <button onClick={() => onAddProposal(project)} type="button">
-                          {proposalIds.includes(project.id) ? "提案開始済み" : "提案開始"}
-                        </button>
                         <button onClick={() => onCopyUrl(project)} type="button">
                           コピー
                         </button>

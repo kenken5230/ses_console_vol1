@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "strict": false,
     "noEmit": true,
-    "incremental": true,
+    "incremental": false,
     "module": "esnext",
     "esModuleInterop": true,
     "moduleResolution": "bundler",
@@ -29,6 +29,12 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "old/**",
+    "__pr_*/**",
+    "app/generated/prisma/**",
+    ".next/cache/**",
+    "dist",
+    "out"
   ]
 }

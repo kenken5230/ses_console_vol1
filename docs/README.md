@@ -7,6 +7,8 @@
 
 ## 追加ドキュメント
 
+- `docs/recovery-main-alignment-report-2026-06-15.md`
+  - `origin/main` clean worktree による復旧・機能棚卸し・修正タスク・検証結果のレポート。
 - `docs/themes/ses-sales-console/requirements/ses-sales-console-integrated-requirements-v0.1.md`
   - Notion移行、案件/要員DB、AIマッチング、提案、メール、履歴、統計、KPI、会社/商流、統合consoleの大テーマ別要件定義。
 - `docs/themes/ses-sales-console/BK/ses-sales-console-theme-backlog-v0.1.md`

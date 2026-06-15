@@ -102,51 +102,6 @@ export const sidePaneItemLabels = [
   "案件作成日"
 ];
 
-export const searchHistories = [
-  {
-    id: 1,
-    chips: ["案件作成日 2026-01-16 ~", "含めるキーワード 在宅"],
-    searchedAt: "2026-04-16 15:21",
-    keyword: "在宅"
-  },
-  {
-    id: 2,
-    chips: ["案件作成日 2026-01-16 ~", "含めるキーワード 基本リモート"],
-    searchedAt: "2026-04-16 15:14",
-    keyword: "基本リモート"
-  },
-  {
-    id: 3,
-    chips: ["案件作成日 2026-01-16 ~", "含めるキーワード フルリモート"],
-    searchedAt: "2026-04-16 14:49",
-    keyword: "フルリモート"
-  },
-  {
-    id: 4,
-    chips: ["案件作成日 2026-01-16 ~", "含めるキーワード shell"],
-    searchedAt: "2026-04-16 14:49",
-    keyword: "shell"
-  },
-  {
-    id: 5,
-    chips: ["都道府県 愛知県"],
-    searchedAt: "2026-04-08 13:39",
-    keyword: "愛知県"
-  },
-  {
-    id: 6,
-    chips: ["含めるキーワード SQL", "都道府県 愛知県"],
-    searchedAt: "2026-04-08 13:39",
-    keyword: "SQL"
-  },
-  {
-    id: 7,
-    chips: ["案件作成日 2026-01-08 ~", "含めるキーワード Python", "都道府県 愛知県"],
-    searchedAt: "2026-04-08 13:37",
-    keyword: "Python"
-  }
-];
-
 export const projects = [
   {
     id: 2085143,
