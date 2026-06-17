@@ -39,9 +39,10 @@ import type {
   WorkStyleKey,
 } from "./types";
 
-export const MARKET_ANALYSIS_DEFAULT_LIMIT = 1000;
+export const MARKET_ANALYSIS_DEFAULT_LIMIT = 100;
 export const MARKET_ANALYSIS_MAX_LIMIT = 1000;
 export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
+export const MARKET_ANALYSIS_CUMULATIVE_FROM_MONTH = "2026-01";
 
 export const MARKET_ANALYSIS_PROJECT_SELECT = {
   id: true,
@@ -89,7 +90,7 @@ export const MARKET_ANALYSIS_PERSON_SELECT = {
 } as const;
 
 export type MarketAnalysisQuery = {
-  limit: number;
+  limit?: number;
   focusOnly: boolean;
   fromMonth?: string;
   toMonth?: string;
@@ -144,8 +145,12 @@ export type MarketAnalysisApiResponse = {
     projectCount: number;
     personCount: number;
     focusProjectCount: number;
+    sampleProjectCount: number;
+    samplePersonCount: number;
+    sampleFocusProjectCount: number;
+    cumulativeFromMonth: string | null;
     qualityAlertCount: number;
-    limit: number;
+    limit: number | null;
     focusOnly: boolean;
   };
   period: {
@@ -161,7 +166,7 @@ export type MarketAnalysisApiResponse = {
     personToMonth: string | null;
   };
   appliedFilters: {
-    limit: number;
+    limit: number | null;
     focusOnly: boolean;
     fromMonth: string | null;
     toMonth: string | null;
@@ -180,8 +185,9 @@ export type MarketAnalysisApiResponse = {
 };
 
 function clampLimit(value: string | null) {
-  if (!value) return MARKET_ANALYSIS_DEFAULT_LIMIT;
-  const parsed = Number(value);
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
   if (!Number.isFinite(parsed) || parsed <= 0) return MARKET_ANALYSIS_DEFAULT_LIMIT;
   return Math.min(Math.trunc(parsed), MARKET_ANALYSIS_MAX_LIMIT);
 }
@@ -255,10 +261,25 @@ function firstKnownPriceBand(metrics: PriceBandMetric[]): PriceBandKey | null {
   return metrics.find((metric) => metric.priceBand !== "unknown")?.priceBand ?? null;
 }
 
-export function parseMarketAnalysisQuery(params: URLSearchParams): MarketAnalysisQuery {
-  const monthRange = normalizeMonthRange(monthParam(params.get("fromMonth")), monthParam(params.get("toMonth")));
+export function defaultRecentMonthRange(now = new Date()) {
+  const current = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const from = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 2, 1));
+  return {
+    fromMonth: monthKeyFromDate(from) ?? undefined,
+    toMonth: monthKeyFromDate(current) ?? undefined,
+  };
+}
+
+export function parseMarketAnalysisQuery(params: URLSearchParams, now = new Date()): MarketAnalysisQuery {
+  const requestedFromMonth = monthParam(params.get("fromMonth"));
+  const requestedToMonth = monthParam(params.get("toMonth"));
+  const monthRange = normalizeMonthRange(
+    requestedFromMonth,
+    requestedToMonth,
+    !requestedFromMonth && !requestedToMonth ? defaultRecentMonthRange(now) : undefined,
+  );
+  const limit = clampLimit(params.get("limit"));
   const query: MarketAnalysisQuery = {
-    limit: clampLimit(params.get("limit")),
     focusOnly: booleanParam(params.get("focusOnly")),
   };
   const skill = skillParam(params.get("skill"));
@@ -267,6 +288,7 @@ export function parseMarketAnalysisQuery(params: URLSearchParams): MarketAnalysi
   const workStyle = workStyleParam(params.get("workStyle"));
   const contractType = contractTypeParam(params.get("contractType"));
 
+  if (limit !== undefined) query.limit = limit;
   if (monthRange.fromMonth) query.fromMonth = monthRange.fromMonth;
   if (monthRange.toMonth) query.toMonth = monthRange.toMonth;
   if (skill) query.skill = skill;
@@ -329,7 +351,13 @@ export function marketPersonFromDb(row: MarketPersonDbRow): MarketPersonInput {
 export function buildMarketAnalysisResponse(
   projectRows: MarketProjectDbRow[],
   personRows: MarketPersonDbRow[],
-  options: Partial<MarketAnalysisQuery> & { generatedAt?: string } = {},
+  options: Partial<MarketAnalysisQuery> & {
+    cumulativeFocusProjectCount?: number;
+    cumulativeFromMonth?: string;
+    cumulativePersonCount?: number;
+    cumulativeProjectCount?: number;
+    generatedAt?: string;
+  } = {},
 ): MarketAnalysisApiResponse {
   const filters = appliedFiltersFromOptions(options);
   const projectPairs = projectRows
@@ -371,11 +399,15 @@ export function buildMarketAnalysisResponse(
 
   return {
     summary: {
-      projectCount: projects.length,
-      personCount: persons.length,
-      focusProjectCount,
+      projectCount: options.cumulativeProjectCount ?? projects.length,
+      personCount: options.cumulativePersonCount ?? persons.length,
+      focusProjectCount: options.cumulativeFocusProjectCount ?? focusProjectCount,
+      sampleProjectCount: projects.length,
+      samplePersonCount: persons.length,
+      sampleFocusProjectCount: focusProjectCount,
+      cumulativeFromMonth: options.cumulativeFromMonth ?? null,
       qualityAlertCount: qualityAlerts.reduce((total, alert) => total + alert.count, 0),
-      limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
+      limit: filters.limit,
       focusOnly: Boolean(options.focusOnly),
     },
     period,
@@ -396,7 +428,7 @@ export function buildMarketAnalysisResponse(
 function appliedFiltersFromOptions(options: Partial<MarketAnalysisQuery>) {
   const monthRange = normalizeMonthRange(options.fromMonth, options.toMonth);
   return {
-    limit: options.limit ?? MARKET_ANALYSIS_DEFAULT_LIMIT,
+    limit: options.limit ?? null,
     focusOnly: Boolean(options.focusOnly),
     fromMonth: monthRange.fromMonth ?? null,
     toMonth: monthRange.toMonth ?? null,
@@ -408,11 +440,17 @@ function appliedFiltersFromOptions(options: Partial<MarketAnalysisQuery>) {
   };
 }
 
-function normalizeMonthRange(fromMonth: string | null | undefined, toMonth: string | null | undefined) {
-  if (fromMonth && toMonth && fromMonth > toMonth) {
-    return { fromMonth: toMonth, toMonth: fromMonth };
+function normalizeMonthRange(
+  fromMonth: string | null | undefined,
+  toMonth: string | null | undefined,
+  fallback?: { fromMonth?: string; toMonth?: string },
+) {
+  const from = fromMonth ?? fallback?.fromMonth;
+  const to = toMonth ?? fallback?.toMonth;
+  if (from && to && from > to) {
+    return { fromMonth: to, toMonth: from };
   }
-  return { fromMonth, toMonth };
+  return { fromMonth: from, toMonth: to };
 }
 
 function rowIsActive(status: string | null | undefined) {

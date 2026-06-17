@@ -150,6 +150,13 @@ function sortBase<T extends MarketMetricBase>(items: T[]) {
   });
 }
 
+function putUnknownPriceBandLast(items: PriceBandMetric[]) {
+  return [
+    ...items.filter((item) => item.priceBand !== "unknown"),
+    ...items.filter((item) => item.priceBand === "unknown"),
+  ];
+}
+
 export function calculateMedian(values: Array<number | null | undefined>) {
   const sorted = values
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
@@ -212,10 +219,10 @@ export function aggregatePriceBandMarket(projects: MarketProjectInput[], persons
     metrics.set(key, metric);
   }
 
-  return sortBase([...metrics.entries()].map(([priceBand, metric]): PriceBandMetric => ({
+  return putUnknownPriceBandLast(sortBase([...metrics.entries()].map(([priceBand, metric]): PriceBandMetric => ({
     priceBand,
     ...toBaseMetric(metric),
-  })));
+  }))));
 }
 
 export function aggregateRegionMarket(projects: MarketProjectInput[], persons: MarketPersonInput[]) {
