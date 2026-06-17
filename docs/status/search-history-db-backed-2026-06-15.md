@@ -35,11 +35,12 @@ The stale #55 branch/PR is reference-only for this work. This branch does not me
 |---|---|
 | Do not show another user's histories | `listSearchHistories` always filters by `userId: user.id`. |
 | Ignore spoofed client `userId` on create | `saveSearchHistory` always writes `userId: user.id` from the authenticated session. |
-| Do not expose `userId` in public response | `publicSearchHistory()` returns only id, targetScope, queryText, filters, sortKey, resultCount, createdAt. |
+| Do not expose row `userId` in public response | `publicSearchHistory()` returns only id, targetScope, queryText, filters, sortKey, resultCount, createdAt. |
+| Strip user-identifying keys from `filters` | `filters` are recursively sanitized before DB create and again while shaping public responses. Dangerous keys include `userId`, `user_id`, `user`, `ownerId`, `owner_id`, `createdBy`, and `created_by`. |
 | Cap list count | `limit` is capped to 50. |
 | Cap query text | `queryText` is capped to 300 chars. |
 | Cap sort key | `sortKey` is capped to 120 chars. |
-| Cap filters payload | `filters` JSON payload is capped to 8KB. |
+| Cap filters payload | Sanitized `filters` JSON payload is capped to 8KB. |
 | Avoid misleading sample data | `サンプル検索履歴` and mock `searchHistories` are removed from the DB-backed UI path. |
 
 ## Verification Plan
@@ -60,6 +61,24 @@ Required gates for this PR:
 ## Current Validation Note
 
 This Codex session cannot execute local shell/git/npm commands because command execution is blocked by the Windows sandbox backend. The PR remains Draft. No real DB write smoke was executed.
+
+Not run in this session:
+
+| Command / Operation | Reason |
+|---|---|
+| `npm.cmd run test:search-history` | Local shell/npm execution blocked by Windows sandbox backend. |
+| `npx.cmd prisma validate` | Local shell/npm execution blocked by Windows sandbox backend. |
+| `npx.cmd prisma generate` | Local shell/npm execution blocked by Windows sandbox backend. |
+| `npm.cmd run typecheck` | Local shell/npm execution blocked by Windows sandbox backend. |
+| `npm.cmd test` | Local shell/npm execution blocked by Windows sandbox backend. |
+| `npm.cmd run build` | Local shell/npm execution blocked by Windows sandbox backend. |
+| `git diff --check` | Local shell/git execution blocked by Windows sandbox backend. |
+| Real DB write smoke | Not approved for this phase and intentionally not executed. |
+| Manual Vercel Preview / production deploy | Vercel Preview is an automatic PR check only; no manual preview operation, production deploy, or deploy operation was executed. |
+
+## Merge Coordination
+
+#60 may also edit `package.json` around test scripts. During follow-up reconciliation, integrate `test:search-history` with #60's `test:market-analysis` flow so the final package scripts run both suites consistently.
 
 ## Deferred / Approval Required
 
