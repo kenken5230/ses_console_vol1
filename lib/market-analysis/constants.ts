@@ -27,6 +27,15 @@ export const PRICE_BANDS = [
   { key: "unknown", label: "未設定", min: null, max: null },
 ] as const;
 
+export const PRICE_BAND_LEGACY_KEY_MAP = {
+  under_50: "45_50",
+  "50_60": "50_55",
+  "60_70": "60_65",
+  "70_80": "70_75",
+  "80_over": "80_85",
+  over_80: "80_85",
+} as const;
+
 export const WORK_STYLE_KEYS = [
   "ONSITE",
   "HYBRID",
