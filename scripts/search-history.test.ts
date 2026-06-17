@@ -103,6 +103,64 @@ async function testSaveIgnoresSpoofedUserId() {
   assertNoSensitiveSearchHistoryOutput(row);
 }
 
+async function testSaveSanitizesFilterUserIdentifiers() {
+  const calls: unknown[] = [];
+  const db = {
+    searchHistory: {
+      async findMany() {
+        throw new Error("not used");
+      },
+      async create(args: unknown) {
+        calls.push(args);
+        const createArgs = args as { data: Record<string, unknown> };
+        return {
+          id: "history-4",
+          ...createArgs.data,
+          createdAt: new Date("2026-06-15T03:00:00.000Z")
+        };
+      }
+    }
+  };
+
+  const row = await saveSearchHistory(db, user, {
+    targetScope: "PROJECTS",
+    queryText: "React",
+    filters: {
+      userId: "filter-spoof",
+      user_id: "legacy-filter-spoof",
+      user: { id: "nested-user-object" },
+      ownerId: "owner-spoof",
+      owner_id: "legacy-owner-spoof",
+      createdBy: "creator-spoof",
+      created_by: "legacy-creator-spoof",
+      activeConditions: [
+        { field: "skill", value: "React", userId: "condition-user", user: "condition-user" },
+        { field: "location", value: "Tokyo", meta: { owner_id: "nested-owner", created_by: "nested-creator", keep: "visible" } }
+      ],
+      nested: {
+        createdBy: "nested-creator",
+        child: { userId: "nested-user", keep: "safe" }
+      }
+    },
+    sortKey: "新着順",
+    resultCount: 3
+  });
+
+  const expectedFilters = {
+    activeConditions: [
+      { field: "skill", value: "React" },
+      { field: "location", value: "Tokyo", meta: { keep: "visible" } }
+    ],
+    nested: {
+      child: { keep: "safe" }
+    }
+  };
+
+  assert.deepEqual((calls[0] as { data: { filters: unknown } }).data.filters, expectedFilters);
+  assert.deepEqual(row.filters, expectedFilters);
+  assertNoSensitiveSearchHistoryOutput(row);
+}
+
 function testValidationCaps() {
   const params = parseSearchHistoryListParams(new URL("http://localhost/api/search-histories?targetScope=MAILS&limit=500"));
   assert.equal(params.targetScope, "MAILS");
@@ -122,13 +180,18 @@ function testPublicResponseShape() {
     userId: "must-not-leak",
     targetScope: "PROJECTS",
     queryText: "Python",
-    filters: {},
+    filters: {
+      keep: "visible",
+      userId: "filter-user-must-not-leak",
+      nested: { ownerId: "filter-owner-must-not-leak", keep: true }
+    },
     sortKey: "名前順",
     resultCount: 8,
     createdAt: new Date("2026-06-15T02:00:00.000Z")
   });
 
   assert.deepEqual(Object.keys(row), ["id", "targetScope", "queryText", "filters", "sortKey", "resultCount", "createdAt"]);
+  assert.deepEqual(row.filters, { keep: "visible", nested: { keep: true } });
   assertNoSensitiveSearchHistoryOutput(row);
 }
 
@@ -161,6 +224,7 @@ function testSourceWiring() {
 
 await testListUsesCurrentUserOnly();
 await testSaveIgnoresSpoofedUserId();
+await testSaveSanitizesFilterUserIdentifiers();
 testValidationCaps();
 testPublicResponseShape();
 testSourceWiring();
