@@ -1,5 +1,6 @@
 import {
   DEFAULT_RECRUITING_COUNT,
+  PRICE_BANDS,
   UNKNOWN_MONTH,
   UNKNOWN_REGION,
   UNKNOWN_SKILL,
@@ -28,6 +29,8 @@ import type {
   SkillMarketMetric,
   WorkStyleKey,
 } from "./types";
+
+const PRICE_BAND_ORDER = new Map(PRICE_BANDS.map((band, index) => [band.key, index]));
 
 type MutableMetric = {
   projectIds: Set<string>;
@@ -150,11 +153,12 @@ function sortBase<T extends MarketMetricBase>(items: T[]) {
   });
 }
 
-function putUnknownPriceBandLast(items: PriceBandMetric[]) {
-  return [
-    ...items.filter((item) => item.priceBand !== "unknown"),
-    ...items.filter((item) => item.priceBand === "unknown"),
-  ];
+function sortPriceBandsByNaturalOrder(items: PriceBandMetric[]) {
+  return items.sort((left, right) => {
+    const leftOrder = PRICE_BAND_ORDER.get(left.priceBand) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = PRICE_BAND_ORDER.get(right.priceBand) ?? Number.MAX_SAFE_INTEGER;
+    return leftOrder - rightOrder;
+  });
 }
 
 export function calculateMedian(values: Array<number | null | undefined>) {
@@ -219,10 +223,10 @@ export function aggregatePriceBandMarket(projects: MarketProjectInput[], persons
     metrics.set(key, metric);
   }
 
-  return putUnknownPriceBandLast(sortBase([...metrics.entries()].map(([priceBand, metric]): PriceBandMetric => ({
+  return sortPriceBandsByNaturalOrder([...metrics.entries()].map(([priceBand, metric]): PriceBandMetric => ({
     priceBand,
     ...toBaseMetric(metric),
-  }))));
+  })));
 }
 
 export function aggregateRegionMarket(projects: MarketProjectInput[], persons: MarketPersonInput[]) {
