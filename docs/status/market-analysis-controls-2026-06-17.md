@@ -13,24 +13,30 @@ Market analysis UI and read-only API control fixes from `origin/main` commit `db
 - Count cumulative projects, persons, and focus projects from `2026-01` with Prisma `count` queries instead of loading all records.
 - Changed price bands to 5万円 increments from `30万円以下` through `120万円以上`; `未設定` remains last.
 - Sort price-band rankings in natural price-band order instead of recruiting-count order.
-- Preserve old shared `priceBand` URL keys by mapping them to deterministic new 5万円 ranges.
+- Preserve old shared `priceBand` URL keys by expanding them to the equivalent set of new 5万円 buckets.
 - Compacted ranking table spacing and right-aligned numeric cells with tabular numbers.
 - Added a visible link back to the original console screen.
 
 ## Legacy Price Band URL Compatibility
 
-Old broad `priceBand` keys are converted before filtering so shared URLs are not silently ignored. Because the new model allows one 5万円 bucket at a time, broad legacy buckets are mapped to the nearest boundary bucket:
+Old broad `priceBand` keys are converted before filtering so shared URLs keep their old range meaning. Legacy keys expand to the equivalent set of new 5万円 buckets, not to a single nearest bucket:
 
-| Legacy key | New key | New label |
-| --- | --- | --- |
-| `under_50` | `45_50` | `45〜50万円` |
-| `50_60` | `50_55` | `50〜55万円` |
-| `60_70` | `60_65` | `60〜65万円` |
-| `70_80` | `70_75` | `70〜75万円` |
-| `80_over` | `80_85` | `80〜85万円` |
-| `over_80` | `80_85` | `80〜85万円` |
+| Legacy key | Expanded new buckets |
+| --- | --- |
+| `under_50`, `under_50万` | `under_30`, `30_35`, `35_40`, `40_45`, `45_50` |
+| `50_60` | `50_55`, `55_60` |
+| `60_70` | `60_65`, `65_70` |
+| `70_80` | `70_75`, `75_80` |
+| `80_over`, `over_80` | `80_85`, `85_90`, `90_95`, `95_100`, `100_105`, `105_110`, `110_115`, `115_120`, `120_over` |
 
-`unknown` continues to map to `未設定`.
+Direct URLs with a new key, such as `priceBand=80_85`, remain a single 5万円 bucket. `unknown` continues to map to `未設定`.
+
+UI and shared URL behavior:
+
+- The new UI dropdown lists the new 5万円 bucket keys.
+- When an old URL is opened, the legacy `priceBand` value is preserved in page state and sent to the API, where it expands internally to multiple buckets.
+- The dropdown displays a temporary `旧URL: ...` option for the current legacy value.
+- Copying the URL without changing the price-band filter keeps the legacy key. Once a user selects a new bucket in the UI, copied URLs use the selected new key.
 
 ## Safety
 

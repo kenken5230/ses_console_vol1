@@ -18,18 +18,54 @@ assert.equal(limitedQuery.toMonth, "2026-06");
 const blankLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit="), fixedNow);
 assert.equal(blankLimitQuery.limit, undefined);
 
-const legacyPriceBandMappings = [
-  ["under_50", "45_50"],
-  ["50_60", "50_55"],
-  ["60_70", "60_65"],
-  ["70_80", "70_75"],
-  ["80_over", "80_85"],
-  ["over_80", "80_85"],
+const over80Query = parseMarketAnalysisQuery(new URLSearchParams("priceBand=over_80"), fixedNow);
+assert.deepEqual(over80Query.priceBand, [
+  "80_85",
+  "85_90",
+  "90_95",
+  "95_100",
+  "100_105",
+  "105_110",
+  "110_115",
+  "115_120",
+  "120_over",
+]);
+
+const range50To60Query = parseMarketAnalysisQuery(new URLSearchParams("priceBand=50_60"), fixedNow);
+assert.deepEqual(range50To60Query.priceBand, ["50_55", "55_60"]);
+
+const newPriceBandQuery = parseMarketAnalysisQuery(new URLSearchParams("priceBand=80_85"), fixedNow);
+assert.equal(newPriceBandQuery.priceBand, "80_85");
+
+const priceBandRows = [
+  { id: "p52", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 52, recruitingCount: 1 } },
+  { id: "p58", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 58, recruitingCount: 1 } },
+  { id: "p62", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 62, recruitingCount: 1 } },
+  { id: "p82", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 82, recruitingCount: 1 } },
+  { id: "p88", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 88, recruitingCount: 1 } },
+  { id: "p121", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 121, recruitingCount: 1 } },
 ];
-for (const [legacyKey, expectedPriceBand] of legacyPriceBandMappings) {
-  const query = parseMarketAnalysisQuery(new URLSearchParams(`priceBand=${legacyKey}`), fixedNow);
-  assert.equal(query.priceBand, expectedPriceBand);
-}
+
+const range50To60Response = buildMarketAnalysisResponse(priceBandRows, [], range50To60Query);
+assert.equal(range50To60Response.summary.sampleProjectCount, 2);
+assert.deepEqual(
+  range50To60Response.priceBandRankings.map((ranking) => ranking.priceBand),
+  ["50_55", "55_60"],
+);
+
+const over80Response = buildMarketAnalysisResponse(priceBandRows, [], over80Query);
+assert.equal(over80Response.summary.sampleProjectCount, 3);
+assert.deepEqual(
+  over80Response.priceBandRankings.map((ranking) => ranking.priceBand),
+  ["80_85", "85_90", "120_over"],
+);
+
+const newPriceBandResponse = buildMarketAnalysisResponse(priceBandRows, [], newPriceBandQuery);
+assert.equal(newPriceBandResponse.summary.sampleProjectCount, 1);
+assert.deepEqual(
+  newPriceBandResponse.priceBandRankings.map((ranking) => ranking.priceBand),
+  ["80_85"],
+);
 
 assert.equal(toPriceBand(25), "under_30");
 assert.equal(toPriceBand(30), "under_30");

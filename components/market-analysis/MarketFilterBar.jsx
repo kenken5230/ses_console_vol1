@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { PRICE_BANDS } from "../../lib/market-analysis/constants";
+import { PRICE_BANDS, PRICE_BAND_LEGACY_LABELS } from "../../lib/market-analysis/constants";
 import MarketShareButton from "./MarketShareButton";
 
 const emptyFilters = {
@@ -27,10 +27,19 @@ const regionOptions = [
   { label: "unknown", value: "unknown" },
 ];
 
-const priceBandOptions = [
+const basePriceBandOptions = [
   { label: "未指定", value: "" },
   ...PRICE_BANDS.map((band) => ({ label: band.label, value: band.key })),
 ];
+
+function priceBandOptionsForValue(value) {
+  if (!value || basePriceBandOptions.some((option) => option.value === value)) {
+    return basePriceBandOptions;
+  }
+
+  const legacyLabel = PRICE_BAND_LEGACY_LABELS[value];
+  return legacyLabel ? [...basePriceBandOptions, { label: legacyLabel, value }] : basePriceBandOptions;
+}
 
 const workStyleOptions = [
   { label: "未指定", value: "" },
@@ -132,6 +141,8 @@ export default function MarketFilterBar({
   useEffect(() => {
     setDraftFilters({ ...emptyFilters, ...filters });
   }, [filters]);
+
+  const priceBandOptions = priceBandOptionsForValue(draftFilters.priceBand);
 
   function updateDraftFilter(key, value) {
     setDraftFilters((current) => ({ ...current, [key]: value }));

@@ -9,7 +9,7 @@ import MarketPeriodInfo from "../../components/market-analysis/MarketPeriodInfo"
 import MarketQualityAlerts from "../../components/market-analysis/MarketQualityAlerts";
 import MarketRankingTable from "../../components/market-analysis/MarketRankingTable";
 import MarketSummaryCards from "../../components/market-analysis/MarketSummaryCards";
-import { PRICE_BAND_LABELS, PRICE_BAND_LEGACY_KEY_MAP } from "../../lib/market-analysis/constants";
+import { PRICE_BAND_LABELS } from "../../lib/market-analysis/constants";
 
 const pageStyle = {
   background: "#f6f7f9",
@@ -237,14 +237,10 @@ function parseLimit(value) {
   return String(Math.trunc(parsed));
 }
 
-function normalizePriceBandFilter(value) {
-  return PRICE_BAND_LEGACY_KEY_MAP[value] || value;
-}
-
 function filtersFromParams(params) {
   return filterKeys.reduce((result, key) => {
     const value = params.get(key)?.trim() || "";
-    result[key] = key === "priceBand" ? normalizePriceBandFilter(value) : value;
+    result[key] = value;
     return result;
   }, { ...emptyDetailFilters });
 }

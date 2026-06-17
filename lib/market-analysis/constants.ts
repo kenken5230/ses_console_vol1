@@ -27,13 +27,37 @@ export const PRICE_BANDS = [
   { key: "unknown", label: "未設定", min: null, max: null },
 ] as const;
 
+const LEGACY_UNDER_50_PRICE_BANDS = ["under_30", "30_35", "35_40", "40_45", "45_50"] as const;
+const LEGACY_OVER_80_PRICE_BANDS = [
+  "80_85",
+  "85_90",
+  "90_95",
+  "95_100",
+  "100_105",
+  "105_110",
+  "110_115",
+  "115_120",
+  "120_over",
+] as const;
+
 export const PRICE_BAND_LEGACY_KEY_MAP = {
-  under_50: "45_50",
-  "50_60": "50_55",
-  "60_70": "60_65",
-  "70_80": "70_75",
-  "80_over": "80_85",
-  over_80: "80_85",
+  under_50: LEGACY_UNDER_50_PRICE_BANDS,
+  "under_50万": LEGACY_UNDER_50_PRICE_BANDS,
+  "50_60": ["50_55", "55_60"],
+  "60_70": ["60_65", "65_70"],
+  "70_80": ["70_75", "75_80"],
+  "80_over": LEGACY_OVER_80_PRICE_BANDS,
+  over_80: LEGACY_OVER_80_PRICE_BANDS,
+} as const;
+
+export const PRICE_BAND_LEGACY_LABELS = {
+  under_50: "旧URL: 50万円未満/以下",
+  "under_50万": "旧URL: 50万円未満/以下",
+  "50_60": "旧URL: 50〜60万円",
+  "60_70": "旧URL: 60〜70万円",
+  "70_80": "旧URL: 70〜80万円",
+  "80_over": "旧URL: 80万円以上",
+  over_80: "旧URL: 80万円以上",
 } as const;
 
 export const WORK_STYLE_KEYS = [

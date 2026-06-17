@@ -45,6 +45,8 @@ export const MARKET_ANALYSIS_MAX_LIMIT = 1000;
 export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
 export const MARKET_ANALYSIS_CUMULATIVE_FROM_MONTH = "2026-01";
 
+type PriceBandFilter = PriceBandKey | PriceBandKey[];
+
 export const MARKET_ANALYSIS_PROJECT_SELECT = {
   id: true,
   createdAt: true,
@@ -97,7 +99,7 @@ export type MarketAnalysisQuery = {
   toMonth?: string;
   skill?: string;
   region?: string;
-  priceBand?: PriceBandKey;
+  priceBand?: PriceBandFilter;
   workStyle?: WorkStyleKey;
   contractType?: ContractTypeKey;
 };
@@ -173,7 +175,7 @@ export type MarketAnalysisApiResponse = {
     toMonth: string | null;
     skill: string | null;
     region: string | null;
-    priceBand: PriceBandKey | null;
+    priceBand: PriceBandFilter | null;
     workStyle: WorkStyleKey | null;
     contractType: ContractTypeKey | null;
   };
@@ -210,13 +212,13 @@ function monthParam(value: string | null) {
   return month >= 1 && month <= 12 ? normalized : undefined;
 }
 
-function priceBandParam(value: string | null): PriceBandKey | undefined {
+function priceBandParam(value: string | null): PriceBandFilter | undefined {
   const normalized = optionalParam(value);
   if (!normalized) return undefined;
   if (PRICE_BANDS.some((band) => band.key === normalized)) return normalized as PriceBandKey;
 
-  const legacyPriceBand = PRICE_BAND_LEGACY_KEY_MAP[normalized as keyof typeof PRICE_BAND_LEGACY_KEY_MAP];
-  return legacyPriceBand ? legacyPriceBand as PriceBandKey : undefined;
+  const legacyPriceBands = PRICE_BAND_LEGACY_KEY_MAP[normalized as keyof typeof PRICE_BAND_LEGACY_KEY_MAP];
+  return legacyPriceBands ? ([...legacyPriceBands] as PriceBandKey[]) : undefined;
 }
 
 function workStyleParam(value: string | null): WorkStyleKey | undefined {
@@ -438,10 +440,18 @@ function appliedFiltersFromOptions(options: Partial<MarketAnalysisQuery>) {
     toMonth: monthRange.toMonth ?? null,
     skill: options.skill ?? null,
     region: options.region ?? null,
-    priceBand: options.priceBand ?? null,
+    priceBand: normalizePriceBandFilter(options.priceBand),
     workStyle: options.workStyle ?? null,
     contractType: options.contractType ?? null,
   };
+}
+
+function normalizePriceBandFilter(priceBand: PriceBandFilter | null | undefined): PriceBandFilter | null {
+  if (!priceBand) return null;
+  if (!Array.isArray(priceBand)) return priceBand;
+
+  const uniquePriceBands = [...new Set(priceBand)];
+  return uniquePriceBands.length ? uniquePriceBands : null;
 }
 
 function normalizeMonthRange(
@@ -538,10 +548,15 @@ function hasSkill(skills: MarketProjectInput["skills"] | MarketPersonInput["skil
   return (skills ?? []).some((item) => normalizeSkillName(item.skillName) === skill);
 }
 
+function matchesPriceBandFilter(priceBand: PriceBandKey, filter: PriceBandFilter | null) {
+  if (!filter) return true;
+  return Array.isArray(filter) ? filter.includes(priceBand) : priceBand === filter;
+}
+
 function projectMatchesFilters(project: MarketProjectInput, filters: ReturnType<typeof appliedFiltersFromOptions>) {
   if (filters.skill && !hasSkill(project.skills, filters.skill)) return false;
   if (filters.region && normalizeRegion(project) !== filters.region) return false;
-  if (filters.priceBand && toPriceBand(pickProjectPrice(project)) !== filters.priceBand) return false;
+  if (!matchesPriceBandFilter(toPriceBand(pickProjectPrice(project)), filters.priceBand)) return false;
   if (
     filters.workStyle
     && normalizeWorkStyle(project.remoteType, `${project.workStyleText ?? ""} ${project.workLocationText ?? ""}`) !== filters.workStyle
@@ -555,7 +570,7 @@ function projectMatchesFilters(project: MarketProjectInput, filters: ReturnType<
 function personMatchesFilters(person: MarketPersonInput, filters: ReturnType<typeof appliedFiltersFromOptions>) {
   if (filters.skill && !hasSkill(person.skills, filters.skill)) return false;
   if (filters.region && normalizeRegion(person) !== filters.region) return false;
-  if (filters.priceBand && toPriceBand(person.desiredUnitPrice) !== filters.priceBand) return false;
+  if (!matchesPriceBandFilter(toPriceBand(person.desiredUnitPrice), filters.priceBand)) return false;
   if (filters.workStyle && normalizeWorkStyle(null, person.remotePreference) !== filters.workStyle) return false;
   return true;
 }
