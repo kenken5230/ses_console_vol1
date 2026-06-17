@@ -17,7 +17,7 @@ The stale #55 branch/PR is reference-only for this work. This branch does not me
 | UI | `components/SearchHistoryModal.jsx`, `components/SearchToolbar.jsx` |
 | Test | `scripts/search-history.test.ts`, `npm run test:search-history` |
 | package | Test script only. Next 16 dependencies and `typecheck = next typegen && tsc --noEmit` are preserved. |
-| DB schema / migration | No schema change, no migration. Existing `SearchHistory` model is used. |
+| DB schema / migration | No DB schema change, no migration. Existing `SearchHistory` model is used. |
 | Real DB smoke | Not executed. Requires separate approval. |
 
 ## UI Change
