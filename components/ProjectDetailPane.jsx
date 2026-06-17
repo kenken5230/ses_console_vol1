@@ -5,7 +5,7 @@ function isEmpty(value) {
   return value === "-" || value === "未入力" || value === "" || value === null || value === undefined;
 }
 
-function DetailItemValue({ item }) {
+function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
   if (item.type === "block") {
     return <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>;
   }
@@ -13,8 +13,8 @@ function DetailItemValue({ item }) {
   if (item.type === "tags") {
     return (
       <div className="tag-flow wrap">
-        {item.tags.map((tag) => (
-          <Badge key={tag}>{tag}</Badge>
+        {item.tags.map((tag, tagIndex) => (
+          <Badge key={`${itemKeyPrefix}-tag-${tagIndex}-${tag}`}>{tag}</Badge>
         ))}
       </div>
     );
@@ -23,8 +23,8 @@ function DetailItemValue({ item }) {
   if (item.type === "commerce") {
     return (
       <div className="commerce-detail">
-        {item.items.map(([label, value]) => (
-          <div key={`${label}-${value}`}>
+        {item.items.map(([label, value], itemIndex) => (
+          <div key={`${itemKeyPrefix}-commerce-${itemIndex}-${label}-${value}`}>
             <span>{label}</span>
             <strong className={isEmpty(value) ? "muted-value" : ""}>{value}</strong>
           </div>
@@ -63,6 +63,7 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
   const groups = detail.groups || [];
   const highlights = detail.highlights || [];
   const meta = detail.meta || [];
+  const projectKey = project.dbId ?? project.id ?? "project";
 
   const handleAction = (action) => {
     console.log(`project detail action: ${action}`, project?.id || project?.dbId || "");
@@ -110,8 +111,8 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
               </div>
             </div>
             <div className="detail-meta">
-              {meta.map((item) => (
-                <span key={item.label}>
+              {meta.map((item, metaIndex) => (
+                <span key={`${projectKey}-meta-${metaIndex}-${item.label}`}>
                   {item.label}: <strong>{item.value || "-"}</strong>
                 </span>
               ))}
@@ -153,8 +154,8 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
 
           {highlights.length ? (
             <section className="detail-highlight-grid">
-              {highlights.map((item) => (
-                <div className="detail-highlight" key={item.label}>
+              {highlights.map((item, highlightIndex) => (
+                <div className="detail-highlight" key={`${projectKey}-highlight-${highlightIndex}-${item.label}`}>
                   <span>{item.label}</span>
                   <strong className={isEmpty(item.value) ? "muted-value" : ""}>{item.value || "-"}</strong>
                 </div>
@@ -163,16 +164,20 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
           ) : null}
 
           <div className="detail-groups">
-            {groups.map((group) => (
-              <section className="detail-group" key={group.title}>
+            {groups.map((group, groupIndex) => (
+              <section className="detail-group" key={`${projectKey}-group-${groupIndex}-${group.title}`}>
                 <h3>{group.title}</h3>
                 <div className="detail-group-body">
-                  {group.items.map((item) => (
-                    <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "commerce" || item.type === "mail" ? "detail-item-wide" : ""}`} key={`${group.title}-${item.label}`}>
-                      <span className="field-label">{item.label}</span>
-                      <DetailItemValue item={item} />
-                    </div>
-                  ))}
+                  {group.items.map((item, itemIndex) => {
+                    const itemKeyPrefix = `${projectKey}-group-${groupIndex}-item-${itemIndex}-${item.label}`;
+
+                    return (
+                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "commerce" || item.type === "mail" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
+                        <span className="field-label">{item.label}</span>
+                        <DetailItemValue item={item} itemKeyPrefix={itemKeyPrefix} />
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             ))}
