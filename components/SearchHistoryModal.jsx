@@ -69,6 +69,7 @@ function buildChips(item) {
 
 async function readErrorMessage(response, fallback) {
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401) return "未認証またはセッション期限切れです";
   return payload?.message || fallback;
 }
 
