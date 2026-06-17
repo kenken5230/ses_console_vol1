@@ -144,6 +144,8 @@ function testSourceWiring() {
   assert.match(modal, /\/api\/search-histories/);
   assert.match(modal, /保存した検索履歴/);
   assert.match(modal, /保存された検索履歴はありません/);
+  assert.match(modal, /検索履歴を読み込んでいます/);
+  assert.match(modal, /保存中/);
   assert.doesNotMatch(modal, /searchHistories/);
   assert.doesNotMatch(modal, /サンプル検索履歴/);
 
@@ -151,6 +153,9 @@ function testSourceWiring() {
   assert.match(toolbar, /ses-console:search-history-context/);
   assert.match(toolbar, /sessionStorage\.setItem/);
   assert.match(toolbar, /onOpenHistory/);
+
+  const data = readFileSync("data/mockProjects.js", "utf8");
+  assert.doesNotMatch(data, /export const searchHistories/);
 }
 
 await testListUsesCurrentUserOnly();
