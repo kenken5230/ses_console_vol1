@@ -5,6 +5,11 @@ import { buildMarketAnalysisResponse, parseMarketAnalysisQuery } from "../../lib
 import { toPriceBand } from "../../lib/market-analysis/normalize";
 
 const fixedNow = new Date("2026-06-17T00:00:00.000Z");
+
+function priceBandQuery(priceBand: string) {
+  return parseMarketAnalysisQuery(new URLSearchParams({ priceBand }), fixedNow);
+}
+
 const defaultQuery = parseMarketAnalysisQuery(new URLSearchParams(), fixedNow);
 assert.equal(defaultQuery.limit, undefined);
 assert.equal(defaultQuery.fromMonth, "2026-04");
@@ -18,8 +23,8 @@ assert.equal(limitedQuery.toMonth, "2026-06");
 const blankLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit="), fixedNow);
 assert.equal(blankLimitQuery.limit, undefined);
 
-const over80Query = parseMarketAnalysisQuery(new URLSearchParams("priceBand=over_80"), fixedNow);
-assert.deepEqual(over80Query.priceBand, [
+const legacyUnder50PriceBands = ["under_30", "30_35", "35_40", "40_45", "45_50"];
+const legacyOver80PriceBands = [
   "80_85",
   "85_90",
   "90_95",
@@ -29,28 +34,79 @@ assert.deepEqual(over80Query.priceBand, [
   "110_115",
   "115_120",
   "120_over",
-]);
+];
 
-const range50To60Query = parseMarketAnalysisQuery(new URLSearchParams("priceBand=50_60"), fixedNow);
+const under50Query = priceBandQuery("under_50");
+assert.deepEqual(under50Query.priceBand, legacyUnder50PriceBands);
+
+const range50To60Query = priceBandQuery("50_60");
 assert.deepEqual(range50To60Query.priceBand, ["50_55", "55_60"]);
 
-const newPriceBandQuery = parseMarketAnalysisQuery(new URLSearchParams("priceBand=80_85"), fixedNow);
+const range60To70Query = priceBandQuery("60_70");
+assert.deepEqual(range60To70Query.priceBand, ["60_65", "65_70"]);
+
+const range70To80Query = priceBandQuery("70_80");
+assert.deepEqual(range70To80Query.priceBand, ["70_75", "75_80"]);
+
+const legacy80OverQuery = priceBandQuery("80_over");
+assert.deepEqual(legacy80OverQuery.priceBand, legacyOver80PriceBands);
+
+const over80Query = priceBandQuery("over_80");
+assert.deepEqual(over80Query.priceBand, legacyOver80PriceBands);
+
+const newPriceBandQuery = priceBandQuery("80_85");
 assert.equal(newPriceBandQuery.priceBand, "80_85");
 
 const priceBandRows = [
+  { id: "p25", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 25, recruitingCount: 1 } },
+  { id: "p34", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 34, recruitingCount: 1 } },
+  { id: "p37", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 37, recruitingCount: 1 } },
+  { id: "p42", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 42, recruitingCount: 1 } },
+  { id: "p47", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 47, recruitingCount: 1 } },
   { id: "p52", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 52, recruitingCount: 1 } },
   { id: "p58", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 58, recruitingCount: 1 } },
   { id: "p62", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 62, recruitingCount: 1 } },
+  { id: "p67", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 67, recruitingCount: 1 } },
+  { id: "p72", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 72, recruitingCount: 1 } },
+  { id: "p76", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 76, recruitingCount: 1 } },
   { id: "p82", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 82, recruitingCount: 1 } },
   { id: "p88", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 88, recruitingCount: 1 } },
   { id: "p121", createdAt: "2026-05-01T00:00:00.000Z", condition: { unitPriceMin: 121, recruitingCount: 1 } },
 ];
+
+const under50Response = buildMarketAnalysisResponse(priceBandRows, [], under50Query);
+assert.equal(under50Response.summary.sampleProjectCount, 5);
+assert.deepEqual(
+  under50Response.priceBandRankings.map((ranking) => ranking.priceBand),
+  legacyUnder50PriceBands,
+);
 
 const range50To60Response = buildMarketAnalysisResponse(priceBandRows, [], range50To60Query);
 assert.equal(range50To60Response.summary.sampleProjectCount, 2);
 assert.deepEqual(
   range50To60Response.priceBandRankings.map((ranking) => ranking.priceBand),
   ["50_55", "55_60"],
+);
+
+const range60To70Response = buildMarketAnalysisResponse(priceBandRows, [], range60To70Query);
+assert.equal(range60To70Response.summary.sampleProjectCount, 2);
+assert.deepEqual(
+  range60To70Response.priceBandRankings.map((ranking) => ranking.priceBand),
+  ["60_65", "65_70"],
+);
+
+const range70To80Response = buildMarketAnalysisResponse(priceBandRows, [], range70To80Query);
+assert.equal(range70To80Response.summary.sampleProjectCount, 2);
+assert.deepEqual(
+  range70To80Response.priceBandRankings.map((ranking) => ranking.priceBand),
+  ["70_75", "75_80"],
+);
+
+const legacy80OverResponse = buildMarketAnalysisResponse(priceBandRows, [], legacy80OverQuery);
+assert.equal(legacy80OverResponse.summary.sampleProjectCount, 3);
+assert.deepEqual(
+  legacy80OverResponse.priceBandRankings.map((ranking) => ranking.priceBand),
+  ["80_85", "85_90", "120_over"],
 );
 
 const over80Response = buildMarketAnalysisResponse(priceBandRows, [], over80Query);
