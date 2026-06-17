@@ -40,7 +40,16 @@ Requested commands:
 - `npm.cmd test`
 - `npm.cmd run build`
 
-Local process execution is blocked in this Codex Windows sandbox. `functions.shell_command` fails with `windows sandbox: Restricted read-only access requires the elevated Windows sandbox backend`, and Node `child_process` fails with `spawn EPERM` for `git`/`npm`. Because of that, the requested validation commands could not be executed locally in this run.
+Results in this Codex Windows sandbox:
+
+- `git diff --check`: not executed. `functions.shell_command` failed before execution with `windows sandbox: Restricted read-only access requires the elevated Windows sandbox backend`; escalated retry failed with the same backend error.
+- `npm.cmd run typecheck`: not executed. `functions.shell_command` failed before execution with the same backend error; escalated retry failed with the same backend error.
+- `npm.cmd test`: not executed. Sandbox run failed with the same backend error; unsandboxed retry was rejected because repo-defined test scripts can access restricted local files.
+- `npm.cmd run build`: not executed. Sandbox run failed with the same backend error; unsandboxed retry was rejected because repo-defined build scripts can access restricted local files.
+
+Additional process note:
+
+- Node `child_process` also failed with `spawn EPERM` for `git` commands, so local branch/status and validation were performed through GitHub metadata where possible.
 
 ## Safety
 
