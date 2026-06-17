@@ -18,6 +18,15 @@ const MAX_QUERY_TEXT_LENGTH = 300;
 const MAX_SORT_KEY_LENGTH = 120;
 const MAX_FILTERS_BYTES = 8_000;
 const MAX_RESULT_COUNT = 1_000_000;
+const SENSITIVE_FILTER_USER_KEYS = new Set([
+  "userid",
+  "user_id",
+  "user",
+  "ownerid",
+  "owner_id",
+  "createdby",
+  "created_by"
+]);
 
 export class SearchHistoryRequestError extends Error {
   status: number;
@@ -40,6 +49,37 @@ type RawSearchHistory = Record<string, unknown>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isSensitiveFilterUserKey(key: string) {
+  return SENSITIVE_FILTER_USER_KEYS.has(key.replace(/[-\s]/g, "_").toLowerCase());
+}
+
+export function sanitizeSearchHistoryFilters(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => sanitizeSearchHistoryFilters(item));
+  if (!isPlainObject(value)) return value;
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (isSensitiveFilterUserKey(key)) continue;
+    sanitized[key] = sanitizeSearchHistoryFilters(nestedValue);
+  }
+  return sanitized;
+}
+
+function assertNoSensitiveSearchHistoryKeys(value: unknown) {
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoSensitiveSearchHistoryKeys(item);
+    return;
+  }
+  if (!isPlainObject(value)) return;
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (isSensitiveFilterUserKey(key)) {
+      throw new Error("SearchHistory public output must not include user-identifying keys");
+    }
+    assertNoSensitiveSearchHistoryKeys(nestedValue);
+  }
 }
 
 function normalizeOptionalString(value: unknown, maxLength: number, fieldName: string) {
@@ -74,12 +114,15 @@ function normalizeFilters(value: unknown) {
   if (value === undefined || value === null) return null;
   if (!isPlainObject(value)) throw new SearchHistoryRequestError(400, "filters must be an object");
 
-  const serialized = JSON.stringify(value);
+  const sanitized = sanitizeSearchHistoryFilters(value);
+  if (!isPlainObject(sanitized)) throw new SearchHistoryRequestError(400, "filters must be an object");
+
+  const serialized = JSON.stringify(sanitized);
   if (Buffer.byteLength(serialized, "utf8") > MAX_FILTERS_BYTES) {
     throw new SearchHistoryRequestError(400, "filters payload is too large");
   }
 
-  return value;
+  return sanitized;
 }
 
 function normalizeResultCount(value: unknown) {
@@ -110,7 +153,7 @@ export function publicSearchHistory(row: RawSearchHistory) {
     id: String(row.id || ""),
     targetScope: normalizeSearchHistoryScope(row.targetScope, "PROJECTS"),
     queryText: typeof row.queryText === "string" ? row.queryText : null,
-    filters: isPlainObject(row.filters) ? row.filters : null,
+    filters: isPlainObject(row.filters) ? (sanitizeSearchHistoryFilters(row.filters) as Record<string, unknown>) : null,
     sortKey: typeof row.sortKey === "string" ? row.sortKey : null,
     resultCount: typeof row.resultCount === "number" ? row.resultCount : null,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || "")
@@ -147,8 +190,5 @@ export async function saveSearchHistory(db: SearchHistoryDb, user: AuthUser, inp
 }
 
 export function assertNoSensitiveSearchHistoryOutput(value: unknown) {
-  const serialized = JSON.stringify(value);
-  if (serialized.includes("userId") || serialized.includes("user_id")) {
-    throw new Error("SearchHistory public output must not include userId");
-  }
+  assertNoSensitiveSearchHistoryKeys(value);
 }
