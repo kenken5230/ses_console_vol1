@@ -145,6 +145,7 @@ function testSourceWiring() {
   assert.match(modal, /保存した検索履歴/);
   assert.match(modal, /保存された検索履歴はありません/);
   assert.match(modal, /検索履歴を読み込んでいます/);
+  assert.match(modal, /未認証またはセッション期限切れです/);
   assert.match(modal, /保存中/);
   assert.doesNotMatch(modal, /searchHistories/);
   assert.doesNotMatch(modal, /サンプル検索履歴/);
