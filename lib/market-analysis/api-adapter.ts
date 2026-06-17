@@ -13,6 +13,7 @@ import {
 } from "./anonymous-examples";
 import {
   CONTRACT_TYPE_KEYS,
+  PRICE_BAND_LEGACY_KEY_MAP,
   PRICE_BANDS,
   UNKNOWN_REGION,
   WORK_STYLE_KEYS,
@@ -212,7 +213,10 @@ function monthParam(value: string | null) {
 function priceBandParam(value: string | null): PriceBandKey | undefined {
   const normalized = optionalParam(value);
   if (!normalized) return undefined;
-  return PRICE_BANDS.some((band) => band.key === normalized) ? normalized as PriceBandKey : undefined;
+  if (PRICE_BANDS.some((band) => band.key === normalized)) return normalized as PriceBandKey;
+
+  const legacyPriceBand = PRICE_BAND_LEGACY_KEY_MAP[normalized as keyof typeof PRICE_BAND_LEGACY_KEY_MAP];
+  return legacyPriceBand ? legacyPriceBand as PriceBandKey : undefined;
 }
 
 function workStyleParam(value: string | null): WorkStyleKey | undefined {
