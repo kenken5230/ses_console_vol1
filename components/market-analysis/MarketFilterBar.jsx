@@ -38,7 +38,19 @@ function priceBandOptionsForValue(value) {
   }
 
   const legacyLabel = PRICE_BAND_LEGACY_LABELS[value];
-  return legacyLabel ? [...basePriceBandOptions, { label: legacyLabel, value }] : basePriceBandOptions;
+  if (!legacyLabel) return basePriceBandOptions;
+
+  const unknownIndex = basePriceBandOptions.findIndex((option) => option.value === "unknown");
+  const legacyOption = { label: legacyLabel, value };
+  if (unknownIndex === -1) {
+    return [...basePriceBandOptions, legacyOption];
+  }
+
+  return [
+    ...basePriceBandOptions.slice(0, unknownIndex),
+    legacyOption,
+    ...basePriceBandOptions.slice(unknownIndex),
+  ];
 }
 
 const workStyleOptions = [
