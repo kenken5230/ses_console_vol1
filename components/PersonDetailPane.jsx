@@ -5,7 +5,7 @@ function isEmpty(value) {
   return value === "-" || value === "未入力" || value === "" || value === null || value === undefined;
 }
 
-function DetailItemValue({ item }) {
+function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
   if (item.type === "block") {
     return <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>;
   }
@@ -13,8 +13,8 @@ function DetailItemValue({ item }) {
   if (item.type === "tags") {
     return (
       <div className="tag-flow wrap">
-        {item.tags.map((tag) => (
-          <Badge key={tag}>{tag}</Badge>
+        {item.tags.map((tag, tagIndex) => (
+          <Badge key={`${itemKeyPrefix}-tag-${tagIndex}-${tag}`}>{tag}</Badge>
         ))}
       </div>
     );
@@ -50,6 +50,7 @@ export default function PersonDetailPane({ canEdit = true, onClose, onMoveToUncl
   const groups = detail.groups || [];
   const highlights = detail.highlights || [];
   const meta = detail.meta || [];
+  const personKey = person.dbId ?? person.id ?? "person";
 
   return (
     <div className="detail-drawer-backdrop" onClick={onClose}>
@@ -82,8 +83,8 @@ export default function PersonDetailPane({ canEdit = true, onClose, onMoveToUncl
               </div>
             </div>
             <div className="detail-meta">
-              {meta.map((item) => (
-                <span key={item.label}>
+              {meta.map((item, metaIndex) => (
+                <span key={`${personKey}-meta-${metaIndex}-${item.label}`}>
                   {item.label}: <strong>{item.value || "-"}</strong>
                 </span>
               ))}
@@ -102,8 +103,8 @@ export default function PersonDetailPane({ canEdit = true, onClose, onMoveToUncl
 
           {highlights.length ? (
             <section className="detail-highlight-grid">
-              {highlights.map((item) => (
-                <div className="detail-highlight" key={item.label}>
+              {highlights.map((item, highlightIndex) => (
+                <div className="detail-highlight" key={`${personKey}-highlight-${highlightIndex}-${item.label}`}>
                   <span>{item.label}</span>
                   <strong className={isEmpty(item.value) ? "muted-value" : ""}>{item.value || "-"}</strong>
                 </div>
@@ -112,16 +113,20 @@ export default function PersonDetailPane({ canEdit = true, onClose, onMoveToUncl
           ) : null}
 
           <div className="detail-groups">
-            {groups.map((group) => (
-              <section className="detail-group" key={group.title}>
+            {groups.map((group, groupIndex) => (
+              <section className="detail-group" key={`${personKey}-group-${groupIndex}-${group.title}`}>
                 <h3>{group.title}</h3>
                 <div className="detail-group-body">
-                  {group.items.map((item) => (
-                    <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "mail" ? "detail-item-wide" : ""}`} key={`${group.title}-${item.label}`}>
-                      <span className="field-label">{item.label}</span>
-                      <DetailItemValue item={item} />
-                    </div>
-                  ))}
+                  {group.items.map((item, itemIndex) => {
+                    const itemKeyPrefix = `${personKey}-group-${groupIndex}-item-${itemIndex}-${item.label}`;
+
+                    return (
+                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "mail" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
+                        <span className="field-label">{item.label}</span>
+                        <DetailItemValue item={item} itemKeyPrefix={itemKeyPrefix} />
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             ))}
