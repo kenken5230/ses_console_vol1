@@ -21,6 +21,31 @@ function assertThrowsStatus(fn: () => unknown, status: number) {
   assert.throws(fn, (error) => error instanceof SearchHistoryRequestError && error.status === status);
 }
 
+function readSource(path: string) {
+  return readFileSync(path, "utf8");
+}
+
+function extractExportedFunctionBody(source: string, functionName: string) {
+  const declaration = new RegExp(`export\\s+(?:async\\s+)?function\\s+${functionName}\\s*\\(`);
+  const match = declaration.exec(source);
+  assert(match, `${functionName} must be exported`);
+
+  const bodyStart = source.indexOf("{", match.index);
+  assert(bodyStart !== -1, `${functionName} must have a function body`);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "{") depth += 1;
+    if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(bodyStart + 1, index);
+    }
+  }
+
+  assert.fail(`${functionName} must have a balanced function body`);
+}
+
 async function testListUsesCurrentUserOnly() {
   const calls: unknown[] = [];
   const db = {
@@ -195,15 +220,46 @@ function testPublicResponseShape() {
   assertNoSensitiveSearchHistoryOutput(row);
 }
 
-function testSourceWiring() {
-  const route = readFileSync("app/api/search-histories/route.ts", "utf8");
-  assert.match(route, /export async function GET/);
-  assert.match(route, /export async function POST/);
+function testRouteBoundaryWiring() {
+  const route = readSource("app/api/search-histories/route.ts");
+  assert.match(route, /export\s+async\s+function\s+GET\s*\(/);
+  assert.match(route, /export\s+async\s+function\s+POST\s*\(/);
   assert.match(route, /requireAnyRole/);
-  assert.match(route, /listSearchHistories/);
-  assert.match(route, /saveSearchHistory/);
 
-  const modal = readFileSync("components/SearchHistoryModal.jsx", "utf8");
+  const getBody = extractExportedFunctionBody(route, "GET");
+  assert.match(getBody, /requireAnyRole\s*\(\s*request\s*,\s*\[\.\.\.SEARCH_HISTORY_ROLES\]\s*\)/);
+  assert.match(getBody, /parseSearchHistoryListParams\s*\(\s*new URL\s*\(\s*request\.url\s*\)\s*\)/);
+  assert.match(getBody, /listSearchHistories\s*\(\s*prisma\s*,\s*user\s*,\s*params\s*\)/);
+  assert.match(getBody, /NextResponse\.json\s*\(\s*\{\s*items\s*\}\s*\)/);
+  assert.doesNotMatch(getBody, /request\.json\s*\(/);
+
+  const postBody = extractExportedFunctionBody(route, "POST");
+  assert.match(postBody, /requireAnyRole\s*\(\s*request\s*,\s*\[\.\.\.SEARCH_HISTORY_ROLES\]\s*\)/);
+  assert.match(postBody, /request\.json\s*\(\s*\)\.catch\s*\(/);
+  assert.match(postBody, /new SearchHistoryRequestError\s*\(\s*400\s*,\s*"request body must be valid JSON"\s*\)/);
+  assert.match(postBody, /saveSearchHistory\s*\(\s*prisma\s*,\s*user\s*,\s*body\s*\)/);
+  assert.match(postBody, /NextResponse\.json\s*\(\s*\{\s*item\s*\}\s*,\s*\{\s*status:\s*201\s*\}\s*\)/);
+  assert.doesNotMatch(postBody, /\bbody\s*(?:\.\s*userId|\[\s*["']userId["']\s*\])/);
+  assert.doesNotMatch(postBody, /\buserId\s*:\s*body\b/);
+}
+
+function testSearchHistoryServiceBoundaryWiring() {
+  const service = readSource("lib/search-history.ts");
+
+  const listBody = extractExportedFunctionBody(service, "listSearchHistories");
+  assert.match(listBody, /userId:\s*user\.id/);
+  assert.match(listBody, /rows\.map\s*\(\s*\(row\)\s*=>\s*publicSearchHistory\s*\(\s*row\s+as\s+RawSearchHistory\s*\)\s*\)/);
+
+  const saveBody = extractExportedFunctionBody(service, "saveSearchHistory");
+  assert.match(saveBody, /validateSearchHistoryBody\s*\(\s*input\s*\)/);
+  assert.match(saveBody, /db\.searchHistory\.create\s*\(\s*\{[\s\S]*data:\s*\{[\s\S]*userId:\s*user\.id[\s\S]*targetScope:\s*data\.targetScope/);
+  assert.match(saveBody, /return\s+publicSearchHistory\s*\(\s*row\s+as\s+RawSearchHistory\s*\)/);
+  assert.doesNotMatch(saveBody, /\binput\s*(?:\.\s*userId|\[\s*["']userId["']\s*\])/);
+  assert.doesNotMatch(saveBody, /\bdata\s*(?:\.\s*userId|\[\s*["']userId["']\s*\])/);
+}
+
+function testSourceWiring() {
+  const modal = readSource("components/SearchHistoryModal.jsx");
   assert.match(modal, /\/api\/search-histories/);
   assert.match(modal, /保存した検索履歴/);
   assert.match(modal, /保存された検索履歴はありません/);
@@ -213,12 +269,12 @@ function testSourceWiring() {
   assert.doesNotMatch(modal, /searchHistories/);
   assert.doesNotMatch(modal, /サンプル検索履歴/);
 
-  const toolbar = readFileSync("components/SearchToolbar.jsx", "utf8");
+  const toolbar = readSource("components/SearchToolbar.jsx");
   assert.match(toolbar, /ses-console:search-history-context/);
   assert.match(toolbar, /sessionStorage\.setItem/);
   assert.match(toolbar, /onOpenHistory/);
 
-  const data = readFileSync("data/mockProjects.js", "utf8");
+  const data = readSource("data/mockProjects.js");
   assert.doesNotMatch(data, /export const searchHistories/);
 }
 
@@ -227,6 +283,8 @@ await testSaveIgnoresSpoofedUserId();
 await testSaveSanitizesFilterUserIdentifiers();
 testValidationCaps();
 testPublicResponseShape();
+testRouteBoundaryWiring();
+testSearchHistoryServiceBoundaryWiring();
 testSourceWiring();
 
 console.log("search-history tests passed");
