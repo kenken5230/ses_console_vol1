@@ -1,6 +1,24 @@
 import DropdownMenu from "./DropdownMenu";
 import { focusOptions, pageSizeOptions, personFocusOptions, quickFilters, sortOptions, tabs } from "../data/mockProjects";
 
+const SEARCH_HISTORY_CONTEXT_KEY = "ses-console:search-history-context";
+
+function getSearchHistoryTarget(activeTab) {
+  if (activeTab === "要員") return { targetLabel: "要員", targetScope: "PERSONS" };
+  if (activeTab === "未分類") return { targetLabel: "未分類メール", targetScope: "MAILS" };
+  return { targetLabel: "案件", targetScope: "PROJECTS" };
+}
+
+function saveSearchHistoryContext(context) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(SEARCH_HISTORY_CONTEXT_KEY, JSON.stringify(context));
+  } catch {
+    // 履歴保存UIの補助情報なので、sessionStorage不可でもモーダル表示は継続する。
+  }
+}
+
 export default function SearchToolbar({
   activeTab,
   activeConditions,
@@ -31,7 +49,7 @@ export default function SearchToolbar({
   hasPendingRefresh = false,
   isSyncing = false,
   sortMenuOpen,
-  selectedFocus,
+  selectedFocus = [],
   selectedSort,
   setPageSize,
   setPageSizeMenuOpen
@@ -49,6 +67,24 @@ export default function SearchToolbar({
       : isPersonTab
       ? "キーワード検索で検索可能な項目：要員名、所属会社、状態、希望単価、稼働開始、スキル"
       : "キーワード検索で検索可能な項目：作業内容、上位担当者、スキル、上位金額、作業場所";
+  const searchHistoryTarget = getSearchHistoryTarget(activeTab);
+
+  const handleOpenHistory = () => {
+    saveSearchHistoryContext({
+      ...searchHistoryTarget,
+      activeTab,
+      queryText: search || "",
+      filters: {
+        activeConditions,
+        checkedFilters,
+        pageSize,
+        selectedFocus
+      },
+      sortKey: selectedSort,
+      resultCount
+    });
+    onOpenHistory?.();
+  };
 
   return (
     <section className="search-area">
@@ -94,7 +130,7 @@ export default function SearchToolbar({
             フィルター
           </button>
         ) : null}
-        <button className="toolbar-button" onClick={onOpenHistory} type="button">
+        <button className="toolbar-button" onClick={handleOpenHistory} type="button">
           検索履歴
         </button>
         <button className="toolbar-button refresh" onClick={onRefresh} type="button">
