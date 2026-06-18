@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { PRICE_BANDS, PRICE_BAND_LEGACY_LABELS } from "../../lib/market-analysis/constants";
 import MarketShareButton from "./MarketShareButton";
 
-const limitOptions = [100, 500, 1000];
 const emptyFilters = {
   fromMonth: "",
   skill: "",
@@ -27,15 +27,19 @@ const regionOptions = [
   { label: "unknown", value: "unknown" },
 ];
 
-const priceBandOptions = [
+const basePriceBandOptions = [
   { label: "未指定", value: "" },
-  { label: "〜50万円", value: "under_50" },
-  { label: "50〜60万円", value: "50_60" },
-  { label: "60〜70万円", value: "60_70" },
-  { label: "70〜80万円", value: "70_80" },
-  { label: "80万円〜", value: "80_over" },
-  { label: "未設定", value: "unknown" },
+  ...PRICE_BANDS.map((band) => ({ label: band.label, value: band.key })),
 ];
+
+function priceBandOptionsForValue(value) {
+  if (!value || basePriceBandOptions.some((option) => option.value === value)) {
+    return basePriceBandOptions;
+  }
+
+  const legacyLabel = PRICE_BAND_LEGACY_LABELS[value];
+  return legacyLabel ? [...basePriceBandOptions, { label: legacyLabel, value }] : basePriceBandOptions;
+}
 
 const workStyleOptions = [
   { label: "未指定", value: "" },
@@ -62,23 +66,23 @@ const barStyle = {
   borderRadius: 8,
   display: "flex",
   flexWrap: "wrap",
-  gap: 16,
+  gap: 14,
   justifyContent: "space-between",
-  padding: 18,
+  padding: 16,
 };
 
 const controlsStyle = {
   alignItems: "center",
   display: "flex",
   flexWrap: "wrap",
-  gap: 14,
+  gap: 12,
 };
 
 const detailsStyle = {
   display: "grid",
   flex: "1 1 100%",
-  gap: 12,
-  gridTemplateColumns: "repeat(auto-fit, minmax(164px, 1fr))",
+  gap: 10,
+  gridTemplateColumns: "repeat(auto-fit, minmax(154px, 1fr))",
   width: "100%",
 };
 
@@ -86,14 +90,14 @@ const actionsStyle = {
   alignItems: "center",
   display: "flex",
   flexWrap: "wrap",
-  gap: 10,
+  gap: 8,
 };
 
 const labelStyle = {
   alignItems: "center",
   color: "#334155",
   display: "inline-flex",
-  fontSize: 15,
+  fontSize: 14,
   fontWeight: 800,
   gap: 8,
 };
@@ -102,23 +106,23 @@ const stackedLabelStyle = {
   ...labelStyle,
   alignItems: "stretch",
   flexDirection: "column",
-  gap: 6,
+  gap: 5,
 };
 
-const selectStyle = {
+const controlStyle = {
   background: "#fff",
   border: "1px solid var(--line)",
   borderRadius: 4,
   color: "var(--text)",
   fontWeight: 800,
-  minHeight: 42,
-  padding: "0 12px",
+  minHeight: 38,
+  padding: "0 10px",
   width: "100%",
 };
 
-const inputStyle = {
-  ...selectStyle,
-  minWidth: 0,
+const limitInputStyle = {
+  ...controlStyle,
+  width: 116,
 };
 
 export default function MarketFilterBar({
@@ -137,6 +141,8 @@ export default function MarketFilterBar({
   useEffect(() => {
     setDraftFilters({ ...emptyFilters, ...filters });
   }, [filters]);
+
+  const priceBandOptions = priceBandOptionsForValue(draftFilters.priceBand);
 
   function updateDraftFilter(key, value) {
     setDraftFilters((current) => ({ ...current, [key]: value }));
@@ -164,19 +170,17 @@ export default function MarketFilterBar({
       <div style={controlsStyle}>
         <label style={labelStyle}>
           取得件数
-          <select
+          <input
             aria-label="取得件数"
             disabled={isLoading}
-            onChange={(event) => onLimitChange(Number(event.target.value))}
-            style={selectStyle}
+            inputMode="numeric"
+            min="1"
+            onChange={(event) => onLimitChange(event.target.value)}
+            placeholder="未指定"
+            style={limitInputStyle}
+            type="number"
             value={limit}
-          >
-            {limitOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          />
         </label>
         <label style={labelStyle}>
           <input
@@ -196,7 +200,7 @@ export default function MarketFilterBar({
             aria-label="統計開始月"
             disabled={isLoading}
             onChange={(event) => updateDraftFilter("fromMonth", event.target.value)}
-            style={inputStyle}
+            style={controlStyle}
             type="month"
             value={draftFilters.fromMonth}
           />
@@ -207,7 +211,7 @@ export default function MarketFilterBar({
             aria-label="統計終了月"
             disabled={isLoading}
             onChange={(event) => updateDraftFilter("toMonth", event.target.value)}
-            style={inputStyle}
+            style={controlStyle}
             type="month"
             value={draftFilters.toMonth}
           />
@@ -219,7 +223,7 @@ export default function MarketFilterBar({
             disabled={isLoading}
             onChange={(event) => updateDraftFilter("skill", event.target.value)}
             placeholder="Java, AWS, React"
-            style={inputStyle}
+            style={controlStyle}
             type="text"
             value={draftFilters.skill}
           />
@@ -230,7 +234,7 @@ export default function MarketFilterBar({
             aria-label="地域"
             disabled={isLoading}
             onChange={(event) => updateDraftFilter("region", event.target.value)}
-            style={selectStyle}
+            style={controlStyle}
             value={draftFilters.region}
           >
             {regionOptions.map((option) => (
@@ -246,7 +250,7 @@ export default function MarketFilterBar({
             aria-label="単価帯"
             disabled={isLoading}
             onChange={(event) => updateDraftFilter("priceBand", event.target.value)}
-            style={selectStyle}
+            style={controlStyle}
             value={draftFilters.priceBand}
           >
             {priceBandOptions.map((option) => (
@@ -262,7 +266,7 @@ export default function MarketFilterBar({
             aria-label="勤務形態"
             disabled={isLoading}
             onChange={(event) => updateDraftFilter("workStyle", event.target.value)}
-            style={selectStyle}
+            style={controlStyle}
             value={draftFilters.workStyle}
           >
             {workStyleOptions.map((option) => (
@@ -278,7 +282,7 @@ export default function MarketFilterBar({
             aria-label="契約形態"
             disabled={isLoading}
             onChange={(event) => updateDraftFilter("contractType", event.target.value)}
-            style={selectStyle}
+            style={controlStyle}
             value={draftFilters.contractType}
           >
             {contractTypeOptions.map((option) => (

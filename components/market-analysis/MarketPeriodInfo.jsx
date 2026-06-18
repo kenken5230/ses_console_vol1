@@ -114,7 +114,7 @@ export default function MarketPeriodInfo({ period }) {
         <span style={titleStyle}>統計期間</span>
         <div style={valueStyle}>{actualRange}</div>
         <div style={noteStyle}>
-          起算軸は{basisLabel}です。期間未指定の場合は、取得件数上限内の最新データで集計します。
+          起算軸は{basisLabel}です。期間未指定の場合は直近3か月をデフォルトにします。
         </div>
         <div style={detailGridStyle}>
           <span style={detailStyle}>指定期間: {appliedRange}</span>
