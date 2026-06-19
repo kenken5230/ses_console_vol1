@@ -11,6 +11,10 @@ import {
   type ExtractionPredictedType,
   type MailExtractionSource,
 } from "./gmail-extraction";
+import {
+  inferGmailCompanyCandidateForExtraction,
+  type KnownCompanyIdentity,
+} from "./gmail-company-candidate";
 import { assertNoSensitiveOutput, buildAnonymizedIssueRow } from "./gmail-extraction-quality-report";
 
 type Fixture = {
@@ -19,6 +23,9 @@ type Fixture = {
   subject: string | null;
   bodyText?: string | null;
   bodyHtml?: string | null;
+  fromEmail?: string | null;
+  fromName?: string | null;
+  knownCompanies?: KnownCompanyIdentity[];
   expectedType: ExtractionPredictedType;
   expectedNeedsReview?: boolean;
   expectedWarnings?: string[];
@@ -26,6 +33,10 @@ type Fixture = {
   expectedNameConfidence?: string;
   expectedNameSource?: string;
   expectedRoleHeadlineSource?: string;
+  expectedCompanyCandidateSource?: string;
+  expectedCompanyCandidateConfidence?: string;
+  expectedCompanyCandidatePresent?: boolean;
+  expectedCompanyCandidateReasonCodes?: string[];
   expectedSkillMaxCount?: number;
   expectedShouldNotCreateReason?: string;
 };
@@ -57,8 +68,8 @@ function mailFromFixture(fixture: Fixture): MailExtractionSource {
     bodyText: fixture.bodyText ?? null,
     bodyHtml: fixture.bodyHtml ?? null,
     normalizedBody: fixture.bodyText ?? null,
-    fromEmail: "fixture@example.test",
-    fromName: "Fixture Sender",
+    fromEmail: fixture.fromEmail ?? "fixture@example.test",
+    fromName: fixture.fromName ?? "Fixture Sender",
     receivedAt: new Date("2026-06-04T00:00:00.000Z"),
   };
 }
@@ -115,12 +126,19 @@ function evaluateExtractionFixtures(fixtures: Fixture[]) {
   let warningExpectedTotal = 0;
   let reviewReasonExpectedMatch = 0;
   let reviewReasonExpectedTotal = 0;
+  let companyCandidateExpectedMatch = 0;
+  let companyCandidateExpectedTotal = 0;
   let skillOverExtractionFailures = 0;
 
   for (const fixture of fixtures) {
     const mail = mailFromFixture(fixture);
     const quality = classifyMailExtractionQuality(mail);
     const extraction = fixture.expectedType === "person" ? extractPersonFromMail(mail) : extractProjectFromMail(mail);
+    const companyCandidate = inferGmailCompanyCandidateForExtraction({
+      mail,
+      extraction,
+      knownCompanies: fixture.knownCompanies,
+    });
     const warnings = quality.warnings;
     const reviewReasons = extraction.target === "person" ? extraction.reviewReasons : extraction.reviewReasons;
 
@@ -164,6 +182,41 @@ function evaluateExtractionFixtures(fixtures: Fixture[]) {
       }
     }
 
+    if (
+      fixture.expectedCompanyCandidateSource ||
+      fixture.expectedCompanyCandidateConfidence ||
+      fixture.expectedCompanyCandidatePresent !== undefined ||
+      fixture.expectedCompanyCandidateReasonCodes
+    ) {
+      companyCandidateExpectedTotal += 1;
+      const candidateMatches =
+        (!fixture.expectedCompanyCandidateSource || companyCandidate.source === fixture.expectedCompanyCandidateSource) &&
+        (!fixture.expectedCompanyCandidateConfidence || companyCandidate.confidence === fixture.expectedCompanyCandidateConfidence) &&
+        (fixture.expectedCompanyCandidatePresent === undefined || Boolean(companyCandidate.candidateName) === fixture.expectedCompanyCandidatePresent) &&
+        includesAll(companyCandidate.reasonCodes, fixture.expectedCompanyCandidateReasonCodes);
+
+      if (candidateMatches) {
+        companyCandidateExpectedMatch += 1;
+      } else {
+        failures.push({
+          id: fixture.id,
+          kind: "companyCandidate",
+          expected: {
+            source: fixture.expectedCompanyCandidateSource,
+            confidence: fixture.expectedCompanyCandidateConfidence,
+            present: fixture.expectedCompanyCandidatePresent,
+            reasonCodes: fixture.expectedCompanyCandidateReasonCodes,
+          },
+          actual: {
+            source: companyCandidate.source,
+            confidence: companyCandidate.confidence,
+            present: Boolean(companyCandidate.candidateName),
+            reasonCodes: companyCandidate.reasonCodes,
+          },
+        });
+      }
+    }
+
     if (fixture.expectedSkillMaxCount && fixture.expectedType !== "other" && fixture.expectedType !== "excluded") {
       const skillCount = extraction.target === "person"
         ? extraction.skills.length
@@ -184,6 +237,7 @@ function evaluateExtractionFixtures(fixtures: Fixture[]) {
     roleHeadlineExpectedMatch: `${roleHeadlineExpectedMatch}/${roleHeadlineExpectedTotal}`,
     warningExpectedMatch: `${warningExpectedMatch}/${warningExpectedTotal}`,
     reviewReasonExpectedMatch: `${reviewReasonExpectedMatch}/${reviewReasonExpectedTotal}`,
+    companyCandidateExpectedMatch: `${companyCandidateExpectedMatch}/${companyCandidateExpectedTotal}`,
     skillOverExtractionFailures,
     failures,
   };
@@ -201,8 +255,22 @@ function main(): void {
     .map((fixture) => {
       const mail = mailFromFixture(fixture);
       const predicted = classifyMailExtractionQuality(mail).predictedType;
-      if (predicted === "project") return buildAnonymizedIssueRow({ id: fixture.id, extraction: extractProjectFromMail(mail) });
-      if (predicted === "person") return buildAnonymizedIssueRow({ id: fixture.id, extraction: extractPersonFromMail(mail) });
+      if (predicted === "project") {
+        const extraction = extractProjectFromMail(mail);
+        return buildAnonymizedIssueRow({
+          id: fixture.id,
+          extraction,
+          companyCandidate: inferGmailCompanyCandidateForExtraction({ mail, extraction, knownCompanies: fixture.knownCompanies }),
+        });
+      }
+      if (predicted === "person") {
+        const extraction = extractPersonFromMail(mail);
+        return buildAnonymizedIssueRow({
+          id: fixture.id,
+          extraction,
+          companyCandidate: inferGmailCompanyCandidateForExtraction({ mail, extraction, knownCompanies: fixture.knownCompanies }),
+        });
+      }
       return null;
     })
     .filter((row): row is NonNullable<typeof row> => Boolean(row))
