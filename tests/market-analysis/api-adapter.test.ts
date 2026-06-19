@@ -11,6 +11,8 @@ import {
   parseMarketAnalysisQuery,
 } from "../../lib/market-analysis/api-adapter";
 
+const defaultQueryNow = new Date("2026-06-08T00:00:00.000Z");
+
 const project = marketProjectFromDb({
   id: "project-1",
   isFocus: true,
@@ -87,20 +89,25 @@ assert.equal(sparsePerson.availableFrom, null);
 assert.equal(sparsePerson.preferredLocation, null);
 assert.deepEqual(sparsePerson.skills, []);
 
-assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("")), {
-  limit: MARKET_ANALYSIS_MAX_LIMIT,
+assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams(""), defaultQueryNow), {
   focusOnly: false,
+  fromMonth: "2026-04",
+  toMonth: "2026-06",
 });
-assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("limit=25&focusOnly=true")), {
+assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("limit=25&focusOnly=true"), defaultQueryNow), {
   limit: 25,
   focusOnly: true,
+  fromMonth: "2026-04",
+  toMonth: "2026-06",
 });
-assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("limit=99999&focusOnly=1")), {
+assert.deepEqual(parseMarketAnalysisQuery(new URLSearchParams("limit=99999&focusOnly=1"), defaultQueryNow), {
   limit: MARKET_ANALYSIS_MAX_LIMIT,
   focusOnly: true,
+  fromMonth: "2026-04",
+  toMonth: "2026-06",
 });
 assert.deepEqual(
-  parseMarketAnalysisQuery(new URLSearchParams("limit=500&focusOnly=false&fromMonth=2026-08&toMonth=2026-06&skill=JAVA&region=渋谷&priceBand=70_80&workStyle=hybrid&contractType=準委任")),
+  parseMarketAnalysisQuery(new URLSearchParams("limit=500&focusOnly=false&fromMonth=2026-08&toMonth=2026-06&skill=JAVA&region=渋谷&priceBand=75_80&workStyle=hybrid&contractType=準委任")),
   {
     limit: 500,
     focusOnly: false,
@@ -108,7 +115,7 @@ assert.deepEqual(
     toMonth: "2026-08",
     skill: "Java",
     region: "東京",
-    priceBand: "70_80",
+    priceBand: "75_80",
     workStyle: "HYBRID",
     contractType: "SEMI_DELEGATION",
   },
@@ -178,7 +185,7 @@ assert.equal(response.generatedAt, "2026-06-08T00:00:00.000Z");
 assert.equal(response.skillRankings[0].skill, "Java");
 assert.equal(response.skillRankings[0].anonymousExamples.projects[0].anonymousId, "PJ-001");
 assert.equal(response.skillRankings[0].anonymousExamples.persons[0].anonymousId, "PS-001");
-assert.equal(response.priceBandRankings[0].priceBand, "80_over");
+assert.equal(response.priceBandRankings[0].priceBand, "90_95");
 assert.equal(response.priceBandRankings[0].anonymousExamples.projects.length, 1);
 assert.ok(response.regionRankings.some((metric) => metric.region === "東京"));
 assert.ok(response.marketCellRankings.length > 0);
@@ -187,7 +194,7 @@ assert.ok(Array.isArray(response.qualityAlerts));
 
 const insights = buildFocusInsights(response);
 assert.equal(insights.topSkill, "Java");
-assert.equal(insights.topPriceBand, "80_over");
+assert.equal(insights.topPriceBand, "90_95");
 assert.equal(insights.topRegion, "東京");
 
 const filterProjects = [
@@ -275,10 +282,10 @@ assert.equal(regionFiltered.summary.projectCount, 1);
 assert.equal(regionFiltered.summary.personCount, 1);
 assert.equal(regionFiltered.regionRankings[0].region, "東京");
 
-const priceBandFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, priceBand: "70_80" });
+const priceBandFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, priceBand: "75_80" });
 assert.equal(priceBandFiltered.summary.projectCount, 1);
 assert.equal(priceBandFiltered.summary.personCount, 1);
-assert.equal(priceBandFiltered.priceBandRankings[0].priceBand, "70_80");
+assert.equal(priceBandFiltered.priceBandRankings[0].priceBand, "75_80");
 
 const workStyleFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons, { limit: 100, workStyle: "HYBRID" });
 assert.equal(workStyleFiltered.summary.projectCount, 1);
@@ -295,7 +302,7 @@ const fullyFiltered = buildMarketAnalysisResponse(filterProjects, filterPersons,
   focusOnly: false,
   skill: "Java",
   region: "東京",
-  priceBand: "70_80",
+  priceBand: "75_80",
   workStyle: "HYBRID",
   contractType: "SEMI_DELEGATION",
 });
@@ -306,7 +313,7 @@ assert.deepEqual(fullyFiltered.appliedFilters, {
   toMonth: null,
   skill: "Java",
   region: "東京",
-  priceBand: "70_80",
+  priceBand: "75_80",
   workStyle: "HYBRID",
   contractType: "SEMI_DELEGATION",
 });
