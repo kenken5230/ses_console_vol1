@@ -1,0 +1,3 @@
+氏名,イニシャル,スキル,希望単価,所属,稼働開始,国籍,年齢,ステータス,注力,未使用列
+Synthetic Person Alpha,S.A,"Java,Spring",75万円,Synthetic Partner,2026-07,日本,34,AVAILABLE,,
+,A.B,"",invalid-price,Synthetic Partner,bad-date,日本,999,AVAILABLE,注力,owner-review-needed
