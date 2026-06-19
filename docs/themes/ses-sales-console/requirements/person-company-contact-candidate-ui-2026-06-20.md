@@ -27,6 +27,7 @@
 
 - 候補は company/contact の safe shape と score/reason codes のみを表示する。
 - ボタン、選択、チェック、保存、反映、mailto/tel リンクは置かない。
+- このリンク禁止は候補UI部分に限定し、既存read-only通常行の連絡先表示や mailto/tel 方針とは別に扱う。
 - 候補がない場合も read-only notice を表示し、DB未保存と自動反映なしを明示する。
 
 ## テスト

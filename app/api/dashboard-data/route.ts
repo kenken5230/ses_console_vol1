@@ -17,6 +17,7 @@ import { mergePersonFormInitialValues } from "../../../lib/person-form-contract"
 
 export const dynamic = "force-dynamic";
 const EMPTY_VALUE = "-";
+const COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE = 1000;
 
 type DetailItem = {
   label: string;
@@ -1122,7 +1123,11 @@ export async function GET(request: Request) {
       }
     }),
     prisma.company.findMany({
-      orderBy: { name: "asc" },
+      take: COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,
+      orderBy: [
+        { normalizedName: "asc" },
+        { id: "asc" }
+      ],
       select: {
         id: true,
         name: true,
@@ -1130,7 +1135,10 @@ export async function GET(request: Request) {
         mainEmailDomain: true,
         tdbScore: true,
         contacts: {
-          orderBy: { name: "asc" },
+          orderBy: [
+            { name: "asc" },
+            { id: "asc" }
+          ],
           select: {
             id: true,
             name: true,

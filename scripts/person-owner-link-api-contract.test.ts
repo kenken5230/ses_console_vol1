@@ -57,6 +57,10 @@ function touchedFilesFromGit() {
 }
 
 const allowedTouchedFiles = new Set([
+  "app/api/dashboard-data/route.ts",
+  "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
   "scripts/person-owner-link-api-contract.test.ts",
   "scripts/company-contact-write-contract.test.ts",
@@ -68,7 +72,7 @@ const allowedTouchedFiles = new Set([
 for (const filePath of touchedFilesFromGit()) {
   assert(
     allowedTouchedFiles.has(filePath),
-    `person owner link API contract PR must stay docs/test/package-only: ${filePath}`
+    `person owner link API contract hardening PR must stay in approved docs/test/read-only route files: ${filePath}`
   );
   assert(!filePath.startsWith("prisma/"), `schema/migration changes are out of scope: ${filePath}`);
   assert(!filePath.startsWith("app/api/companies/"), `company API routes are out of scope: ${filePath}`);
@@ -79,6 +83,7 @@ const docsPath = "docs/themes/ses-sales-console/requirements/person-owner-compan
 const docsSource = readProjectFile(docsPath);
 const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
+const dashboardSource = readProjectFile("app/api/dashboard-data/route.ts");
 const ownerLinkRoutePath = "app/api/persons/[id]/owner-company-contact/route.ts";
 
 for (const requiredText of [
@@ -107,13 +112,21 @@ for (const requiredText of [
   "汎用ドメイン",
   "既存値あり",
   "NG",
+  "SUSPENDED",
+  "CompanyContact.isActive=false",
+  "候補計算用のDB read",
   "409",
   "manual-review",
   "AuditLog",
   "beforeData",
   "afterData",
   "rollback route",
-  "実DB write smoke"
+  "実DB write smoke",
+  "Future API Implementation Required Case Table",
+  "authorized happy path",
+  "trade suspended",
+  "inactive contact",
+  "raw text rejected"
 ]) {
   assert(docsSource.includes(requiredText), `${docsPath} must include: ${requiredText}`);
 }
@@ -134,5 +147,10 @@ for (const forbiddenRouteDir of ["app/api/companies", "app/api/company-contacts"
     assert(!/\/route\.(ts|tsx|js|jsx)$/.test(filePath), `${forbiddenRouteDir} route files are out of scope: ${filePath}`);
   }
 }
+
+assert(
+  /prisma\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(dashboardSource),
+  "candidate company DB read must be bounded and stable before write API implementation"
+);
 
 console.log("person owner company/contact link API contract tests passed.");
