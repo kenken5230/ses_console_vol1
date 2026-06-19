@@ -46,7 +46,9 @@ const allowedTouchedFiles = new Set([
   "components/PersonDetailPane.jsx",
   "app/globals.css",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
   "scripts/person-company-contact-candidate-ui.test.ts",
+  "scripts/company-contact-write-contract.test.ts",
   "package.json"
 ]);
 
