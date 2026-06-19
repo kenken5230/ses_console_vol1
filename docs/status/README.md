@@ -6,6 +6,7 @@
 
 | File | Purpose |
 |---|---|
+| `claude-review-pr62-65-followup-2026-06-20.md` | Claude Code PR #62〜#65レビュー指摘の安全対応範囲、未検証項目、検証ログ |
 | `current-feature-status-2026-06-15.md` | 機能ごとの実装済み/設計のみ/未実装/要再テストの現状表 |
 | `dependency-security-audit-2026-06-15.md` | npm audit結果、依存更新タスク、検証結果 |
 | `recovery-main-alignment-report-2026-06-15.md` | clean worktree復旧、未実装UI撤去、検証結果、残課題 |

@@ -1,22 +1,35 @@
-function normalizeSearchValue(value) {
+function normalizeSearchValue(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
-function isAsciiWordChar(character) {
+function isAsciiWordChar(character: string): boolean {
   return /^[a-z0-9]$/i.test(character || "");
 }
 
-function hasAsciiTokenBoundary(text, startIndex, tokenLength) {
+function hasAsciiTokenBoundary(text: string, startIndex: number, tokenLength: number): boolean {
   const before = startIndex > 0 ? text[startIndex - 1] : "";
   const after = text[startIndex + tokenLength] || "";
   return !isAsciiWordChar(before) && !isAsciiWordChar(after);
 }
 
-function isShortAsciiToken(term) {
+function isShortAsciiToken(term: string): boolean {
   return /^[a-z0-9]{1,3}$/.test(term);
 }
 
-export function textIncludesSearchTerm(text, term) {
+const SQL_COMPATIBLE_TECH_TERMS: ReadonlySet<string> = new Set(["mysql", "postgresql", "mssql", "plsql", "tsql", "sqlserver"]);
+
+function normalizeAsciiTechnologyToken(token: string): string {
+  return token.replace(/[^a-z0-9]/g, "");
+}
+
+function hasKnownEmbeddedShortAsciiMatch(text: string, term: string): boolean {
+  if (term !== "sql") return false;
+
+  const tokens = text.match(/[a-z0-9][a-z0-9.+#-]*/g) ?? [];
+  return tokens.some((token) => SQL_COMPATIBLE_TECH_TERMS.has(normalizeAsciiTechnologyToken(token)));
+}
+
+export function textIncludesSearchTerm(text: unknown, term: unknown): boolean {
   const haystack = normalizeSearchValue(text);
   const needle = normalizeSearchValue(term);
   if (!needle) return true;
@@ -31,9 +44,7 @@ export function textIncludesSearchTerm(text, term) {
     index = haystack.indexOf(needle, index + 1);
   }
 
-  return false;
+  return hasKnownEmbeddedShortAsciiMatch(haystack, needle);
 }
 
-export function textMatchesSearchQuery(text, query) {
-  return textIncludesSearchTerm(text, query);
-}
+export const textMatchesSearchQuery = textIncludesSearchTerm;
