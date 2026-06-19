@@ -516,7 +516,34 @@ function personCompanyContactCandidateInput(person: any, normalizedExtraction: a
   };
 }
 
-function mapProject(project: any) {
+function projectCompanyContactCandidateInput(
+  project: any,
+  normalizedExtraction: any,
+  upperCompanyRole: any,
+  primaryContactRole: any
+) {
+  return {
+    companyName: firstCandidateText(
+      normalizedExtraction.upperCompanyName,
+      upperCompanyRole?.company?.name,
+      primaryContactRole?.company?.name,
+      project.sourceMail?.fromName
+    ),
+    email: firstCandidateText(project.sourceMail?.fromEmail, primaryContactRole?.companyContact?.email),
+    contactEmail: firstCandidateText(
+      normalizedExtraction.contactEmail,
+      primaryContactRole?.companyContact?.email,
+      project.sourceMail?.fromEmail
+    ),
+    contactName: firstCandidateText(
+      normalizedExtraction.contactName,
+      primaryContactRole?.companyContact?.name,
+      project.sourceMail?.fromName
+    )
+  };
+}
+
+function mapProject(project: any, companyContactCandidateSources: readonly CompanyContactCandidateSource[]) {
   const condition = project.condition;
   const skills = project.skills.map((skill: any) => skill.skillName);
   const requiredSkills = project.skills.filter((skill: any) => skill.skillType === "REQUIRED").map((skill: any) => skill.skillName);
@@ -550,6 +577,12 @@ function mapProject(project: any) {
   const coreTime = formatTimeRange(condition?.coreTimeStart, condition?.coreTimeEnd);
   const commerceNote = condition?.notes?.startsWith("商流: ") ? condition.notes.replace(/^商流:\s*/, "") : "";
   const needsReview = hasNeedsReviewExtraction(project.sourceMail, "PROJECT", project.id);
+  const normalizedExtraction = latestNormalizedExtraction(project.sourceMail, "PROJECT", project.id);
+  const companyContactCandidates = findCompanyContactCandidates(
+    projectCompanyContactCandidateInput(project, normalizedExtraction, upperCompanyRole, primaryContactRole),
+    companyContactCandidateSources,
+    { maxCandidates: 5 }
+  );
   const projectFormValues = {
     title: project.title || "",
     upperCompanyName: company === EMPTY_VALUE ? "" : company,
@@ -598,6 +631,10 @@ function mapProject(project: any) {
     {
       title: "会社/担当者 (read-only)",
       items: [makeCompanyContactsItem("会社ロール", companyContactRows)]
+    },
+    {
+      title: "会社/担当者候補（表示のみ）",
+      items: [makeCompanyContactCandidatesItem("会社/担当者候補（表示のみ）", companyContactCandidates)]
     },
     {
       title: "上位会社",
@@ -1112,7 +1149,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       currentUser,
-      projects: projects.map(mapProject),
+      projects: projects.map((project) => mapProject(project, companyContactCandidateSources)),
       persons: persons.map((person) => mapPerson(person, companyContactCandidateSources)),
       unclassifiedMails: unclassifiedMails.map((mail) => mapUnclassifiedMail(mail, companies))
     });
