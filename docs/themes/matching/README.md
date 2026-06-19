@@ -481,6 +481,7 @@ Each match sample includes only:
 - This does not create Proposal records.
 - This does not create message drafts.
 - This does not send messages.
+- Note after the guarded save/review PRs: persistence and review writes now exist only through supervised, disabled-by-default staging guards; the dry-run and read-only review surfaces remain non-mutating.
 - The current UI/API does not persist match suggestions.
 - PR #28 adds only the schema/migration foundation for future match suggestion persistence.
 - PR #30 adds read-only saved suggestion APIs, but no saved suggestion write path.
