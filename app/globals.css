@@ -1525,6 +1525,109 @@ input[type="radio"] {
   text-underline-offset: 3px;
 }
 
+.readonly-candidate-panel {
+  background: #fbfcfe;
+  border: 1px solid #d8dee9;
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.readonly-candidate-notice {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 8px;
+}
+
+.readonly-candidate-notice strong {
+  color: #263241;
+  font-size: 15px;
+}
+
+.readonly-candidate-notice span,
+.readonly-candidate-reasons span {
+  background: #eef2f7;
+  border-radius: 999px;
+  color: #475569;
+  padding: 3px 8px;
+}
+
+.readonly-candidate-empty {
+  color: #8a94a3;
+  font-size: 14px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.readonly-candidate-list {
+  display: grid;
+  gap: 10px;
+}
+
+.readonly-candidate-row {
+  background: #fff;
+  border: 1px solid #e3e8f0;
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(220px, 1.1fr);
+  padding: 12px;
+}
+
+.readonly-candidate-main,
+.readonly-candidate-contact {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.readonly-candidate-main > strong {
+  color: #1f5fc5;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.readonly-candidate-score,
+.readonly-candidate-sub {
+  color: #8a94a3;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.readonly-candidate-field {
+  align-items: baseline;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.readonly-candidate-field span {
+  color: #8a94a3;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.readonly-candidate-field strong {
+  color: #263241;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.readonly-candidate-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+
 .person-value {
   align-items: center;
   display: inline-flex;
@@ -3276,6 +3379,7 @@ input[type="radio"] {
   .match-band-overview,
   .match-help-grid,
   .readonly-company-row,
+  .readonly-candidate-row,
   .match-reference-grid {
     grid-template-columns: 1fr;
   }
