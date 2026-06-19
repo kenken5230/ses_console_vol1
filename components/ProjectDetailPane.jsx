@@ -5,6 +5,17 @@ function isEmpty(value) {
   return value === "-" || value === "未入力" || value === "" || value === null || value === undefined;
 }
 
+function ContactLine({ href, label, value }) {
+  if (isEmpty(value)) return null;
+
+  return (
+    <span className="readonly-contact-line">
+      <span>{label}</span>
+      {href ? <a href={href}>{value}</a> : <strong>{value}</strong>}
+    </span>
+  );
+}
+
 function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
   if (item.type === "block") {
     return <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>;
@@ -39,6 +50,41 @@ function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
         <summary>元メール本文を表示</summary>
         <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>
       </details>
+    );
+  }
+
+  if (item.type === "companyContacts") {
+    const companyContacts = item.companyContacts || [];
+    if (!companyContacts.length) return <p className="detail-block muted-value">-</p>;
+
+    return (
+      <div className="readonly-company-list">
+        {companyContacts.map((entry, entryIndex) => {
+          const company = entry.company || {};
+          const contact = entry.contact || {};
+          const contactTitle = [contact.department, contact.position].filter(Boolean).join(" / ");
+
+          return (
+            <div className="readonly-company-row" key={`${itemKeyPrefix}-company-contact-${entryIndex}-${entry.role}-${company.id || company.name || "none"}`}>
+              <div className="readonly-company-main">
+                <span className="readonly-company-role">
+                  {entry.roleLabel || entry.role}
+                  {entry.isPrimary ? <small>primary</small> : null}
+                </span>
+                <strong className={isEmpty(company.name) ? "muted-value" : ""}>{company.name || "-"}</strong>
+                <span className="readonly-company-meta">取引: {company.tradeStatus || "-"}</span>
+              </div>
+              <div className="readonly-contact-lines">
+                <ContactLine label="担当者" value={contact.name} />
+                <ContactLine label="メール" href={contact.email ? `mailto:${contact.email}` : undefined} value={contact.email} />
+                <ContactLine label="電話" href={contact.phone ? `tel:${contact.phone}` : undefined} value={contact.phone} />
+                <ContactLine label="部署/役職" value={contactTitle} />
+                {!entry.contact ? <span className="readonly-contact-empty">担当者 -</span> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     );
   }
 
@@ -172,7 +218,7 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
                     const itemKeyPrefix = `${projectKey}-group-${groupIndex}-item-${itemIndex}-${item.label}`;
 
                     return (
-                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "commerce" || item.type === "mail" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
+                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "commerce" || item.type === "mail" || item.type === "companyContacts" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
                         <span className="field-label">{item.label}</span>
                         <DetailItemValue item={item} itemKeyPrefix={itemKeyPrefix} />
                       </div>
