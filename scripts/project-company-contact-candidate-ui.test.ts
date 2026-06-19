@@ -43,14 +43,10 @@ function touchedFilesFromGit() {
 
 const allowedTouchedFiles = new Set([
   "app/api/dashboard-data/route.ts",
-  "components/PersonDetailPane.jsx",
   "components/ProjectDetailPane.jsx",
-  "app/globals.css",
-  "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
-  "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
-  "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
+  "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/company-contact-write-contract.test.ts",
   "package.json"
 ]);
@@ -58,26 +54,28 @@ const allowedTouchedFiles = new Set([
 for (const filePath of touchedFilesFromGit()) {
   assert(
     allowedTouchedFiles.has(filePath),
-    `person candidate display PR must stay in the approved read-only file set: ${filePath}`
+    `project candidate display PR must stay in the approved read-only file set: ${filePath}`
   );
 }
 
 const dashboardSource = readProjectFile("app/api/dashboard-data/route.ts");
-const personPaneSource = readProjectFile("components/PersonDetailPane.jsx");
+const projectPaneSource = readProjectFile("components/ProjectDetailPane.jsx");
 const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
 const docsSource = readProjectFile(
-  "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md"
+  "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md"
 );
 
-assert(dashboardSource.includes("findCompanyContactCandidates"), "dashboard person detail must use the shared candidate helper");
+assert(dashboardSource.includes("findCompanyContactCandidates"), "dashboard project detail must use the shared candidate helper");
+assert(dashboardSource.includes("projectCompanyContactCandidateInput"), "dashboard must build project candidate input explicitly");
 assert(dashboardSource.includes('type: "companyContactCandidates"'), "dashboard detail must expose candidate display items");
 assert(dashboardSource.includes("会社/担当者候補（表示のみ）"), "dashboard detail must carry the explicit read-only candidate label");
+assert(dashboardSource.includes("projects.map((project) => mapProject(project, companyContactCandidateSources))"));
 assert(dashboardSource.includes("persons.map((person) => mapPerson(person, companyContactCandidateSources))"));
 
 const dashboardWritePatterns = [
   /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/,
-  /prisma\.(company|companyContact|person)\.(create|createMany|update|upsert|delete|deleteMany)\b/,
+  /prisma\.(company|companyContact|project|projectCompanyRole|person)\.(create|createMany|update|upsert|delete|deleteMany)\b/,
   /prisma\.\$transaction\b/
 ];
 for (const pattern of dashboardWritePatterns) {
@@ -87,9 +85,10 @@ for (const pattern of dashboardWritePatterns) {
 assert(!/export\s+async\s+function\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons must not be introduced");
 assert(!existsSync(path.join(rootDir, "app/api/companies")), "company write/API routes must not be introduced");
 assert(!existsSync(path.join(rootDir, "app/api/company-contacts")), "company contact write/API routes must not be introduced");
+assert(!existsSync(path.join(rootDir, "app/api/company-contact-candidates")), "company contact candidate write/API routes must not be introduced");
 
 const candidateUiSource = sectionBetween(
-  personPaneSource,
+  projectPaneSource,
   "function CompanyContactCandidateList",
   "function DetailItemValue"
 );
@@ -108,12 +107,14 @@ for (const forbiddenUiPattern of [
   /\bfetch\s*\(/i,
   /method:\s*["'](POST|PATCH|PUT|DELETE)["']/i
 ]) {
-  assert(!forbiddenUiPattern.test(candidateUiSource), `candidate UI must remain display-only: ${forbiddenUiPattern}`);
+  assert(!forbiddenUiPattern.test(candidateUiSource), `project candidate UI must remain display-only: ${forbiddenUiPattern}`);
 }
 
-assert(personPaneSource.includes('item.type === "companyContactCandidates"'), "PersonDetailPane must render candidate items");
-assert(personPaneSource.includes("readonly-candidate-panel"), "PersonDetailPane must use the candidate display styling");
-assert(packageSource.includes("test:person-company-contact-candidate-ui"), "package.json must expose the candidate UI test");
-assert(docsSource.includes("保存・反映・編集なし") && docsSource.includes("`PATCH /api/persons` なし"));
+assert(projectPaneSource.includes('item.type === "companyContactCandidates"'), "ProjectDetailPane must render candidate items");
+assert(projectPaneSource.includes("readonly-candidate-panel"), "ProjectDetailPane must use the shared candidate display styling");
+assert(projectPaneSource.includes('|| item.type === "companyContactCandidates"'), "candidate display must use the wide detail layout");
+assert(packageSource.includes("test:project-company-contact-candidate-ui"), "package.json must expose the project candidate UI test");
+assert(docsSource.includes("DBには保存されません") && docsSource.includes("自動反映なし"));
+assert(docsSource.includes("保存payload変更なし") && docsSource.includes("API write追加なし"));
 
-console.log("person company/contact candidate UI read-only tests passed.");
+console.log("project company/contact candidate UI read-only tests passed.");

@@ -72,9 +72,13 @@ function sectionBetween(source: string, startNeedle: string, endNeedle: string) 
 }
 
 const allowedTouchedFiles = new Set([
+  "app/api/dashboard-data/route.ts",
+  "components/ProjectDetailPane.jsx",
+  "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
-  "scripts/company-contact-write-contract.test.ts",
+  "scripts/project-company-contact-candidate-ui.test.ts",
   "scripts/person-company-contact-candidate-ui.test.ts",
+  "scripts/company-contact-write-contract.test.ts",
   "package.json"
 ]);
 
@@ -92,6 +96,7 @@ const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
 const dashboardSource = readProjectFile("app/api/dashboard-data/route.ts");
 const personPaneSource = readProjectFile("components/PersonDetailPane.jsx");
+const projectPaneSource = readProjectFile("components/ProjectDetailPane.jsx");
 
 for (const requiredText of [
   "DB write routeはまだ未実装",
@@ -123,17 +128,24 @@ assertRouteTreeAbsentOrReadOnly("app/api/company-contact-candidates");
 
 for (const pattern of [
   /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/,
-  /prisma\.(company|companyContact|person)\.(create|createMany|update|upsert|delete|deleteMany)\b/,
+  /prisma\.(company|companyContact|project|projectCompanyRole|person)\.(create|createMany|update|upsert|delete|deleteMany)\b/,
   /prisma\.\$transaction\b/
 ]) {
   assert(!pattern.test(dashboardSource), `dashboard candidate display route must remain read-only: ${pattern}`);
 }
 
-const candidateUiSource = sectionBetween(
-  personPaneSource,
-  "function CompanyContactCandidateList",
-  "function DetailItemValue"
-);
+const candidateUiSources = [
+  sectionBetween(
+    personPaneSource,
+    "function CompanyContactCandidateList",
+    "function DetailItemValue"
+  ),
+  sectionBetween(
+    projectPaneSource,
+    "function CompanyContactCandidateList",
+    "function DetailItemValue"
+  )
+];
 
 for (const forbiddenUiPattern of [
   /<button\b/i,
@@ -141,10 +153,14 @@ for (const forbiddenUiPattern of [
   /<select\b/i,
   /type=["']checkbox["']/i,
   /onClick\s*=/i,
+  /mailto:/i,
+  /tel:/i,
   /\bfetch\s*\(/i,
   /method:\s*["'](POST|PATCH|PUT|DELETE)["']/i
 ]) {
-  assert(!forbiddenUiPattern.test(candidateUiSource), `candidate UI must not expose save/apply controls: ${forbiddenUiPattern}`);
+  for (const candidateUiSource of candidateUiSources) {
+    assert(!forbiddenUiPattern.test(candidateUiSource), `candidate UI must not expose save/apply controls: ${forbiddenUiPattern}`);
+  }
 }
 
 console.log("company/contact write contract tests passed.");
