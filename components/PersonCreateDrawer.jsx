@@ -1,58 +1,22 @@
 import { useEffect, useState } from "react";
+import { PERSON_FORM_FIELD_GROUPS, mergePersonFormInitialValues } from "../lib/person-form-contract";
 
-const personGroups = [
-  {
-    title: "必須項目",
-    priority: "必須",
-    fields: [
-      { name: "name", label: "要員名", type: "text", placeholder: "例: 山田 太郎 / Y.T", required: true },
-      { name: "initials", label: "イニシャル", type: "text", placeholder: "例: T.K" },
-      { name: "ownerCompanyName", label: "所属会社", type: "text", placeholder: "例: 株式会社○○" },
-      { name: "status", label: "状態", type: "select", options: ["提案可", "提案中", "参画中", "停止"] },
-      { name: "skills", label: "使用技術", type: "textarea", placeholder: "例: Java、Spring Boot、AWS" },
-      { name: "availableFrom", label: "稼働開始日", type: "date" }
-    ]
-  },
-  {
-    title: "推奨項目",
-    priority: "推奨",
-    fields: [
-      { name: "desiredUnitPrice", label: "希望単価", type: "number", placeholder: "例: 75", suffix: "万円" },
-      { name: "preferredLocation", label: "希望勤務地", type: "text", placeholder: "例: 東京、神奈川、フルリモート" },
-      { name: "remotePreference", label: "リモート可否", type: "text", placeholder: "例: 常駐可 / リモート希望 / フルリモート" },
-      { name: "age", label: "年齢", type: "number", placeholder: "例: 32", suffix: "歳" },
-      { name: "nationality", label: "国籍", type: "text", placeholder: "例: 日本" },
-      { name: "careerSummary", label: "経験職種", type: "textarea", placeholder: "例: バックエンドエンジニア、PL" },
-      { name: "processes", label: "対応工程", type: "textarea", placeholder: "例: 要件定義、基本設計、製造、テスト" },
-      { name: "summary", label: "得意領域", type: "textarea", placeholder: "例: API設計、性能改善" },
-      { name: "ownerContactName", label: "担当者", type: "text", placeholder: "例: 山田 太郎" },
-      { name: "ownerContactEmail", label: "担当者メール", type: "email", placeholder: "例: sales@example.com" }
-    ]
-  },
-  {
-    title: "任意項目",
-    priority: "任意",
-    fields: [
-      { name: "createdBy", label: "作成者", type: "text" },
-      { name: "createdAt", label: "作成日", type: "date" }
-    ]
-  }
-];
-
-function FormControl({ disabled, field }) {
+function FormControl({ disabled, field, onChange, value }) {
   const commonProps = {
     "aria-label": field.label,
     disabled,
     name: field.name,
+    onChange,
     placeholder: field.placeholder || field.label,
-    required: field.required
+    required: field.required,
+    value
   };
 
   if (field.type === "textarea") return <textarea {...commonProps} />;
 
   if (field.type === "select") {
     return (
-      <select {...commonProps} defaultValue="">
+      <select {...commonProps}>
         <option value="" disabled>
           選択してください
         </option>
@@ -74,9 +38,14 @@ function PriorityBadge({ value }) {
   return <span className={`field-priority ${priorityClass}`}>{value}</span>;
 }
 
-export default function PersonCreateDrawer({ onClose, onSaved }) {
+export default function PersonCreateDrawer({ initialValues, onClose, onSaved }) {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [formValues, setFormValues] = useState(() => mergePersonFormInitialValues(initialValues));
+
+  useEffect(() => {
+    setFormValues(mergePersonFormInitialValues(initialValues));
+  }, [initialValues]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -86,6 +55,11 @@ export default function PersonCreateDrawer({ onClose, onSaved }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isSaving, onClose]);
+
+  const handleFieldChange = (event) => {
+    const { name, value } = event.target;
+    setFormValues((current) => ({ ...current, [name]: value }));
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -138,7 +112,7 @@ export default function PersonCreateDrawer({ onClose, onSaved }) {
 
         <form className="detail-scroll create-drawer-form" onSubmit={handleSubmit}>
           <div className="detail-groups">
-            {personGroups.map((group) => (
+            {PERSON_FORM_FIELD_GROUPS.map((group) => (
               <section className="detail-group" key={group.title}>
                 <h3>
                   <span>{group.title}</span>
@@ -152,7 +126,7 @@ export default function PersonCreateDrawer({ onClose, onSaved }) {
                         <PriorityBadge value={field.priority || group.priority} />
                       </span>
                       <div className="create-control-row">
-                        <FormControl disabled={isSaving} field={field} />
+                        <FormControl disabled={isSaving} field={field} onChange={handleFieldChange} value={formValues[field.name]} />
                         {field.suffix ? <em>{field.suffix}</em> : null}
                       </div>
                     </label>
