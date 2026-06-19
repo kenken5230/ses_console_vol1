@@ -30,7 +30,26 @@ function extractExportedFunctionBody(source: string, functionName: string) {
   const match = declaration.exec(source);
   assert(match, `${functionName} must be exported`);
 
-  const bodyStart = source.indexOf("{", match.index);
+  const signatureStart = source.indexOf("(", match.index);
+  assert(signatureStart !== -1, `${functionName} must have a parameter list`);
+
+  let signatureDepth = 0;
+  let signatureEnd = -1;
+  for (let index = signatureStart; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "(") signatureDepth += 1;
+    if (character === ")") {
+      signatureDepth -= 1;
+      if (signatureDepth === 0) {
+        signatureEnd = index;
+        break;
+      }
+    }
+  }
+
+  assert(signatureEnd !== -1, `${functionName} must have a balanced parameter list`);
+
+  const bodyStart = source.indexOf("{", signatureEnd);
   assert(bodyStart !== -1, `${functionName} must have a function body`);
 
   let depth = 0;
@@ -278,13 +297,20 @@ function testSourceWiring() {
   assert.doesNotMatch(data, /export const searchHistories/);
 }
 
-await testListUsesCurrentUserOnly();
-await testSaveIgnoresSpoofedUserId();
-await testSaveSanitizesFilterUserIdentifiers();
-testValidationCaps();
-testPublicResponseShape();
-testRouteBoundaryWiring();
-testSearchHistoryServiceBoundaryWiring();
-testSourceWiring();
+async function main() {
+  await testListUsesCurrentUserOnly();
+  await testSaveIgnoresSpoofedUserId();
+  await testSaveSanitizesFilterUserIdentifiers();
+  testValidationCaps();
+  testPublicResponseShape();
+  testRouteBoundaryWiring();
+  testSearchHistoryServiceBoundaryWiring();
+  testSourceWiring();
 
-console.log("search-history tests passed");
+  console.log("search-history tests passed");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -113,7 +113,7 @@ const response = buildMarketAnalysisResponse(
     toMonth: "2026-08",
     skill: "Java",
     region: matchingRegion,
-    priceBand: "70_80",
+    priceBand: "75_80",
     workStyle: matchingWorkStyle,
     contractType: "SEMI_DELEGATION",
     generatedAt: "2026-08-31T00:00:00.000Z",
@@ -124,7 +124,7 @@ assert.equal(response.summary.projectCount, 1, "filtered response keeps one acti
 assert.equal(response.summary.personCount, 1, "filtered response keeps one active matching person");
 const javaRanking = response.skillRankings.find((ranking) => ranking.skill === "Java");
 assert.ok(javaRanking);
-assert.equal(response.priceBandRankings[0].priceBand, "70_80");
+assert.equal(response.priceBandRankings[0].priceBand, "75_80");
 assert.equal(response.regionRankings[0].region, matchingRegion);
 assert.equal(response.regionRankings[0].workStyle, matchingWorkStyle);
 assert.equal(response.marketCellRankings[0].contractType, "SEMI_DELEGATION");
@@ -136,7 +136,7 @@ assert.deepEqual(skillExamples.projects[0], {
   kind: "project",
   anonymousId: "PJ-001",
   registeredMonth: "2026-08",
-  priceBand: "70_80",
+  priceBand: "75_80",
   region: matchingRegion,
   workStyle: matchingWorkStyle,
   skillCount: 3,
@@ -150,7 +150,7 @@ assert.deepEqual(skillExamples.persons[0], {
   kind: "person",
   anonymousId: "PS-001",
   registeredMonth: "2026-08",
-  priceBand: "70_80",
+  priceBand: "75_80",
   region: matchingRegion,
   workStyle: matchingWorkStyle,
   skillCount: 2,

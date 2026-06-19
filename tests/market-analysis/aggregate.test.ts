@@ -106,14 +106,14 @@ assert.equal(aws.preferredSkillProjectCount, 1);
 assert.equal(aws.personCount, 1);
 
 const priceMetrics = aggregatePriceBandMarket(projects, persons);
-const over80 = priceMetrics.find((metric) => metric.priceBand === "80_over");
-assert.ok(over80);
-assert.equal(over80.projectCount, 1);
-assert.equal(over80.personCount, 1);
-assert.equal(over80.projectMedianPrice, 90);
-assert.equal(over80.personDesiredMedianPrice, 90);
+const ninety = priceMetrics.find((metric) => metric.priceBand === "90_95");
+assert.ok(ninety);
+assert.equal(ninety.projectCount, 1);
+assert.equal(ninety.personCount, 1);
+assert.equal(ninety.projectMedianPrice, 90);
+assert.equal(ninety.personDesiredMedianPrice, 90);
 
-const seventy = priceMetrics.find((metric) => metric.priceBand === "70_80");
+const seventy = priceMetrics.find((metric) => metric.priceBand === "70_75");
 assert.ok(seventy);
 assert.equal(seventy.projectCount, 1);
 assert.equal(seventy.personCount, 1);
@@ -138,7 +138,7 @@ assert.equal(osakaHybrid.personCount, 1);
 const cells = aggregateMarketCells(projects, persons, new Date("2026-06-06T00:00:00+09:00"));
 const javaCell = cells.find((metric) => (
   metric.skill === "Java"
-  && metric.priceBand === "80_over"
+  && metric.priceBand === "90_95"
   && metric.region === "東京"
   && metric.workStyle === "ONSITE"
   && metric.startMonth === "2026-07"
