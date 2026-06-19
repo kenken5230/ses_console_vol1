@@ -7,6 +7,7 @@
 Gmail remediationと抽出品質を相談する場合:
 
 - `docs/themes/gmail-remediation/README.md`
+- `docs/themes/gmail-remediation/design/gmail-company-candidate-readonly-v0.1.md`
 - `docs/themes/gmail-remediation/design/gmail-person-remediation-supervised-ops-v0.1.md`
 - `docs/themes/gmail-remediation/research/gmail-unlinked-extraction-quality-research-v0.1.md`
 - `docs/themes/gmail-remediation/BK/feature-backlog-and-task-list-v0.1.md`

@@ -7,6 +7,7 @@ import {
   type PersonExtraction,
   type ProjectExtraction,
 } from "./gmail-extraction";
+import { anonymizedCompanyCandidate, type GmailCompanyCandidate } from "./gmail-company-candidate";
 
 export type QualityIssueRow = {
   sampleId: string;
@@ -23,6 +24,7 @@ export type QualityIssueRow = {
   roleHeadlineSource?: string;
   skillCount: number;
   skillOverExtraction: boolean;
+  companyCandidate?: ReturnType<typeof anonymizedCompanyCandidate>;
 };
 
 export function shortHash(value: string | null | undefined): string {
@@ -73,6 +75,7 @@ export function buildAnonymizedIssueRow(params: {
   id: string;
   extraction: MailExtraction;
   issueCodes?: string[];
+  companyCandidate?: GmailCompanyCandidate;
 }): QualityIssueRow {
   const { extraction } = params;
   const score = qualityScoreSummary(extraction);
@@ -89,6 +92,7 @@ export function buildAnonymizedIssueRow(params: {
     featureFlags: score.featureFlags,
     skillCount: qualitySkillCount(extraction),
     skillOverExtraction: qualitySkillOverExtraction(extraction),
+    companyCandidate: params.companyCandidate ? anonymizedCompanyCandidate(params.companyCandidate) : undefined,
   };
 
   if (extraction.target === "person") {

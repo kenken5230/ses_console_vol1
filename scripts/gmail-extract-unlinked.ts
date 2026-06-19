@@ -11,11 +11,20 @@ import {
   findExistingProjectForSenderSubject,
 } from "../lib/gmail-extract-entities";
 import { buildExtractionBodyText } from "../lib/gmail-message-body";
+import {
+  anonymizedCompanyCandidate,
+  inferGmailCompanyCandidateForExtraction,
+  type GmailCompanyCandidate,
+  type KnownCompanyIdentity,
+} from "./gmail-company-candidate";
 import { extractFromMail, formatDate, personDisplayName, type MailExtraction, type MailExtractionSource } from "./gmail-extraction";
 import { qualityScoreSummary, shortHash } from "./gmail-extraction-quality-report";
 
 type ExtractTarget = "all" | "project" | "person";
 type EntityTarget = "project" | "person";
+type KnownCompanyRow = KnownCompanyIdentity & {
+  aliases: Array<{ aliasName: string; normalizedAliasName: string }>;
+};
 
 type CandidateMail = {
   id: string;
@@ -210,7 +219,18 @@ function scoreSummary(extraction: MailExtraction): string {
   return `project=${score.projectScore};person=${score.personScore};margin=${score.conflictMargin};predicted=${score.predictedType}`;
 }
 
-function qualityColumns(extraction: MailExtraction, mail: CandidateMail) {
+function companyCandidateColumns(companyCandidate: GmailCompanyCandidate) {
+  const anonymized = anonymizedCompanyCandidate(companyCandidate);
+  return {
+    companyCandidatePresent: anonymized.candidatePresent ? "yes" : "",
+    companyCandidateSource: anonymized.source,
+    companyCandidateConfidence: anonymized.confidence,
+    companyCandidateReason: anonymized.reasonCodes.join(", "),
+    companyCandidateGenericDomain: anonymized.isGenericDomain ? "yes" : "",
+  };
+}
+
+function qualityColumns(extraction: MailExtraction, mail: CandidateMail, companyCandidate: GmailCompanyCandidate) {
   const score = qualityScoreSummary(extraction);
   if (extraction.target === "person") {
     return {
@@ -237,6 +257,7 @@ function qualityColumns(extraction: MailExtraction, mail: CandidateMail) {
       bodyDerived: score.bodyDerived ? "yes" : "",
       skillOverExtraction: extraction.skillOverExtraction ? "yes" : "",
       wouldNeedsReview: extraction.needsReview ? "yes" : "",
+      ...companyCandidateColumns(companyCandidate),
     };
   }
 
@@ -264,6 +285,7 @@ function qualityColumns(extraction: MailExtraction, mail: CandidateMail) {
     bodyDerived: score.bodyDerived ? "yes" : "",
     skillOverExtraction: extraction.skillOverExtraction ? "yes" : "",
     wouldNeedsReview: extraction.needsReview ? "yes" : "",
+    ...companyCandidateColumns(companyCandidate),
   };
 }
 
@@ -354,6 +376,14 @@ async function main(): Promise<void> {
       },
     },
   });
+  const knownCompanies = await prisma.company.findMany({
+    select: {
+      name: true,
+      normalizedName: true,
+      mainEmailDomain: true,
+      aliases: { select: { aliasName: true, normalizedAliasName: true } },
+    },
+  }) as KnownCompanyRow[];
 
   const summary = {
     mode: apply ? "apply" : "dry-run",
@@ -373,6 +403,7 @@ async function main(): Promise<void> {
     const entityTarget = entityTargetForMail(mail);
     const source = toMailSource(mail);
     const extraction = extractFromMail(source);
+    const companyCandidate = inferGmailCompanyCandidateForExtraction({ mail: source, extraction, knownCompanies });
     const existingLinkReason = skipReasonFromExistingLinks(mail, entityTarget);
     const existing = existingLinkReason ? null : await findExistingForTarget(entityTarget, source);
     const skipReason = existingLinkReason ?? (existing ? existing.source : null);
@@ -393,7 +424,7 @@ async function main(): Promise<void> {
         missing: extraction.missingFields.join(", "),
         subject: safeSubject(mail.subject),
         mailId: shortId(mail.id),
-        ...qualityColumns(extraction, mail),
+        ...qualityColumns(extraction, mail, companyCandidate),
       });
       continue;
     }
@@ -412,7 +443,7 @@ async function main(): Promise<void> {
         missing: extraction.missingFields.join(", "),
         subject: safeSubject(mail.subject),
         mailId: shortId(mail.id),
-        ...qualityColumns(extraction, mail),
+        ...qualityColumns(extraction, mail, companyCandidate),
       });
       continue;
     }
@@ -434,7 +465,7 @@ async function main(): Promise<void> {
         subject: safeSubject(mail.subject),
         mailId: shortId(mail.id),
         entityId: shortId(result.id),
-        ...qualityColumns(extraction, mail),
+        ...qualityColumns(extraction, mail, companyCandidate),
       });
     } catch (error) {
       summary.failed += 1;
@@ -452,7 +483,7 @@ async function main(): Promise<void> {
         errorName: safeErrorName(error),
         errorCode: safeErrorCode(error),
         errorMessage: safeErrorMessage(error),
-        ...qualityColumns(extraction, mail),
+        ...qualityColumns(extraction, mail, companyCandidate),
       });
     }
   }
