@@ -40,6 +40,15 @@ const labelStyle = {
   fontWeight: 800,
 };
 
+const noteStyle = {
+  color: "#64748b",
+  display: "block",
+  fontSize: 11,
+  fontWeight: 700,
+  lineHeight: 1.4,
+  marginTop: 3,
+};
+
 const valueStyle = {
   color: "#1f5fc5",
   display: "block",
@@ -74,17 +83,26 @@ async function copyText(text) {
 export default function MarketSummaryCards({ summary }) {
   const [copied, setCopied] = useState(false);
   const cumulativeFromMonth = summary?.cumulativeFromMonth || "2026-01";
+  const projectScope = summary?.focusOnly ? "注力案件のみ" : "全案件";
   const items = [
-    { label: `累計案件数 (${cumulativeFromMonth}以降)`, value: summary?.projectCount },
-    { label: `累計要員数 (${cumulativeFromMonth}以降)`, value: summary?.personCount },
-    { label: `累計注力案件数 (${cumulativeFromMonth}以降)`, value: summary?.focusProjectCount },
-    { label: "集計対象案件数", value: summary?.sampleProjectCount ?? summary?.projectCount },
-    { label: "集計対象要員数", value: summary?.samplePersonCount ?? summary?.personCount },
-    { label: "データ品質アラート件数", value: summary?.qualityAlertCount },
+    { label: "累計案件数", note: `${cumulativeFromMonth}以降 / ${projectScope}`, value: summary?.projectCount },
+    { label: "累計要員数", note: `${cumulativeFromMonth}以降 / 全要員`, value: summary?.personCount },
+    { label: "累計注力案件数", note: `${cumulativeFromMonth}以降 / 注力案件`, value: summary?.focusProjectCount },
+    {
+      label: "ランキング集計案件数",
+      note: `取得・フィルター後${summary?.focusOnly ? " / 注力のみ" : ""}`,
+      value: summary?.sampleProjectCount ?? summary?.projectCount,
+    },
+    {
+      label: "ランキング集計要員数",
+      note: "取得・フィルター後 / 全要員",
+      value: summary?.samplePersonCount ?? summary?.personCount,
+    },
+    { label: "データ品質アラート件数", note: "ランキング集計対象内", value: summary?.qualityAlertCount },
   ];
 
   async function handleCopy() {
-    const ok = await copyText(items.map((item) => [item.label, item.value ?? 0].join("\t")).join("\n"));
+    const ok = await copyText(items.map((item) => [`${item.label} (${item.note})`, item.value ?? 0].join("\t")).join("\n"));
     if (!ok) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
@@ -102,6 +120,7 @@ export default function MarketSummaryCards({ summary }) {
         {items.map((item) => (
           <article key={item.label} style={cardStyle}>
             <span style={labelStyle}>{item.label}</span>
+            <span style={noteStyle}>{item.note}</span>
             <strong style={valueStyle}>{formatCount(item.value)}</strong>
           </article>
         ))}

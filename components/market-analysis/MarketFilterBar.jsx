@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { PRICE_BANDS, PRICE_BAND_LEGACY_LABELS } from "../../lib/market-analysis/constants";
+import { normalizeMarketAnalysisLimitInput } from "../../lib/market-analysis/ui-controls";
 import MarketShareButton from "./MarketShareButton";
 
 const emptyFilters = {
@@ -114,6 +115,13 @@ const labelStyle = {
   gap: 8,
 };
 
+const limitLabelStyle = {
+  ...labelStyle,
+  alignItems: "stretch",
+  flexDirection: "column",
+  gap: 5,
+};
+
 const stackedLabelStyle = {
   ...labelStyle,
   alignItems: "stretch",
@@ -134,7 +142,15 @@ const controlStyle = {
 
 const limitInputStyle = {
   ...controlStyle,
+  maxWidth: 138,
   width: 116,
+};
+
+const helperTextStyle = {
+  color: "#64748b",
+  fontSize: 11,
+  fontWeight: 800,
+  lineHeight: 1.35,
 };
 
 export default function MarketFilterBar({
@@ -180,19 +196,25 @@ export default function MarketFilterBar({
   return (
     <section style={barStyle} aria-label="市場分析フィルター">
       <div style={controlsStyle}>
-        <label style={labelStyle}>
-          取得件数
+        <label style={limitLabelStyle}>
+          <span>取得件数</span>
           <input
+            aria-describedby="market-analysis-limit-help"
             aria-label="取得件数"
             disabled={isLoading}
             inputMode="numeric"
             min="1"
-            onChange={(event) => onLimitChange(event.target.value)}
-            placeholder="未指定"
+            max="1000"
+            onChange={(event) => onLimitChange(normalizeMarketAnalysisLimitInput(event.target.value))}
+            placeholder="空欄=上限なし"
+            step="1"
             style={limitInputStyle}
             type="number"
             value={limit}
           />
+          <span id="market-analysis-limit-help" style={helperTextStyle}>
+            1〜1000件 / 空欄は取得上限なし
+          </span>
         </label>
         <label style={labelStyle}>
           <input

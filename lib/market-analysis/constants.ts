@@ -2,6 +2,10 @@ export const UNKNOWN_SKILL = "unknown";
 export const UNKNOWN_REGION = "unknown";
 export const UNKNOWN_MONTH = "unknown";
 export const DEFAULT_RECRUITING_COUNT = 1;
+export const MARKET_ANALYSIS_DEFAULT_LIMIT = 100;
+export const MARKET_ANALYSIS_MIN_LIMIT = 1;
+export const MARKET_ANALYSIS_MAX_LIMIT = 1000;
+export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
 
 export const PRICE_BANDS = [
   { key: "under_30", label: "30万円以下", min: null, max: 30 },
