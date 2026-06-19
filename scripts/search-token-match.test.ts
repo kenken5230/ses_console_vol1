@@ -16,4 +16,13 @@ assert.equal(textMatchesSearchQuery("React TypeScript project", "react"), true);
 assert.equal(textMatchesSearchQuery("React TypeScript project", "react project"), false);
 assert.equal(textIncludesSearchTerm("JavaScript developer", "script"), true);
 
+assert.equal(textMatchesSearchQuery("MySQL migration", "SQL"), true);
+assert.equal(textMatchesSearchQuery("PostgreSQL database", "sql"), true);
+assert.equal(textMatchesSearchQuery("SQL Server tuning", "sql"), true);
+assert.equal(textMatchesSearchQuery("SQLAlchemy integration", "SQL"), false);
+
+assert.equal(textMatchesSearchQuery("Go API", "go"), true);
+assert.equal(textMatchesSearchQuery("Django API", "go"), false);
+assert.equal(textMatchesSearchQuery("Vue.js frontend", "vue"), true);
+
 console.log("search token match tests passed");
