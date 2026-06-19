@@ -17,6 +17,7 @@ import SearchToolbar from "../components/SearchToolbar";
 import UnclassifiedMailDetailPane from "../components/UnclassifiedMailDetailPane";
 import UnclassifiedMailTable from "../components/UnclassifiedMailTable";
 import { filterFormRows, focusOptions, personFilterFormRows, quickFilters } from "../data/mockProjects";
+import { textMatchesSearchQuery } from "../lib/search-token-match";
 
 const defaultQuickFilters = Object.fromEntries(quickFilters.map((filter) => [filter.id, Boolean(filter.defaultChecked)]));
 const currentMocUserName = "営業担当A";
@@ -440,11 +441,11 @@ export default function Home() {
   };
 
   const filteredProjects = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+    const normalizedSearch = search.trim();
     let result = projects;
 
-    if (normalized) {
-      result = result.filter((project) => collectProjectText(project).includes(normalized));
+    if (normalizedSearch) {
+      result = result.filter((project) => textMatchesSearchQuery(collectProjectText(project), normalizedSearch));
     }
 
     if (filterValues.createdFrom || filterValues.createdTo) {
@@ -460,8 +461,8 @@ export default function Home() {
       result = result.filter((project) => String(project.id).includes(filterValues.projectId.trim()));
     }
     if (filterValues.exclude.trim()) {
-      const excluded = filterValues.exclude.trim().toLowerCase();
-      result = result.filter((project) => !collectProjectText(project).includes(excluded));
+      const excluded = filterValues.exclude.trim();
+      result = result.filter((project) => !textMatchesSearchQuery(collectProjectText(project), excluded));
     }
     if (filterValues.startMonthFrom || filterValues.startMonthTo) {
       result = result.filter((project) => {
@@ -473,8 +474,8 @@ export default function Home() {
       });
     }
     if (filterValues.skill.trim()) {
-      const skill = filterValues.skill.trim().toLowerCase();
-      result = result.filter((project) => collectProjectText(project).includes(skill));
+      const skill = filterValues.skill.trim();
+      result = result.filter((project) => textMatchesSearchQuery(collectProjectText(project), skill));
     }
     if (filterValues.unitUndecidedOnly) {
       result = result.filter((project) => project.unitPriceValue === 0 || project.unitPrice === "未定");
@@ -483,8 +484,8 @@ export default function Home() {
       if (filterValues.unitMax) result = result.filter((project) => project.unitPriceValue <= Number(filterValues.unitMax));
     }
     if (filterValues.prefecture.trim()) {
-      const prefecture = filterValues.prefecture.trim().toLowerCase();
-      result = result.filter((project) => collectProjectText(project).includes(prefecture));
+      const prefecture = filterValues.prefecture.trim();
+      result = result.filter((project) => textMatchesSearchQuery(collectProjectText(project), prefecture));
     }
     if (filterValues.remote.length) {
       result = result.filter((project) => {
@@ -532,11 +533,11 @@ export default function Home() {
   }, [checkedFilters, currentUserName, filterValues, projects, search, selectedFocus, selectedSort]);
 
   const filteredPersons = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+    const normalizedSearch = search.trim();
     let result = persons;
 
-    if (normalized) {
-      result = result.filter((person) => collectPersonText(person).includes(normalized));
+    if (normalizedSearch) {
+      result = result.filter((person) => textMatchesSearchQuery(collectPersonText(person), normalizedSearch));
     }
 
     if (filterValues.createdFrom || filterValues.createdTo) {
@@ -552,8 +553,8 @@ export default function Home() {
       result = result.filter((person) => String(person.id).includes(filterValues.projectId.trim()));
     }
     if (filterValues.exclude.trim()) {
-      const excluded = filterValues.exclude.trim().toLowerCase();
-      result = result.filter((person) => !collectPersonText(person).includes(excluded));
+      const excluded = filterValues.exclude.trim();
+      result = result.filter((person) => !textMatchesSearchQuery(collectPersonText(person), excluded));
     }
     if (filterValues.startMonthFrom || filterValues.startMonthTo) {
       result = result.filter((person) => {
@@ -565,8 +566,8 @@ export default function Home() {
       });
     }
     if (filterValues.skill.trim()) {
-      const skill = filterValues.skill.trim().toLowerCase();
-      result = result.filter((person) => collectPersonText(person).includes(skill));
+      const skill = filterValues.skill.trim();
+      result = result.filter((person) => textMatchesSearchQuery(collectPersonText(person), skill));
     }
     if (filterValues.unitUndecidedOnly) {
       result = result.filter((person) => person.unitPriceValue === 0 || person.unitPrice === "未定");
@@ -575,8 +576,8 @@ export default function Home() {
       if (filterValues.unitMax) result = result.filter((person) => person.unitPriceValue <= Number(filterValues.unitMax));
     }
     if (filterValues.prefecture.trim()) {
-      const location = filterValues.prefecture.trim().toLowerCase();
-      result = result.filter((person) => collectPersonText(person).includes(location));
+      const location = filterValues.prefecture.trim();
+      result = result.filter((person) => textMatchesSearchQuery(collectPersonText(person), location));
     }
     if (filterValues.remote.length) {
       result = result.filter((person) => {
@@ -612,16 +613,16 @@ export default function Home() {
   }, [checkedFilters, currentUserName, filterValues, persons, search, selectedSort]);
 
   const filteredUnclassifiedMails = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+    const normalizedSearch = search.trim();
     let result = unclassifiedMails;
 
-    if (normalized) {
-      result = result.filter((mail) => collectMailText(mail).includes(normalized));
+    if (normalizedSearch) {
+      result = result.filter((mail) => textMatchesSearchQuery(collectMailText(mail), normalizedSearch));
     }
 
     if (filterValues.exclude.trim()) {
-      const excluded = filterValues.exclude.trim().toLowerCase();
-      result = result.filter((mail) => !collectMailText(mail).includes(excluded));
+      const excluded = filterValues.exclude.trim();
+      result = result.filter((mail) => !textMatchesSearchQuery(collectMailText(mail), excluded));
     }
 
     if (checkedFilters.hasResult) result = result.filter((mail) => mail.hasResult);

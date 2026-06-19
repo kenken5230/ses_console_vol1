@@ -1,5 +1,11 @@
 # Market / Search / Gmail Recheck
 
+## 2026-06-19 Search Token Precision Update
+
+- Dashboard free-text search now treats query terms as contiguous tokens instead of loose character matches.
+- Short ASCII terms such as `AI` no longer match separated or embedded ASCII noise such as `ARI`, `A R I`, `Gmail`, or `mail`.
+- Japanese-adjacent and delimiter-adjacent terms remain searchable, for example `AIエンジニア`, `生成AI`, and `AI/ML`.
+
 ## A/B/C 分類
 
 | 区分 | 意味 | 今回の扱い |
