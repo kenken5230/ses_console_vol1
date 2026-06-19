@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { authErrorResponse, requireAuth } from "../../../lib/auth";
+import {
+  mapPersonOwnerReadOnly,
+  mapProjectCompanyRolesReadOnly,
+  type SafeDashboardCompany,
+  type SafeDashboardCompanyContact,
+  type SafeDashboardProjectCompanyRole
+} from "../../../lib/dashboard-company-readonly";
 import { mergePersonFormInitialValues } from "../../../lib/person-form-contract";
 
 export const dynamic = "force-dynamic";
@@ -9,15 +16,24 @@ const EMPTY_VALUE = "-";
 type DetailItem = {
   label: string;
   value?: string;
-  type?: "block" | "tags" | "commerce" | "mail";
+  type?: "block" | "tags" | "commerce" | "mail" | "companyContacts";
   tags?: string[];
   items?: string[][];
+  companyContacts?: DetailCompanyContact[];
   emphasis?: boolean;
 };
 
 type DetailGroup = {
   title: string;
   items: DetailItem[];
+};
+
+type DetailCompanyContact = {
+  role: string;
+  roleLabel: string;
+  isPrimary: boolean;
+  company: SafeDashboardCompany | null;
+  contact: SafeDashboardCompanyContact | null;
 };
 
 function formatDate(value: Date | null | undefined) {
@@ -400,6 +416,40 @@ function makeCommerceItem(label: string, items: string[][]): DetailItem {
   return { label, type: "commerce", items: items.length ? items : [["商流", EMPTY_VALUE]] };
 }
 
+function roleToCompanyContact(role: SafeDashboardProjectCompanyRole): DetailCompanyContact {
+  return {
+    role: role.role,
+    roleLabel: companyRoleLabel(role.role),
+    isPrimary: role.isPrimary,
+    company: role.company,
+    contact: role.contact
+  };
+}
+
+function makeCompanyContactsItem(label: string, companyContacts: DetailCompanyContact[]): DetailItem {
+  return {
+    label,
+    type: "companyContacts",
+    companyContacts
+  };
+}
+
+function makeOwnerCompanyContactItem(
+  label: string,
+  ownerCompany: SafeDashboardCompany | null,
+  ownerContact: SafeDashboardCompanyContact | null
+): DetailItem {
+  return makeCompanyContactsItem(label, [
+    {
+      role: "OWNER_COMPANY",
+      roleLabel: "所属会社",
+      isPrimary: true,
+      company: ownerCompany,
+      contact: ownerContact
+    }
+  ]);
+}
+
 function mapProject(project: any) {
   const condition = project.condition;
   const skills = project.skills.map((skill: any) => skill.skillName);
@@ -413,6 +463,8 @@ function mapProject(project: any) {
   const unitPrice = upperAmount !== EMPTY_VALUE ? upperAmount : formatMoneyRange(condition?.unitPriceMin, condition?.unitPriceMax, condition?.unitPriceText);
   const projectUnitPrice = formatMoneyRange(condition?.unitPriceMin, condition?.unitPriceMax, condition?.unitPriceText);
   const createdAt = formatDate(project.createdAt);
+  const companyRoles = mapProjectCompanyRolesReadOnly(project.companyRoles);
+  const companyContactRows = companyRoles.map(roleToCompanyContact);
   const upperCompanyRole = pickProjectCompanyRole(project);
   const company = upperCompanyRole?.company?.name || EMPTY_VALUE;
   const upperCompany = upperCompanyRole?.company;
@@ -477,6 +529,10 @@ function mapProject(project: any) {
     createdAt: createdAt || ""
   };
   const detailGroups: DetailGroup[] = [
+    {
+      title: "会社/担当者 (read-only)",
+      items: [makeCompanyContactsItem("会社ロール", companyContactRows)]
+    },
     {
       title: "上位会社",
       items: [
@@ -563,6 +619,7 @@ function mapProject(project: any) {
     locations: locations.length ? locations : [EMPTY_VALUE],
     interviewCount: condition?.interviewCount ? `${condition.interviewCount}回` : EMPTY_VALUE,
     company,
+    companyRoles,
     fee: condition?.commissionFeeAmount ? `${condition.commissionFeeAmount.toLocaleString()}円` : EMPTY_VALUE,
     hasResult: project.companyRoles.some((role: any) => role.company.tradeStatus === "OK"),
     creator: project.createdBy?.name?.slice(0, 2) || "DB",
@@ -607,6 +664,7 @@ function mapPerson(person: any) {
   const status = statusLabel(person.status);
   const unitPrice = person.desiredUnitPrice ? `${person.desiredUnitPrice}万円` : "未定";
   const ownerCompanyTradeStatus = person.ownerCompany?.tradeStatus || "UNKNOWN";
+  const { ownerCompany, ownerContact } = mapPersonOwnerReadOnly(person);
   const needsReview = hasNeedsReviewExtraction(person.sourceMail, "PERSON", person.id);
   const normalizedExtraction = latestNormalizedExtraction(person.sourceMail, "PERSON", person.id);
   const reviewReasons = normalizedStringArray(normalizedExtraction.reviewReasons);
@@ -614,6 +672,10 @@ function mapPerson(person: any) {
   const roleHeadline = typeof normalizedExtraction.roleHeadline === "string" ? normalizedExtraction.roleHeadline : "";
   const careerOrRole = person.careerSummary || roleHeadline || EMPTY_VALUE;
   const detailGroups: DetailGroup[] = [
+    {
+      title: "会社/担当者 (read-only)",
+      items: [makeOwnerCompanyContactItem("所属会社/担当者", ownerCompany, ownerContact)]
+    },
     {
       title: "基本情報",
       items: [
@@ -681,6 +743,8 @@ function mapPerson(person: any) {
     statusRaw: person.status,
     company,
     contact,
+    ownerCompany,
+    ownerContact,
     unitPrice,
     unitPriceValue: person.desiredUnitPrice || 0,
     availableFrom: availableFrom || "未入力",
@@ -791,8 +855,26 @@ export async function GET(request: Request) {
         condition: true,
         companyRoles: {
           include: {
-            company: true,
-            companyContact: true
+            company: {
+              select: {
+                id: true,
+                name: true,
+                tradeStatus: true,
+                mainEmailDomain: true,
+                tdbScore: true
+              }
+            },
+            companyContact: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                department: true,
+                position: true,
+                isActive: true
+              }
+            }
           },
           orderBy: { roleOrder: "asc" }
         },
@@ -833,8 +915,26 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: "desc" },
       include: {
-        ownerCompany: true,
-        ownerContact: true,
+        ownerCompany: {
+          select: {
+            id: true,
+            name: true,
+            tradeStatus: true,
+            mainEmailDomain: true,
+            tdbScore: true
+          }
+        },
+        ownerContact: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            department: true,
+            position: true,
+            isActive: true
+          }
+        },
         createdBy: true,
         sourceMail: {
           select: {
