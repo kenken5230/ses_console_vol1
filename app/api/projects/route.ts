@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { authErrorResponse, requireAnyRole } from "../../../lib/auth";
+import {
+  InputValidationError,
+  emptyToNull,
+  parseDateInput,
+  parseMonthInput,
+  parseNumberInput,
+  parseOptionalContactInput,
+  parseRemoteTypeInput,
+  parseSelectInput,
+  splitListInput
+} from "../../../lib/input-standard-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -13,45 +24,7 @@ type ProjectSkillCreateRow = {
 };
 type TransactionClient = any;
 
-const emptyToNull = (value?: string) => {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-};
-
 const normalizeCompanyName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, "");
-
-const parseNumber = (value?: string, label = "数値") => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-
-  const normalized = trimmed.replace(/,/g, "");
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`${label}は数値で入力してください`);
-  }
-
-  return Math.trunc(parsed);
-};
-
-const parseMonth = (value?: string) => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  if (!/^\d{4}-\d{2}$/.test(trimmed)) {
-    throw new Error("月項目はYYYY-MM形式で入力してください");
-  }
-
-  return new Date(`${trimmed}-01T00:00:00.000Z`);
-};
-
-const parseDate = (value?: string) => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    throw new Error("日付項目はYYYY-MM-DD形式で入力してください");
-  }
-
-  return new Date(`${trimmed}T00:00:00.000Z`);
-};
 
 const parseTimeRange = (value?: string) => {
   const trimmed = value?.trim();
@@ -72,21 +45,14 @@ const parseSettlementRange = (value?: string) => {
   if (!trimmed) return { min: null, max: null };
 
   const numbers = trimmed.match(/\d+/g)?.map(Number).filter(Number.isFinite) || [];
+  if (!numbers.length) {
+    throw new InputValidationError("精算幅は140〜180hのように数値を含めて入力してください");
+  }
+
   return {
     min: numbers[0] ?? null,
     max: numbers[1] ?? numbers[0] ?? null
   };
-};
-
-const splitList = (value?: string) => {
-  return Array.from(
-    new Set(
-      (value || "")
-        .split(/[\n,、/／]+/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  );
 };
 
 const tradeStatusMap: Record<string, "UNKNOWN" | "OK" | "NG" | "NEEDS_REVIEW"> = {
@@ -115,6 +81,12 @@ const attendanceMap: Record<string, "NEED_CONFIRMATION" | "REQUIRED" | "NOT_REQU
   未確認: "NEED_CONFIRMATION",
   必要: "REQUIRED",
   不要: "NOT_REQUIRED"
+};
+
+const focusProjectMap: Record<string, boolean> = {
+  未選択: false,
+  該当: true,
+  非該当: false
 };
 
 const roleLabels = [
@@ -163,8 +135,8 @@ async function findOrCreateCompany(tx: any, name: string, payload: ProjectCreate
     data: {
       name,
       normalizedName,
-      tradeStatus: isUpperCompany ? tradeStatusMap[payload.tradeStatus || ""] || "UNKNOWN" : "UNKNOWN",
-      tdbScore: isUpperCompany ? parseNumber(payload.tdbScore, "帝国データバンク点数") : null
+      tradeStatus: isUpperCompany ? parseSelectInput(payload.tradeStatus, "取引可否", tradeStatusMap, "UNKNOWN") : "UNKNOWN",
+      tdbScore: isUpperCompany ? parseNumberInput(payload.tdbScore, "帝国データバンク点数") : null
     }
   });
 }
@@ -173,9 +145,10 @@ function buildConditionData(payload: ProjectCreatePayload) {
   const settlement = parseSettlementRange(payload.settlementTimeRange);
   const fixedWorkTime = parseTimeRange(payload.fixedWorkTime);
   const coreTime = parseTimeRange(payload.coreTime);
-  const unitPrice = parseNumber(payload.unitPrice, "単価");
-  const upperAmount = parseNumber(payload.upperAmount, "上位金額");
+  const unitPrice = parseNumberInput(payload.unitPrice, "単価");
+  const upperAmount = parseNumberInput(payload.upperAmount, "上位金額");
   const commerceNotes = emptyToNull(payload.commerceFlow);
+  const remoteText = [payload.workEnvironment, payload.workLocation, payload.prefecture].filter(Boolean).join(" ");
 
   return {
     unitPriceMin: unitPrice,
@@ -186,10 +159,10 @@ function buildConditionData(payload: ProjectCreatePayload) {
     commissionFeeAmount: null,
     amProjectFeeAmount: 0,
     bankruptcyPredictionFeeAmount: null,
-    recruitingCount: parseNumber(payload.recruitingCount, "募集人数"),
+    recruitingCount: parseNumberInput(payload.recruitingCount, "募集人数"),
     workload: emptyToNull(payload.workload),
-    startMonth: parseMonth(payload.projectStartMonth || payload.startMonth),
-    expectedWorkDaysPerWeek: parseNumber(payload.expectedWorkDaysPerWeek, "想定稼働日数"),
+    startMonth: parseMonthInput(payload.projectStartMonth || payload.startMonth, "開始月"),
+    expectedWorkDaysPerWeek: parseNumberInput(payload.expectedWorkDaysPerWeek, "想定稼働日数"),
     settlementTimeMin: settlement.min,
     settlementTimeMax: settlement.max,
     fixedWorkStartTime: fixedWorkTime.start,
@@ -198,16 +171,21 @@ function buildConditionData(payload: ProjectCreatePayload) {
     coreTimeEnd: coreTime.end,
     workLocationText: emptyToNull(payload.workLocation),
     prefecture: emptyToNull(payload.prefecture),
-    remoteType: "UNKNOWN" as const,
+    remoteType: parseRemoteTypeInput(payload.remoteType, remoteText),
     workEnvironment: emptyToNull(payload.workEnvironment),
-    contractType: contractTypeMap[payload.contractType || ""] || "UNKNOWN",
-    foreignNationalityPolicy: foreignNationalityMap[payload.foreignNationalityPolicy || ""] || "UNKNOWN",
+    contractType: parseSelectInput(payload.contractType, "契約形態", contractTypeMap, "UNKNOWN"),
+    foreignNationalityPolicy: parseSelectInput(payload.foreignNationalityPolicy, "外国籍の受け入れ", foreignNationalityMap, "UNKNOWN"),
     ageCondition: emptyToNull(payload.ageCondition),
     siteAtmosphere: emptyToNull(payload.siteAtmosphere),
     dressCode: emptyToNull(payload.dressCode),
     hairNailRule: emptyToNull(payload.hairNailRule),
-    interviewCount: parseNumber(payload.interviewCount, "面談回数"),
-    salesInterviewAttendanceRequired: attendanceMap[payload.salesInterviewAttendanceRequired || ""] || "NEED_CONFIRMATION",
+    interviewCount: parseNumberInput(payload.interviewCount, "面談回数"),
+    salesInterviewAttendanceRequired: parseSelectInput(
+      payload.salesInterviewAttendanceRequired,
+      "営業の面談同席の要否",
+      attendanceMap,
+      "NEED_CONFIRMATION"
+    ),
     amContactRequired: false,
     amContactName: null,
     notes: commerceNotes ? `商流: ${commerceNotes}` : null
@@ -284,7 +262,7 @@ async function syncFocusTag(tx: TransactionClient, projectId: string, isFocus: b
 
 async function findOrCreateUpperContact(tx: any, companyId: string, payload: ProjectCreatePayload) {
   const contactName = emptyToNull(payload.upperContactName);
-  const contactValue = emptyToNull(payload.contact);
+  const contactValue = parseOptionalContactInput(payload.contact, "担当者連絡先");
   if (!contactName && !contactValue) return null;
 
   const email = contactValue?.includes("@") ? contactValue : null;
@@ -313,7 +291,7 @@ async function findOrCreateUpperContact(tx: any, companyId: string, payload: Pro
 
 function buildSkillRows(projectId: string, payload: ProjectCreatePayload): ProjectSkillCreateRow[] {
   const toRows = (value: string | undefined, skillType: ProjectSkillTypeValue): ProjectSkillCreateRow[] => {
-    return splitList(value).map((skillName) => ({ projectId, skillName, skillType }));
+    return splitListInput(value).map((skillName) => ({ projectId, skillName, skillType }));
   };
 
   const rows: ProjectSkillCreateRow[] = [
@@ -342,9 +320,9 @@ export async function POST(request: Request) {
     }
 
     const createdByUserId = authUser.id || (await findDefaultUserId(emptyToNull(payload.createdBy)));
-    const projectCreatedAt = parseDate(payload.createdAt);
+    const projectCreatedAt = parseDateInput(payload.createdAt, "案件作成日");
     const projectCode = `MOC-${Date.now().toString(36).toUpperCase()}`;
-    const isFocus = payload.isFocus === "該当";
+    const isFocus = parseSelectInput(payload.isFocus, "注力案件", focusProjectMap, false);
     const conditionData = buildConditionData(payload);
 
     const project = await prisma.$transaction(async (tx) => {
@@ -384,7 +362,7 @@ export async function POST(request: Request) {
     if (authResponse) return authResponse;
 
     const message = error instanceof Error ? error.message : "案件作成に失敗しました";
-    const status = message.includes("必須") || message.includes("数値") || message.includes("形式") ? 400 : 500;
+    const status = error instanceof InputValidationError || message.includes("必須") ? 400 : 500;
 
     return NextResponse.json({ message }, { status });
   }
@@ -419,8 +397,8 @@ export async function PATCH(request: Request) {
     }
 
     const createdByUserId = authUser.id || (await findDefaultUserId(emptyToNull(payload.createdBy)));
-    const projectCreatedAt = parseDate(payload.createdAt);
-    const isFocus = payload.isFocus === "該当";
+    const projectCreatedAt = parseDateInput(payload.createdAt, "案件作成日");
+    const isFocus = parseSelectInput(payload.isFocus, "注力案件", focusProjectMap, false);
     const conditionData = buildConditionData(payload);
 
     await prisma.$transaction(async (tx) => {
@@ -458,7 +436,7 @@ export async function PATCH(request: Request) {
     if (authResponse) return authResponse;
 
     const message = error instanceof Error ? error.message : "案件更新に失敗しました";
-    const status = message.includes("必須") || message.includes("数値") || message.includes("形式") ? 400 : 500;
+    const status = error instanceof InputValidationError || message.includes("必須") ? 400 : 500;
 
     return NextResponse.json({ message }, { status });
   }
