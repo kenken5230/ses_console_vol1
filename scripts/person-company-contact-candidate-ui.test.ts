@@ -76,6 +76,10 @@ assert(dashboardSource.includes("findCompanyContactCandidates"), "dashboard pers
 assert(dashboardSource.includes('type: "companyContactCandidates"'), "dashboard detail must expose candidate display items");
 assert(dashboardSource.includes("会社/担当者候補（表示のみ）"), "dashboard detail must carry the explicit read-only candidate label");
 assert(dashboardSource.includes("persons.map((person) => mapPerson(person, companyContactCandidateSources))"));
+assert(
+  /prisma\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(dashboardSource),
+  "candidate company DB read must use a bounded stable query"
+);
 
 const dashboardWritePatterns = [
   /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/,
@@ -117,5 +121,6 @@ assert(personPaneSource.includes('item.type === "companyContactCandidates"'), "P
 assert(personPaneSource.includes("readonly-candidate-panel"), "PersonDetailPane must use the candidate display styling");
 assert(packageSource.includes("test:person-company-contact-candidate-ui"), "package.json must expose the candidate UI test");
 assert(docsSource.includes("保存・反映・編集なし") && docsSource.includes("`PATCH /api/persons` なし"));
+assert(docsSource.includes("候補UI部分に限定") && docsSource.includes("既存read-only通常行"));
 
 console.log("person company/contact candidate UI read-only tests passed.");

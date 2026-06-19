@@ -74,6 +74,7 @@ function sectionBetween(source: string, startNeedle: string, endNeedle: string) 
 const allowedTouchedFiles = new Set([
   "app/api/dashboard-data/route.ts",
   "components/ProjectDetailPane.jsx",
+  "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
@@ -93,6 +94,12 @@ for (const filePath of touchedFilesFromGit()) {
 
 const docsSource = readProjectFile(
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md"
+);
+const personCandidateDocsSource = readProjectFile(
+  "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md"
+);
+const projectCandidateDocsSource = readProjectFile(
+  "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md"
 );
 const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
@@ -116,7 +123,12 @@ for (const requiredText of [
   "監査ログ",
   "rollback",
   "変更履歴",
-  "実DB write smokeは別承認"
+  "実DB write smokeは別承認",
+  "SUSPENDED",
+  "CompanyContact.isActive=false",
+  "候補計算用のDB read",
+  "候補UI部分に限定",
+  "既存の会社/担当者 read-only 通常行"
 ]) {
   assert(docsSource.includes(requiredText), `write contract docs must include: ${requiredText}`);
 }
@@ -135,6 +147,14 @@ for (const pattern of [
 ]) {
   assert(!pattern.test(dashboardSource), `dashboard candidate display route must remain read-only: ${pattern}`);
 }
+assert(
+  /const\s+COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE\s*=\s*\d+/.test(dashboardSource),
+  "dashboard candidate company read must define a bounded take constant"
+);
+assert(
+  /prisma\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\],[\s\S]*contacts:\s*\{\s*orderBy:\s*\[\s*\{\s*name:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(dashboardSource),
+  "candidate company/contact DB read must use take and stable orderBy"
+);
 
 const candidateUiSources = [
   sectionBetween(
@@ -163,6 +183,11 @@ for (const forbiddenUiPattern of [
   for (const candidateUiSource of candidateUiSources) {
     assert(!forbiddenUiPattern.test(candidateUiSource), `candidate UI must not expose save/apply controls: ${forbiddenUiPattern}`);
   }
+}
+
+for (const candidateDocsSource of [personCandidateDocsSource, projectCandidateDocsSource]) {
+  assert(candidateDocsSource.includes("候補UI部分に限定"), "candidate UI link ban must be scoped to candidate UI only");
+  assert(candidateDocsSource.includes("既存read-only通常行"), "candidate UI docs must not redefine regular read-only mailto/tel rows");
 }
 
 console.log("company/contact write contract tests passed.");

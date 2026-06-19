@@ -44,7 +44,9 @@ function touchedFilesFromGit() {
 const allowedTouchedFiles = new Set([
   "app/api/dashboard-data/route.ts",
   "components/ProjectDetailPane.jsx",
+  "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
   "scripts/project-company-contact-candidate-ui.test.ts",
   "scripts/person-company-contact-candidate-ui.test.ts",
@@ -74,6 +76,10 @@ assert(dashboardSource.includes('type: "companyContactCandidates"'), "dashboard 
 assert(dashboardSource.includes("会社/担当者候補（表示のみ）"), "dashboard detail must carry the explicit read-only candidate label");
 assert(dashboardSource.includes("projects.map((project) => mapProject(project, companyContactCandidateSources))"));
 assert(dashboardSource.includes("persons.map((person) => mapPerson(person, companyContactCandidateSources))"));
+assert(
+  /prisma\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(dashboardSource),
+  "candidate company DB read must use a bounded stable query"
+);
 
 const dashboardWritePatterns = [
   /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/,
@@ -118,5 +124,6 @@ assert(projectPaneSource.includes('|| item.type === "companyContactCandidates"')
 assert(packageSource.includes("test:project-company-contact-candidate-ui"), "package.json must expose the project candidate UI test");
 assert(docsSource.includes("DBには保存されません") && docsSource.includes("自動反映なし"));
 assert(docsSource.includes("保存payload変更なし") && docsSource.includes("API write追加なし"));
+assert(docsSource.includes("候補UI部分に限定") && docsSource.includes("既存read-only通常行"));
 
 console.log("project company/contact candidate UI read-only tests passed.");
