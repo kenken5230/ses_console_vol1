@@ -8,6 +8,11 @@ import {
   type SafeDashboardCompanyContact,
   type SafeDashboardProjectCompanyRole
 } from "../../../lib/dashboard-company-readonly";
+import {
+  findCompanyContactCandidates,
+  type CompanyContactCandidate,
+  type CompanyContactCandidateSource
+} from "../../../lib/company-contact-candidates";
 import { mergePersonFormInitialValues } from "../../../lib/person-form-contract";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +21,11 @@ const EMPTY_VALUE = "-";
 type DetailItem = {
   label: string;
   value?: string;
-  type?: "block" | "tags" | "commerce" | "mail" | "companyContacts";
+  type?: "block" | "tags" | "commerce" | "mail" | "companyContacts" | "companyContactCandidates";
   tags?: string[];
   items?: string[][];
   companyContacts?: DetailCompanyContact[];
+  companyContactCandidates?: DetailCompanyContactCandidate[];
   emphasis?: boolean;
 };
 
@@ -35,6 +41,8 @@ type DetailCompanyContact = {
   company: SafeDashboardCompany | null;
   contact: SafeDashboardCompanyContact | null;
 };
+
+type DetailCompanyContactCandidate = CompanyContactCandidate;
 
 function formatDate(value: Date | null | undefined) {
   if (!value) return "";
@@ -450,6 +458,40 @@ function makeOwnerCompanyContactItem(
   ]);
 }
 
+function cleanCandidateInput(value: unknown) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function makeCompanyContactCandidateSources(companies: any[]): CompanyContactCandidateSource[] {
+  return companies.flatMap((company) => {
+    const contacts = Array.isArray(company.contacts) ? company.contacts : [];
+    if (!contacts.length) return [{ company, contact: null }];
+    return contacts.map((contact: any) => ({ company, contact }));
+  });
+}
+
+function makePersonCompanyContactCandidateInput(person: any, normalizedExtraction: any) {
+  return {
+    companyName: cleanCandidateInput(normalizedExtraction.ownerCompanyName),
+    email: cleanCandidateInput(person.sourceMail?.fromEmail),
+    contactEmail: cleanCandidateInput(normalizedExtraction.contactEmail),
+    contactName: cleanCandidateInput(normalizedExtraction.contactName) || cleanCandidateInput(person.sourceMail?.fromName)
+  };
+}
+
+function makeCompanyContactCandidatesItem(
+  label: string,
+  candidates: DetailCompanyContactCandidate[]
+): DetailItem {
+  return {
+    label,
+    type: "companyContactCandidates",
+    companyContactCandidates: candidates
+  };
+}
+
 function mapProject(project: any) {
   const condition = project.condition;
   const skills = project.skills.map((skill: any) => skill.skillName);
@@ -654,7 +696,7 @@ function mapProject(project: any) {
   };
 }
 
-function mapPerson(person: any) {
+function mapPerson(person: any, companyContactCandidateSources: CompanyContactCandidateSource[] = []) {
   const skillNames = person.skills.map((skill: any) => skill.skillName);
   const skillsText = skillNames.join(" / ") || "未入力";
   const createdAt = formatDate(person.createdAt);
@@ -671,10 +713,19 @@ function mapPerson(person: any) {
   const nameConfidence = typeof normalizedExtraction.nameConfidence === "string" ? normalizedExtraction.nameConfidence : "";
   const roleHeadline = typeof normalizedExtraction.roleHeadline === "string" ? normalizedExtraction.roleHeadline : "";
   const careerOrRole = person.careerSummary || roleHeadline || EMPTY_VALUE;
+  const companyContactCandidates = findCompanyContactCandidates(
+    makePersonCompanyContactCandidateInput(person, normalizedExtraction),
+    companyContactCandidateSources,
+    { maxCandidates: 5 }
+  );
   const detailGroups: DetailGroup[] = [
     {
       title: "会社/担当者 (read-only)",
       items: [makeOwnerCompanyContactItem("所属会社/担当者", ownerCompany, ownerContact)]
+    },
+    {
+      title: "会社/担当者候補（表示のみ）",
+      items: [makeCompanyContactCandidatesItem("候補", companyContactCandidates)]
     },
     {
       title: "基本情報",
@@ -1003,18 +1054,33 @@ export async function GET(request: Request) {
     }),
     prisma.company.findMany({
       select: {
+        id: true,
         name: true,
         normalizedName: true,
         mainEmailDomain: true,
-        tradeStatus: true
+        tradeStatus: true,
+        tdbScore: true,
+        contacts: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            department: true,
+            position: true,
+            isActive: true
+          },
+          orderBy: [{ isActive: "desc" }, { name: "asc" }]
+        }
       }
     })
   ]);
+    const companyContactCandidateSources = makeCompanyContactCandidateSources(companies);
 
     return NextResponse.json({
       currentUser,
       projects: projects.map(mapProject),
-      persons: persons.map(mapPerson),
+      persons: persons.map((person) => mapPerson(person, companyContactCandidateSources)),
       unclassifiedMails: unclassifiedMails.map((mail) => mapUnclassifiedMail(mail, companies))
     });
   } catch (error) {

@@ -16,6 +16,26 @@ function ContactLine({ href, label, value }) {
   );
 }
 
+const candidateReasonLabels = {
+  company_name_exact: "会社名一致",
+  company_name_variant: "会社名ゆらぎ",
+  email_domain_match: "メールドメイン",
+  contact_email_match: "担当者メール",
+  contact_name_exact: "担当者名一致",
+  contact_name_variant: "担当者名ゆらぎ"
+};
+
+function CandidateTextLine({ label, value }) {
+  if (isEmpty(value)) return null;
+
+  return (
+    <span className="readonly-contact-line">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
 function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
   if (item.type === "block") {
     return <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>;
@@ -71,6 +91,61 @@ function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
             </div>
           );
         })}
+      </div>
+    );
+  }
+
+  if (item.type === "companyContactCandidates") {
+    const candidates = item.companyContactCandidates || [];
+
+    return (
+      <div className="candidate-readonly-panel">
+        <div className="candidate-readonly-header">
+          <p>元メール・送信元情報から推定した候補です。DBには保存されません。</p>
+          <span>自動反映なし</span>
+        </div>
+        {!candidates.length ? (
+          <p className="candidate-empty-message">候補はありません。現在の保存値は変更されません。</p>
+        ) : (
+          <div className="candidate-company-list">
+            {candidates.map((candidate, candidateIndex) => {
+              const company = candidate.company || {};
+              const contact = candidate.contact || {};
+              const contactTitle = [contact.department, contact.position].filter(Boolean).join(" / ");
+              const reasonCodes = candidate.reasonCodes || [];
+
+              return (
+                <div
+                  className="candidate-company-row"
+                  key={`${itemKeyPrefix}-candidate-${candidateIndex}-${company.id || company.name || contact.id || contact.email || "none"}`}
+                >
+                  <div className="readonly-company-main">
+                    <span className="readonly-company-role">候補 {candidateIndex + 1}</span>
+                    <strong className={isEmpty(company.name) ? "muted-value" : ""}>{company.name || "-"}</strong>
+                    <span className="readonly-company-meta">取引: {company.tradeStatus || "-"}</span>
+                    <span className="candidate-score">score {candidate.score ?? "-"}</span>
+                  </div>
+                  <div className="readonly-contact-lines">
+                    <CandidateTextLine label="担当者" value={contact.name} />
+                    <CandidateTextLine label="メール" value={contact.email} />
+                    <CandidateTextLine label="電話" value={contact.phone} />
+                    <CandidateTextLine label="部署/役職" value={contactTitle} />
+                    {!candidate.contact ? <span className="readonly-contact-empty">担当者 -</span> : null}
+                  </div>
+                  {reasonCodes.length ? (
+                    <div className="candidate-reason-list" aria-label="候補理由">
+                      {reasonCodes.map((reasonCode) => (
+                        <span key={`${itemKeyPrefix}-candidate-${candidateIndex}-reason-${reasonCode}`}>
+                          {candidateReasonLabels[reasonCode] || reasonCode}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -167,7 +242,7 @@ export default function PersonDetailPane({ canEdit = true, onClose, onMoveToUncl
                     const itemKeyPrefix = `${personKey}-group-${groupIndex}-item-${itemIndex}-${item.label}`;
 
                     return (
-                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "mail" || item.type === "companyContacts" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
+                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "mail" || item.type === "companyContacts" || item.type === "companyContactCandidates" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
                         <span className="field-label">{item.label}</span>
                         <DetailItemValue item={item} itemKeyPrefix={itemKeyPrefix} />
                       </div>
