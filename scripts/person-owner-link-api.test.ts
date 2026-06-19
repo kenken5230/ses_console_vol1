@@ -68,6 +68,7 @@ function createMockDb(overrides: {
   company?: any;
   contact?: any;
   person?: any;
+  updateError?: any;
 } = {}) {
   const calls: Array<[string, any]> = [];
   const auditLogs: any[] = [];
@@ -101,6 +102,7 @@ function createMockDb(overrides: {
       },
       async update(args: any) {
         calls.push(["person.update", args]);
+        if (overrides.updateError) throw overrides.updateError;
         person.ownerCompanyId = args.data.ownerCompanyId;
         person.ownerContactId = args.data.ownerContactId;
         person.updatedAt = updatedDate;
@@ -234,6 +236,11 @@ async function main() {
     assert.equal(mock.calls.filter(([name]) => name === "$transaction").length, 1);
     assert.equal(mock.calls.filter(([name]) => name === "person.update").length, 1);
     assert.equal(mock.calls.filter(([name]) => name === "auditLog.create").length, 1);
+    const updateCall = mock.calls.find(([name]) => name === "person.update")?.[1];
+    assert.equal(updateCall.where.id, personId);
+    assert.equal(updateCall.where.ownerCompanyId, null);
+    assert.equal(updateCall.where.ownerContactId, null);
+    assert.equal(updateCall.where.updatedAt.toISOString(), baseDate.toISOString());
     assert.equal(mock.auditLogs.length, 1);
     assert.equal(mock.auditLogs[0].actorUserId, userId);
     assert.equal(mock.auditLogs[0].action, PERSON_OWNER_COMPANY_CONTACT_LINK_INTENT);
@@ -307,6 +314,25 @@ async function main() {
   await assertRejectsWithStatus(validBody({ expectedOwnerCompanyId: otherCompanyId }), 409, "STALE_OWNER_COMPANY_ID");
   await assertRejectsWithStatus(validBody({ expectedOwnerContactId: contactId }), 409, "STALE_OWNER_CONTACT_ID");
   await assertRejectsWithStatus(validBody({ expectedUpdatedAt: "2026-06-20T09:00:00.000Z" }), 409, "STALE_PERSON_UPDATED_AT");
+
+  const racingUpdateMock = createMockDb({ updateError: { code: "P2025" } });
+  await assert.rejects(
+    () => linkExistingPersonOwnerCompanyContact(
+      racingUpdateMock.db,
+      personId,
+      validBody(),
+      { id: userId, role: "ADMIN" } as any,
+      personOwnerCompanyContactLinkGuard({
+        COMPANY_CONTACT_LINK_WRITE_ENABLED: "true",
+        COMPANY_CONTACT_LINK_WRITE_TARGET: "staging",
+      }),
+    ),
+    (error: unknown) => error instanceof PersonOwnerCompanyContactLinkRequestError
+      && error.status === 409
+      && error.reasonCode === "STALE_PERSON_UPDATED_AT",
+  );
+  assert.equal(racingUpdateMock.calls.filter(([name]) => name === "person.update").length, 1);
+  assert.equal(racingUpdateMock.calls.some(([name]) => name === "auditLog.create"), false);
 
   const routeSource = readProjectFile("app/api/persons/[id]/owner-company-contact/route.ts");
   assert(routeHasHandler(routeSource, "PATCH"));

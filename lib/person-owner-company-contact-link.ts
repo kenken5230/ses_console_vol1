@@ -189,6 +189,10 @@ function containsSensitiveValue(value: unknown): boolean {
   return Object.values(asRecord(value)).some(containsSensitiveValue);
 }
 
+function isPrismaRecordNotFoundError(error: unknown) {
+  return asRecord(error).code === "P2025";
+}
+
 function assertNoUnsupportedOrRawFields(body: Record<string, unknown>) {
   for (const [key, value] of Object.entries(body)) {
     if (!ALLOWED_BODY_KEYS.has(key) || FORBIDDEN_TOP_LEVEL_KEYS.has(key)) {
@@ -445,14 +449,31 @@ export async function linkExistingPersonOwnerCompanyContact(
       updatedAt: input.expectedUpdatedAt,
     };
 
-    const updatedPerson = await tx.person.update({
-      where: { id: routePersonId },
-      data: {
-        ownerCompanyId: input.companyId,
-        ownerContactId: input.contactId,
-      },
-      select: personSelect,
-    });
+    let updatedPerson: unknown;
+    try {
+      updatedPerson = await tx.person.update({
+        where: {
+          id: routePersonId,
+          ownerCompanyId: null,
+          ownerContactId: null,
+          updatedAt: new Date(input.expectedUpdatedAt),
+        },
+        data: {
+          ownerCompanyId: input.companyId,
+          ownerContactId: input.contactId,
+        },
+        select: personSelect,
+      });
+    } catch (error) {
+      if (isPrismaRecordNotFoundError(error)) {
+        throw new PersonOwnerCompanyContactLinkRequestError(
+          "Person changed before link update.",
+          409,
+          "STALE_PERSON_UPDATED_AT",
+        );
+      }
+      throw error;
+    }
 
     const updatedAt = isoDate(asRecord(updatedPerson).updatedAt);
     const afterData = {
