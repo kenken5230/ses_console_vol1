@@ -8,6 +8,11 @@ import {
   type SafeDashboardCompanyContact,
   type SafeDashboardProjectCompanyRole
 } from "../../../lib/dashboard-company-readonly";
+import {
+  findCompanyContactCandidates,
+  type CompanyContactCandidate,
+  type CompanyContactCandidateSource
+} from "../../../lib/company-contact-candidates";
 import { mergePersonFormInitialValues } from "../../../lib/person-form-contract";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +21,11 @@ const EMPTY_VALUE = "-";
 type DetailItem = {
   label: string;
   value?: string;
-  type?: "block" | "tags" | "commerce" | "mail" | "companyContacts";
+  type?: "block" | "tags" | "commerce" | "mail" | "companyContacts" | "companyContactCandidates";
   tags?: string[];
   items?: string[][];
   companyContacts?: DetailCompanyContact[];
+  companyContactCandidates?: CompanyContactCandidate[];
   emphasis?: boolean;
 };
 
@@ -434,6 +440,17 @@ function makeCompanyContactsItem(label: string, companyContacts: DetailCompanyCo
   };
 }
 
+function makeCompanyContactCandidatesItem(
+  label: string,
+  companyContactCandidates: CompanyContactCandidate[]
+): DetailItem {
+  return {
+    label,
+    type: "companyContactCandidates",
+    companyContactCandidates
+  };
+}
+
 function makeOwnerCompanyContactItem(
   label: string,
   ownerCompany: SafeDashboardCompany | null,
@@ -448,6 +465,55 @@ function makeOwnerCompanyContactItem(
       contact: ownerContact
     }
   ]);
+}
+
+function buildCompanyContactCandidateSources(companies: any[]): CompanyContactCandidateSource[] {
+  return companies.flatMap((company) => {
+    const safeCompany = {
+      id: company.id,
+      name: company.name,
+      tradeStatus: company.tradeStatus,
+      mainEmailDomain: company.mainEmailDomain,
+      tdbScore: company.tdbScore
+    };
+    const contacts = company.contacts || [];
+    if (!contacts.length) return [{ company: safeCompany, contact: null }];
+
+    return contacts.map((contact: any) => ({
+      company: safeCompany,
+      contact
+    }));
+  });
+}
+
+function firstCandidateText(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const text = value.trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function personCompanyContactCandidateInput(person: any, normalizedExtraction: any) {
+  return {
+    companyName: firstCandidateText(
+      normalizedExtraction.ownerCompanyName,
+      person.ownerCompany?.name,
+      person.sourceMail?.fromName
+    ),
+    email: firstCandidateText(person.sourceMail?.fromEmail, person.ownerContact?.email),
+    contactEmail: firstCandidateText(
+      normalizedExtraction.contactEmail,
+      person.ownerContact?.email,
+      person.sourceMail?.fromEmail
+    ),
+    contactName: firstCandidateText(
+      normalizedExtraction.contactName,
+      person.ownerContact?.name,
+      person.sourceMail?.fromName
+    )
+  };
 }
 
 function mapProject(project: any) {
@@ -654,7 +720,7 @@ function mapProject(project: any) {
   };
 }
 
-function mapPerson(person: any) {
+function mapPerson(person: any, companyContactCandidateSources: readonly CompanyContactCandidateSource[]) {
   const skillNames = person.skills.map((skill: any) => skill.skillName);
   const skillsText = skillNames.join(" / ") || "未入力";
   const createdAt = formatDate(person.createdAt);
@@ -671,10 +737,19 @@ function mapPerson(person: any) {
   const nameConfidence = typeof normalizedExtraction.nameConfidence === "string" ? normalizedExtraction.nameConfidence : "";
   const roleHeadline = typeof normalizedExtraction.roleHeadline === "string" ? normalizedExtraction.roleHeadline : "";
   const careerOrRole = person.careerSummary || roleHeadline || EMPTY_VALUE;
+  const companyContactCandidates = findCompanyContactCandidates(
+    personCompanyContactCandidateInput(person, normalizedExtraction),
+    companyContactCandidateSources,
+    { maxCandidates: 5 }
+  );
   const detailGroups: DetailGroup[] = [
     {
       title: "会社/担当者 (read-only)",
       items: [makeOwnerCompanyContactItem("所属会社/担当者", ownerCompany, ownerContact)]
+    },
+    {
+      title: "会社/担当者候補（表示のみ）",
+      items: [makeCompanyContactCandidatesItem("会社/担当者候補（表示のみ）", companyContactCandidates)]
     },
     {
       title: "基本情報",
@@ -845,7 +920,7 @@ function mapUnclassifiedMail(mail: any, companies: any[]) {
 export async function GET(request: Request) {
   try {
     const currentUser = await requireAuth(request);
-    const [projects, persons, unclassifiedMails, companies] = await Promise.all([
+    const [projects, persons, unclassifiedMails, companies, companyContactCandidateCompanies] = await Promise.all([
     prisma.project.findMany({
       where: {
         status: { not: "ARCHIVED" }
@@ -1008,13 +1083,37 @@ export async function GET(request: Request) {
         mainEmailDomain: true,
         tradeStatus: true
       }
+    }),
+    prisma.company.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        tradeStatus: true,
+        mainEmailDomain: true,
+        tdbScore: true,
+        contacts: {
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            department: true,
+            position: true,
+            isActive: true
+          }
+        }
+      }
     })
   ]);
+
+    const companyContactCandidateSources = buildCompanyContactCandidateSources(companyContactCandidateCompanies);
 
     return NextResponse.json({
       currentUser,
       projects: projects.map(mapProject),
-      persons: persons.map(mapPerson),
+      persons: persons.map((person) => mapPerson(person, companyContactCandidateSources)),
       unclassifiedMails: unclassifiedMails.map((mail) => mapUnclassifiedMail(mail, companies))
     });
   } catch (error) {

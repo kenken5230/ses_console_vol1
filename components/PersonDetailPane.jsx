@@ -16,6 +16,78 @@ function ContactLine({ href, label, value }) {
   );
 }
 
+const candidateReasonLabels = {
+  company_name_exact: "会社名一致",
+  company_name_variant: "会社名ゆれ一致",
+  email_domain_match: "メールドメイン一致",
+  contact_email_match: "担当者メール一致",
+  contact_name_exact: "担当者名一致",
+  contact_name_variant: "担当者名ゆれ一致"
+};
+
+function CandidateField({ label, value }) {
+  if (isEmpty(value)) return null;
+
+  return (
+    <span className="readonly-candidate-field">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function CompanyContactCandidateList({ candidates = [] }) {
+  return (
+    <div className="readonly-candidate-panel">
+      <div className="readonly-candidate-notice">
+        <strong>会社/担当者候補（表示のみ）</strong>
+        <span>DBには保存されません</span>
+        <span>自動反映なし</span>
+      </div>
+      {!candidates.length ? (
+        <p className="readonly-candidate-empty">候補なし</p>
+      ) : (
+        <div className="readonly-candidate-list">
+          {candidates.map((candidate, candidateIndex) => {
+            const company = candidate.company || {};
+            const contact = candidate.contact || {};
+            const contactTitle = [contact.department, contact.position].filter(Boolean).join(" / ");
+            const candidateKey = [
+              company.id || company.name || "company-none",
+              contact.id || contact.email || contact.name || "contact-none",
+              candidateIndex
+            ].join("-");
+
+            return (
+              <div className="readonly-candidate-row" key={candidateKey}>
+                <div className="readonly-candidate-main">
+                  <span className="readonly-candidate-score">score {candidate.score}</span>
+                  <strong className={isEmpty(company.name) ? "muted-value" : ""}>{company.name || "-"}</strong>
+                  <span className="readonly-candidate-sub">取引: {company.tradeStatus || "-"}</span>
+                  <CandidateField label="ドメイン" value={company.mainEmailDomain} />
+                  <CandidateField label="TDB" value={company.tdbScore} />
+                </div>
+                <div className="readonly-candidate-contact">
+                  <CandidateField label="担当者" value={contact.name} />
+                  <CandidateField label="メール" value={contact.email} />
+                  <CandidateField label="電話" value={contact.phone} />
+                  <CandidateField label="部署/役職" value={contactTitle} />
+                  {!candidate.contact ? <span className="readonly-candidate-sub">担当者なし</span> : null}
+                </div>
+                <div className="readonly-candidate-reasons" aria-label="候補理由">
+                  {(candidate.reasonCodes || []).map((reasonCode) => (
+                    <span key={`${candidateKey}-${reasonCode}`}>{candidateReasonLabels[reasonCode] || reasonCode}</span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
   if (item.type === "block") {
     return <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>;
@@ -73,6 +145,10 @@ function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
         })}
       </div>
     );
+  }
+
+  if (item.type === "companyContactCandidates") {
+    return <CompanyContactCandidateList candidates={item.companyContactCandidates || []} />;
   }
 
   return <strong className={`${item.emphasis ? "important-value" : ""} ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</strong>;
@@ -167,7 +243,7 @@ export default function PersonDetailPane({ canEdit = true, onClose, onMoveToUncl
                     const itemKeyPrefix = `${personKey}-group-${groupIndex}-item-${itemIndex}-${item.label}`;
 
                     return (
-                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "mail" || item.type === "companyContacts" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
+                      <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "mail" || item.type === "companyContacts" || item.type === "companyContactCandidates" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
                         <span className="field-label">{item.label}</span>
                         <DetailItemValue item={item} itemKeyPrefix={itemKeyPrefix} />
                       </div>
