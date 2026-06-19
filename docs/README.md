@@ -9,6 +9,8 @@
 
 ## 追加ドキュメント
 
+- `docs/shared/operations/codex-windows-sandbox-preflight-v0.1.md`
+  - CodexでWindows環境の実装・merge・conflict解消へ入る前のsandbox、PowerShell、npm、Prisma、proxy、permission確認手順。
 - `docs/status/current-feature-status-2026-06-15.md`
   - 機能ごとの実装済み/設計のみ/未実装/要再テストを整理した現状表。
 - `docs/status/recovery-main-alignment-report-2026-06-15.md`
