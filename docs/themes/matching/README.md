@@ -5,10 +5,15 @@ This theme covers deterministic matching between existing Projects and Persons.
 Current files:
 
 - `README.md`: deterministic matching dry-run and read-only matching review UI/API notes.
+- `current-state-after-pr44.md`: current MatchSuggestion implementation/docs inventory after PR #44 and the next small-PR split plan.
 - `match-suggestion-persistence-design.md`: match suggestion persistence, review workflow, schema/API/UI/safety design, PR #28 schema foundation, and staged implementation plan.
 - `match-suggestion-review-update-design.md`: docs-only design for guarded saved suggestion review status updates.
 - `proposal-draft-from-approved-match-suggestions-design.md`: docs-only design for future Proposal draft creation from approved saved MatchSuggestions.
 - `proposal-traceability-and-draft-status-prerequisites.md`: docs-only prerequisite design for Proposal traceability, draft status, target company resolution, and sales mail account resolution.
+
+## Current State After PR #44
+
+PR #44 is merged as matching docs. Its original integrated implementation scope should not be treated as a branch to revive. The current canonical state is summarized in `current-state-after-pr44.md`; future MatchSuggestion work should be rebuilt as small PRs from latest `main`, without reintroducing duplicated schema, migration, API, UI, CSS, or package-script changes.
 
 ## Deterministic Matching Dry-run MVP
 
@@ -476,6 +481,7 @@ Each match sample includes only:
 - This does not create Proposal records.
 - This does not create message drafts.
 - This does not send messages.
+- Note after the guarded save/review PRs: persistence and review writes now exist only through supervised, disabled-by-default staging guards; the dry-run and read-only review surfaces remain non-mutating.
 - The current UI/API does not persist match suggestions.
 - PR #28 adds only the schema/migration foundation for future match suggestion persistence.
 - PR #30 adds read-only saved suggestion APIs, but no saved suggestion write path.
