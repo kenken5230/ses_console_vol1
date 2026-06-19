@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { aggregatePriceBandMarket } from "../../lib/market-analysis/aggregate";
 import { buildMarketAnalysisResponse, parseMarketAnalysisQuery } from "../../lib/market-analysis/api-adapter";
 import { toPriceBand } from "../../lib/market-analysis/normalize";
+import { normalizeMarketAnalysisLimitInput, visibleMarketRankingRows } from "../../lib/market-analysis/ui-controls";
 
 const fixedNow = new Date("2026-06-17T00:00:00.000Z");
 
@@ -22,6 +23,17 @@ assert.equal(limitedQuery.toMonth, "2026-06");
 
 const blankLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit="), fixedNow);
 assert.equal(blankLimitQuery.limit, undefined);
+
+assert.equal(normalizeMarketAnalysisLimitInput(""), "");
+assert.equal(normalizeMarketAnalysisLimitInput("0"), "1");
+assert.equal(normalizeMarketAnalysisLimitInput("1"), "1");
+assert.equal(normalizeMarketAnalysisLimitInput("1000"), "1000");
+assert.equal(normalizeMarketAnalysisLimitInput("1001"), "1000");
+assert.equal(normalizeMarketAnalysisLimitInput("12.9"), "12");
+assert.equal(normalizeMarketAnalysisLimitInput("not-a-number", "100"), "100");
+
+const overMaxLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit=1001"), fixedNow);
+assert.equal(overMaxLimitQuery.limit, 1000);
 
 const legacyUnder50PriceBands = ["under_30", "30_35", "35_40", "40_45", "45_50"];
 const legacyOver80PriceBands = [
@@ -140,6 +152,11 @@ assert.deepEqual(
   priceBandRankings.map((ranking) => ranking.priceBand),
   ["under_30", "70_75", "120_over", "unknown"],
 );
+
+const allPriceBandRows = Array.from({ length: 21 }, (_, index) => ({ priceBand: index === 20 ? "unknown" : `band_${index}` }));
+assert.equal(visibleMarketRankingRows(allPriceBandRows).length, 20);
+assert.equal(visibleMarketRankingRows(allPriceBandRows, null).length, 21);
+assert.equal(visibleMarketRankingRows(allPriceBandRows, null).at(-1)?.priceBand, "unknown");
 
 const response = buildMarketAnalysisResponse([], [], {
   cumulativeFocusProjectCount: 7,
