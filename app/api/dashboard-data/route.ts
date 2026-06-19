@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { authErrorResponse, requireAuth } from "../../../lib/auth";
+import { mergePersonFormInitialValues } from "../../../lib/person-form-contract";
 
 export const dynamic = "force-dynamic";
 const EMPTY_VALUE = "-";
@@ -708,25 +709,25 @@ function mapPerson(person: any) {
       groups: detailGroups,
       fields: detailGroups.flatMap((group) => group.items)
     },
-    formValues: {
+    formValues: mergePersonFormInitialValues({
       name: person.name || "",
       initials: person.initials || "",
       ownerCompanyName: person.ownerCompany?.name || "",
-      ownerContactName: person.ownerContact?.name || "",
-      ownerContactEmail: person.ownerContact?.email || "",
       status: personStatusInputLabel(person.status),
-      desiredUnitPrice: formatInputNumber(person.desiredUnitPrice),
+      skills: skillNames.join("\n"),
       availableFrom: availableFrom || "",
+      desiredUnitPrice: formatInputNumber(person.desiredUnitPrice),
       preferredLocation: person.preferredLocation || "",
       remotePreference: person.remotePreference || "",
       age: formatInputNumber(person.age),
       nationality: person.nationality || "",
-      summary: person.summary || "",
       careerSummary: person.careerSummary || "",
-      skills: skillNames.join("\n"),
+      summary: person.summary || "",
+      ownerContactName: person.ownerContact?.name || "",
+      ownerContactEmail: person.ownerContact?.email || "",
       createdBy: person.createdBy?.name || "",
       createdAt: createdAt || ""
-    }
+    })
   };
 }
 
