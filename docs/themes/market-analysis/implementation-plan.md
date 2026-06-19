@@ -9,7 +9,7 @@
 ## 推奨フォルダ構成
 
 ```text
-docs/market-analysis/
+docs/themes/market-analysis/
   research.md
   data-inventory.md
   analysis-axes.md
@@ -54,14 +54,15 @@ Query:
 
 | パラメータ | 例 | 内容 |
 |---|---|---|
-| `from` | `2026-06-01` | 対象作成日または開始月の下限 |
-| `to` | `2026-08-31` | 対象作成日または開始月の上限 |
+| `fromMonth` | `2026-04` | データ登録月の下限。未指定時は直近3か月 |
+| `toMonth` | `2026-06` | データ登録月の上限。未指定時は直近3か月 |
+| `limit` | `100` | 取得件数。`1〜1000` に丸め、空欄/未指定は上限なし |
 | `skill` | `Java` | スキル絞り込み |
 | `region` | `東京` | 地域絞り込み |
-| `priceBand` | `70-80` | 単価帯絞り込み |
+| `priceBand` | `70_75` | 単価帯絞り込み。旧URLキーはAPIで5万円刻みに展開 |
 | `workStyle` | `HYBRID` | 勤務形態 |
 | `contractType` | `SEMI_DELEGATION` | 契約形態 |
-| `focusOnly` | `true` | 注力案件のみ |
+| `focusOnly` | `true` | 案件を注力案件に限定。要員countは注力条件の対象外 |
 
 Response:
 
@@ -168,8 +169,10 @@ const skillAliases = {
 `lib/market-analysis/constants.ts`
 
 ```ts
-type PriceBandKey = "under_50" | "50_60" | "60_70" | "70_80" | "80_over" | "unknown";
+type PriceBandKey = typeof PRICE_BANDS[number]["key"];
 ```
+
+現在の帯は `30万円以下`、30〜120万円の5万円刻み、`120万円以上`、`未設定`。ランキング表では `未設定` を最後に残す。
 
 案件単価:
 

@@ -8,6 +8,10 @@ import {
   type MailExtractionSource,
 } from "./gmail-extraction";
 import {
+  inferGmailCompanyCandidateForExtraction,
+  type KnownCompanyIdentity,
+} from "./gmail-company-candidate";
+import {
   assertNoSensitiveOutput,
   buildAnonymizedIssueRow,
   incrementCounter,
@@ -48,6 +52,10 @@ type CandidateMail = {
     extractionType: string;
     reviewStatus: string;
   }>;
+};
+
+type KnownCompanyRow = KnownCompanyIdentity & {
+  aliases: Array<{ aliasName: string; normalizedAliasName: string }>;
 };
 
 function parseArgValue(name: string): string | null {
@@ -191,6 +199,9 @@ function emptyCounters() {
     classificationWarningCounts: {} as Record<string, number>,
     reviewReasonCounts: {} as Record<string, number>,
     roleHeadlineSourceCounts: {} as Record<string, number>,
+    companyCandidateSourceCounts: {} as Record<string, number>,
+    companyCandidateConfidenceCounts: {} as Record<string, number>,
+    companyCandidateReasonCounts: {} as Record<string, number>,
     skillCountDistribution: {} as Record<string, number>,
     projectScoreDistribution: {} as Record<string, number>,
     personScoreDistribution: {} as Record<string, number>,
@@ -258,6 +269,14 @@ async function main(): Promise<void> {
       },
     },
   });
+  const knownCompanies = await prisma.company.findMany({
+    select: {
+      name: true,
+      normalizedName: true,
+      mainEmailDomain: true,
+      aliases: { select: { aliasName: true, normalizedAliasName: true } },
+    },
+  }) as KnownCompanyRow[];
   const senderSubjectCounts = new Map<string, number>();
   for (const mail of mails as CandidateMail[]) {
     const key = senderSubjectKey(mail);
@@ -275,10 +294,14 @@ async function main(): Promise<void> {
       summary.sameSenderSubjectCandidate += 1;
     }
     const extraction = extractFromMail(source);
+    const companyCandidate = inferGmailCompanyCandidateForExtraction({ mail: source, extraction, knownCompanies });
     const score = qualityScoreSummary(extraction);
     const reasons = [...qualityReviewReasons(extraction), ...existingReasons];
 
     incrementCounter(counters.predictedCounts, quality.predictedType);
+    incrementCounter(counters.companyCandidateSourceCounts, companyCandidate.source);
+    incrementCounter(counters.companyCandidateConfidenceCounts, companyCandidate.confidence);
+    incrementMany(counters.companyCandidateReasonCounts, companyCandidate.reasonCodes);
     incrementCounter(counters.projectScoreDistribution, scoreBucketKey(quality.projectScore));
     incrementCounter(counters.personScoreDistribution, scoreBucketKey(quality.personScore));
     incrementCounter(counters.skillCountDistribution, skillCountBucket(qualitySkillCount(extraction)));
@@ -307,7 +330,7 @@ async function main(): Promise<void> {
     }
 
     if (isHighRiskExtraction(extraction, existingReasons) && highRiskRows.length < 20) {
-      highRiskRows.push(buildAnonymizedIssueRow({ id: mail.id, extraction, issueCodes: reasons }));
+      highRiskRows.push(buildAnonymizedIssueRow({ id: mail.id, extraction, issueCodes: reasons, companyCandidate }));
     }
   }
 
@@ -318,6 +341,7 @@ async function main(): Promise<void> {
     notes: [
       "read-only audit; no DB writes",
       "audit-scope=all includes linked and unlinked candidates; audit-scope=unlinked focuses on new creation candidates; audit-scope=linked focuses on already linked/extracted candidates.",
+      "company candidate source/confidence/reason is reported without candidateName",
       "subjects, bodies, emails, names, company names are not printed",
       `sampleRunId=${shortHash(`${new Date().toISOString()}-${mails.length}`)}`,
     ],

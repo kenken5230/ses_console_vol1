@@ -9,6 +9,8 @@ import MarketPeriodInfo from "../../components/market-analysis/MarketPeriodInfo"
 import MarketQualityAlerts from "../../components/market-analysis/MarketQualityAlerts";
 import MarketRankingTable from "../../components/market-analysis/MarketRankingTable";
 import MarketSummaryCards from "../../components/market-analysis/MarketSummaryCards";
+import { PRICE_BAND_LABELS } from "../../lib/market-analysis/constants";
+import { normalizeMarketAnalysisLimitInput } from "../../lib/market-analysis/ui-controls";
 
 const pageStyle = {
   background: "#f6f7f9",
@@ -41,6 +43,27 @@ const descriptionStyle = {
   maxWidth: 760,
 };
 
+const headerMetaStyle = {
+  alignItems: "flex-end",
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+};
+
+const backLinkStyle = {
+  alignItems: "center",
+  background: "#fff",
+  border: "1px solid var(--line)",
+  borderRadius: 4,
+  color: "#1f5fc5",
+  display: "inline-flex",
+  fontSize: 14,
+  fontWeight: 900,
+  minHeight: 36,
+  padding: "0 12px",
+  textDecoration: "none",
+};
+
 const metaStyle = {
   color: "#64748b",
   fontSize: 13,
@@ -69,14 +92,7 @@ const errorTitleStyle = {
   marginBottom: 6,
 };
 
-const priceBandLabels = {
-  under_50: "〜50万円",
-  "50_60": "50〜60万円",
-  "60_70": "60〜70万円",
-  "70_80": "70〜80万円",
-  "80_over": "80万円〜",
-  unknown: "未設定",
-};
+const priceBandLabels = PRICE_BAND_LABELS;
 
 const workStyleLabels = {
   ONSITE: "常駐",
@@ -94,8 +110,8 @@ const contractTypeLabels = {
   UNKNOWN: "未設定",
 };
 
-const DEFAULT_LIMIT = 500;
-const DEFAULT_DETAIL_FILTERS = {
+const DEFAULT_LIMIT = "100";
+const emptyDetailFilters = {
   fromMonth: "",
   skill: "",
   region: "",
@@ -104,7 +120,6 @@ const DEFAULT_DETAIL_FILTERS = {
   contractType: "",
   toMonth: "",
 };
-const limitOptions = [100, 500, 1000];
 const filterKeys = ["fromMonth", "toMonth", "skill", "region", "priceBand", "workStyle", "contractType"];
 
 const commonMetricColumns = [
@@ -192,29 +207,54 @@ function booleanParam(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
+function monthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function recentThreeMonthFilters(now = new Date()) {
+  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const fromMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 2, 1);
+  return {
+    fromMonth: monthKey(fromMonth),
+    toMonth: monthKey(currentMonth),
+  };
+}
+
+function defaultDetailFilters() {
+  return { ...emptyDetailFilters, ...recentThreeMonthFilters() };
+}
+
+function normalizeDefaultPeriod(filters) {
+  if (filters.fromMonth || filters.toMonth) return filters;
+  return { ...filters, ...recentThreeMonthFilters() };
+}
+
 function parseLimit(value) {
-  const parsed = Number(value);
-  return limitOptions.includes(parsed) ? parsed : DEFAULT_LIMIT;
+  if (value === null) return DEFAULT_LIMIT;
+  return normalizeMarketAnalysisLimitInput(value, DEFAULT_LIMIT);
 }
 
 function filtersFromParams(params) {
   return filterKeys.reduce((result, key) => {
-    result[key] = params.get(key)?.trim() || "";
+    const value = params.get(key)?.trim() || "";
+    result[key] = value;
     return result;
-  }, { ...DEFAULT_DETAIL_FILTERS });
+  }, { ...emptyDetailFilters });
 }
 
 function stateFromUrl() {
   if (typeof window === "undefined") {
     return {
-      filters: DEFAULT_DETAIL_FILTERS,
+      filters: defaultDetailFilters(),
       focusOnly: false,
       limit: DEFAULT_LIMIT,
     };
   }
   const params = new URLSearchParams(window.location.search);
+  const filters = filtersFromParams(params);
+  const hasExplicitPeriod = params.has("fromMonth") || params.has("toMonth");
   return {
-    filters: filtersFromParams(params),
+    filters: hasExplicitPeriod ? filters : normalizeDefaultPeriod(filters),
     focusOnly: booleanParam(params.get("focusOnly")),
     limit: parseLimit(params.get("limit")),
   };
@@ -222,7 +262,7 @@ function stateFromUrl() {
 
 function buildMarketAnalysisSearch({ filters, focusOnly, limit }) {
   const params = new URLSearchParams();
-  params.set("limit", String(limit));
+  if (limit.trim()) params.set("limit", limit.trim());
   if (focusOnly) params.set("focusOnly", "true");
   for (const key of filterKeys) {
     appendOptionalParam(params, key, filters[key]);
@@ -239,9 +279,10 @@ function replaceMarketAnalysisUrl(nextState) {
 
 async function fetchMarketAnalysis({ filters, focusOnly, limit, signal }) {
   const params = new URLSearchParams({
-    limit: String(limit),
     focusOnly: focusOnly ? "true" : "false",
   });
+  const requestedLimit = limit.trim();
+  if (requestedLimit) params.set("limit", requestedLimit);
   appendOptionalParam(params, "fromMonth", filters.fromMonth);
   appendOptionalParam(params, "toMonth", filters.toMonth);
   appendOptionalParam(params, "skill", filters.skill);
@@ -291,7 +332,7 @@ function selectedRowFor(selection, type) {
 export default function MarketAnalysisPage() {
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [focusOnly, setFocusOnly] = useState(false);
-  const [filters, setFilters] = useState(DEFAULT_DETAIL_FILTERS);
+  const [filters, setFilters] = useState(defaultDetailFilters);
   const [isUrlStateReady, setIsUrlStateReady] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -305,15 +346,17 @@ export default function MarketAnalysisPage() {
   }, []);
 
   const applyFilters = useCallback((nextFilters) => {
+    const normalizedFilters = normalizeDefaultPeriod(nextFilters);
     setSelectedDrilldown(null);
-    setFilters(nextFilters);
-    replaceMarketAnalysisUrl({ filters: nextFilters, focusOnly, limit });
+    setFilters(normalizedFilters);
+    replaceMarketAnalysisUrl({ filters: normalizedFilters, focusOnly, limit });
   }, [focusOnly, limit]);
 
   const changeLimit = useCallback((nextLimit) => {
+    const normalizedLimit = normalizeMarketAnalysisLimitInput(nextLimit);
     setSelectedDrilldown(null);
-    setLimit(nextLimit);
-    replaceMarketAnalysisUrl({ filters, focusOnly, limit: nextLimit });
+    setLimit(normalizedLimit);
+    replaceMarketAnalysisUrl({ filters, focusOnly, limit: normalizedLimit });
   }, [filters, focusOnly]);
 
   const changeFocusOnly = useCallback((nextFocusOnly) => {
@@ -325,7 +368,7 @@ export default function MarketAnalysisPage() {
   const resetFilters = useCallback(() => {
     setLimit(DEFAULT_LIMIT);
     setFocusOnly(false);
-    setFilters(DEFAULT_DETAIL_FILTERS);
+    setFilters(defaultDetailFilters());
     setSelectedDrilldown(null);
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", window.location.pathname);
@@ -388,9 +431,12 @@ export default function MarketAnalysisPage() {
             案件・要員データから、スキル、単価帯、地域、需給ギャップ、営業注力候補を確認できます。
           </p>
         </div>
-        <div style={metaStyle}>
-          <div>最終更新</div>
-          <strong>{generatedAt}</strong>
+        <div style={headerMetaStyle}>
+          <a href="/" style={backLinkStyle}>元の画面に戻る</a>
+          <div style={metaStyle}>
+            <div>最終更新</div>
+            <strong>{generatedAt}</strong>
+          </div>
         </div>
       </header>
 
@@ -441,6 +487,7 @@ export default function MarketAnalysisPage() {
             <MarketRankingTable
               columns={priceBandColumns}
               onRowSelect={selectDrilldown}
+              rowLimit={null}
               rows={data.priceBandRankings}
               selectedRow={selectedRowFor(selectedDrilldown, "priceBand")}
               title="単価帯別ランキング"

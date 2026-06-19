@@ -7,7 +7,9 @@
 全体の壁打ち:
 
 - `docs/themes/ses-sales-console/README.md`
+- `docs/themes/ses-sales-console/status/theme-progress-2026-06-19.md`
 - `docs/themes/ses-sales-console/requirements/ses-sales-console-integrated-requirements-v0.1.md`
+- `docs/themes/ses-sales-console/requirements/input-field-definition-2026-06-19.md`
 - `docs/themes/ses-sales-console/BK/ses-sales-console-theme-backlog-v0.1.md`
 - `docs/shared/quality/two-pass-task-test-policy-v0.1.md`
 

@@ -22,7 +22,7 @@
 | 保存スキーマ | `codex/pr28-match-suggestion-schema` | `MatchSuggestion`、`MatchSuggestionReviewEvent`、`MatchSuggestionSourceRecord` の候補スキーマ |
 | 保存API | `codex/pr30-saved-match-suggestion-apis` | saved suggestions の read-only list/detail/review queue API |
 | CSV/source tracking | `codex/pr22-csv-source-apply`, `codex/pr23-import-review-ui` | `ImportSource`、`ImportRun`、`SourceRecord`、`EntitySourceLink`、import review UI |
-| 市場分析 | `docs/market-analysis/*` | マッチングやAI特徴量に接続可能な集計観点。ただし今回MVPの主機能ではない |
+| 市場分析 | `docs/themes/market-analysis/*` | マッチングやAI特徴量に接続可能な集計観点。ただし今回MVPの主機能ではない |
 
 注意:
 

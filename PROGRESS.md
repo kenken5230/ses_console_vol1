@@ -31,6 +31,9 @@
 |---|---|---|---|---|---|
 | PM setup chat | チャット横断進捗管理の初期整備 | `PROGRESS.md`, `docs/shared/operations/` | Done | 2026-06-13 | なし |
 | Codex GitHub sync chat | GitHub上に進捗共有docsを配置 | `PROGRESS.md`, `docs/shared/operations/`, `docs/shared/README.md` | Done | 2026-06-13 | ローカル `git status` はsandbox制約で未確認 |
+| Codex recovery/main alignment | `origin/main` clean worktree で復旧・UI真実性・検証基盤を修正 | `app/page.jsx`, `components/*`, `data/mockProjects.js`, `tsconfig.json`, `.gitignore`, `docs/status/recovery-main-alignment-report-2026-06-15.md` | Done | 2026-06-15 | SearchHistory DB 実装、dependency upgrade、Browser visual QA は別タスク |
+| Codex dependency security audit | npm audit high以上の改善調査と依存更新 | `package.json`, `package-lock.json`, `docs/status/dependency-security-audit-2026-06-15.md` | Done | 2026-06-15 | Next 16更新、overrides、dynamic route型対応、audit 0件 |
+| Codex UI regression restore | #49基準で消えた既存UI導線の復旧と#53/#54/#55変更台帳 | `app/page.jsx`, `components/Header.jsx`, `components/SearchToolbar.jsx`, `components/SearchHistoryModal.jsx`, `components/ProjectTable.jsx`, `components/ProjectDetailPane.jsx`, `data/mockProjects.js`, `docs/status/ui-change-ledger-2026-06-15.md`, `docs/status/ui-regression-restore-2026-06-15.md`, `docs/status/ui-restore-plan-2026-06-15.md` | In Progress | 2026-06-15 | #55 DB-backed SearchHistoryは削除せず別統合。main mergeはユーザー承認後 |
 
 ## 衝突注意エリア
 
@@ -71,6 +74,33 @@
 - Validation: GitHub connectorで `main` 上の欠落を確認。ローカルgit/npm検証はsandbox制約により未実行。
 - Remaining: PRをmergeして `main` に反映する。merge後、各チャットは作業開始時に `PROGRESS.md` を読む。
 - Risk / Need coordination: ローカル未コミット差分はこの環境では未確認。実装作業前には通常環境で `git status` を確認する。
+
+### 2026-06-15 JST / Codex recovery/main alignment
+
+- Scope: dirty tree に直接 merge せず、`origin/main` から clean worktree/branch を作って復旧作業を開始。
+- Done: dirty tree backup 作成、clean worktree 作成、未実装 UI 導線撤去、未分類メール除外キーワード修正、`tsconfig.tsbuildinfo` hygiene、復旧レポート追加。
+- Changed: `.gitignore`, `app/page.jsx`, `components/Header.jsx`, `components/ProjectDetailPane.jsx`, `components/ProjectTable.jsx`, `components/SearchToolbar.jsx`, `data/mockProjects.js`, `tsconfig.json`, `docs/README.md`, `docs/status/recovery-main-alignment-report-2026-06-15.md`, `PROGRESS.md`。
+- Validation: `npm.cmd ci --ignore-scripts`, Prisma validate/generate, `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run build`, `git diff --check`, 未実装 UI 残骸検索 pass。
+- Remaining: SearchHistory は DB-backed 実装として別 PR、dependency security upgrade、Browser visual QA、docs status matrix。
+- Risk / Need coordination: DB write/migration は今回未実行。Browser 操作用 tool はこのスレッドで公開されなかったため visual QA は未実施。
+
+### 2026-06-15 JST / Codex docs/status recheck
+
+- Scope: docs入口とテーマ別フォルダを再整理し、怪しい箇所を再テストする。
+- Done: `docs/status/` を追加し、復旧レポートを移動。市場分析docsを `docs/themes/market-analysis/` へ移動。docs入口とテーマ入口を更新。現状機能ステータス表を追加。
+- Changed: `docs/README.md`, `docs/themes/README.md`, `docs/status/`, `docs/themes/market-analysis/`, `PROGRESS.md`。
+- Validation: 参照切れ検索 pass、未実装UI残骸検索 pass、`git diff --check` pass(CRLF警告のみ)、`npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、Prisma validate pass、`npm.cmd audit --audit-level=high` fail(8 vulnerabilities)。
+- Remaining: SearchHistory DB-backed実装、dependency security upgrade、Browser visual QA。
+- Risk / Need coordination: フォルダ移動のみ。コード配置、DB、migration、実データ更新は行わない。
+
+### 2026-06-15 JST / Codex dependency security audit
+
+- Scope: `npm.cmd audit --audit-level=high` の8件を調査し、改善可能な依存更新を別branch/別PRで進める。
+- Done: 専用worktree/branchを作成。audit内容、metadata、Node互換性を確認。`next`/`tsx`更新、Hono/esbuild/PostCSS overrides、Next 16 dynamic route型対応、fresh typecheck対応を完了。
+- Changed: `package.json`, `package-lock.json`, `next-env.d.ts`, `tsconfig.json`, dynamic `[id]` route handlers, `docs/status/dependency-security-audit-2026-06-15.md`, `docs/status/README.md`, `docs/status/current-feature-status-2026-06-15.md`, `PROGRESS.md`。
+- Validation: `npm.cmd audit --audit-level=high` pass(0 vulnerabilities)、Prisma validate/generate pass、fresh `.next`なし `npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、local start smoke 200。
+- Remaining: Vercel/PR checks確認、Browser visual QAは別枠。
+- Risk / Need coordination: Next major updateを含むため、復旧PR #53とは別PRにする。
 
 ## 引き継ぎテンプレート
 

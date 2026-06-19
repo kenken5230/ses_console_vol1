@@ -10,7 +10,6 @@ export default function ProjectTable({
   onMenuToggle,
   onSelectProject,
   projects,
-  proposalIds,
   selectedProjectId
 }) {
   const visibleColumns = compact
@@ -22,76 +21,80 @@ export default function ProjectTable({
       <table className="project-table">
         <thead>
           <tr>
-            {visibleColumns.map((column) => (
-              <th key={column}>{column}</th>
+            {visibleColumns.map((column, columnIndex) => (
+              <th key={`${column || "actions"}-${columnIndex}`}>{column}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {projects.map((project) => (
-            <tr
-              className={selectedProjectId === project.id ? "selected" : ""}
-              key={project.id}
-              onClick={() => onSelectProject(project)}
-            >
-              <td className="id-cell">{project.id}</td>
-              <td className="title-cell" title={project.title}>
-                <div className="title-with-badges">
-                  <span>{project.title}</span>
-                  {project.needsReview ? <Badge tone="danger">要確認</Badge> : null}
-                </div>
-              </td>
-              <td className={project.unitPrice !== "未定" ? "price-cell" : ""}>{project.unitPrice}</td>
-              <td>
-                <div className="badge-list">
-                  {project.locations.slice(0, compact ? 2 : 3).map((location) => (
-                    <Badge key={location}>{location}</Badge>
-                  ))}
-                  {project.locations.length > (compact ? 2 : 3) ? <span>…</span> : null}
-                </div>
-              </td>
-              <td>{project.interviewCount}</td>
-              {!compact ? (
-                <>
-                  <td className="company-cell">{project.company}</td>
-                  <td>{project.fee}</td>
-                  <td>{project.hasResult ? <Badge tone="outline">実績あり</Badge> : null}</td>
-                  <td>
-                    <span className="avatar" aria-label={`${project.creator} 作成`}>
-                      {project.creator}
-                    </span>
-                  </td>
-                  <td />
-                  <td>{project.createdAt}</td>
-                  <td className="action-cell" onClick={(event) => event.stopPropagation()}>
-                    {canEdit ? (
-                      <>
-                    <button className="kebab-button" onClick={() => onMenuToggle(project.id)} type="button" aria-label="案件メニュー">
-                      ⋯
-                    </button>
-                    {menuProjectId === project.id ? (
-                      <div className="row-action-menu">
-                        <button onClick={() => onAddProposal(project)} type="button">
-                          {proposalIds.includes(project.id) ? "提案開始済み" : "提案開始"}
-                        </button>
-                        <button onClick={() => onCopyUrl(project)} type="button">
-                          コピー
-                        </button>
-                        <button onClick={() => onDetailAction("edit", project)} type="button">
-                          編集
-                        </button>
-                        <button onClick={() => onDetailAction("archive", project)} type="button">
-                          アーカイブ
-                        </button>
-                      </div>
-                    ) : null}
-                      </>
-                    ) : null}
-                  </td>
-                </>
-              ) : null}
-            </tr>
-          ))}
+          {projects.map((project, projectIndex) => {
+            const projectKey = project.dbId ?? project.id ?? projectIndex;
+
+            return (
+              <tr
+                className={selectedProjectId === project.id ? "selected" : ""}
+                key={projectKey}
+                onClick={() => onSelectProject(project)}
+              >
+                <td className="id-cell">{project.id}</td>
+                <td className="title-cell" title={project.title}>
+                  <div className="title-with-badges">
+                    <span>{project.title}</span>
+                    {project.needsReview ? <Badge tone="danger">要確認</Badge> : null}
+                  </div>
+                </td>
+                <td className={project.unitPrice !== "未定" ? "price-cell" : ""}>{project.unitPrice}</td>
+                <td>
+                  <div className="badge-list">
+                    {project.locations.slice(0, compact ? 2 : 3).map((location, locationIndex) => (
+                      <Badge key={`${projectKey}-location-${locationIndex}-${location}`}>{location}</Badge>
+                    ))}
+                    {project.locations.length > (compact ? 2 : 3) ? <span>…</span> : null}
+                  </div>
+                </td>
+                <td>{project.interviewCount}</td>
+                {!compact ? (
+                  <>
+                    <td className="company-cell">{project.company}</td>
+                    <td>{project.fee}</td>
+                    <td>{project.hasResult ? <Badge tone="outline">実績あり</Badge> : null}</td>
+                    <td>
+                      <span className="avatar" aria-label={`${project.creator} 作成`}>
+                        {project.creator}
+                      </span>
+                    </td>
+                    <td />
+                    <td>{project.createdAt}</td>
+                    <td className="action-cell" onClick={(event) => event.stopPropagation()}>
+                      {canEdit ? (
+                        <>
+                          <button className="kebab-button" onClick={() => onMenuToggle(project.id)} type="button" aria-label="案件メニュー">
+                            ⋯
+                          </button>
+                          {menuProjectId === project.id ? (
+                            <div className="row-action-menu">
+                              <button onClick={() => onAddProposal(project)} title="提案開始は未実装です。DB登録は行われません。" type="button">
+                                提案開始（未実装）
+                              </button>
+                              <button onClick={() => onCopyUrl(project)} type="button">
+                                コピー
+                              </button>
+                              <button onClick={() => onDetailAction("edit", project)} type="button">
+                                編集
+                              </button>
+                              <button onClick={() => onDetailAction("archive", project)} type="button">
+                                アーカイブ
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </td>
+                  </>
+                ) : null}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

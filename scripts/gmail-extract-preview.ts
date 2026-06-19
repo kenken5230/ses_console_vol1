@@ -1,9 +1,16 @@
 import "dotenv/config";
 
 import { prisma } from "../lib/prisma";
+import {
+  inferGmailCompanyCandidateForExtraction,
+  type KnownCompanyIdentity,
+} from "./gmail-company-candidate";
 import { extractFromMail, formatDate, personDisplayName, type MailExtractionSource } from "./gmail-extraction";
 
 type ExtractPreviewType = "all" | "anken" | "youin";
+type KnownCompanyRow = KnownCompanyIdentity & {
+  aliases: Array<{ aliasName: string; normalizedAliasName: string }>;
+};
 
 function parseLimit(): number {
   const argLimit = process.argv.find((arg) => arg.startsWith("--limit="))?.split("=")[1];
@@ -64,9 +71,22 @@ async function main(): Promise<void> {
       classificationVersion: true,
     },
   });
+  const knownCompanies = await prisma.company.findMany({
+    select: {
+      name: true,
+      normalizedName: true,
+      mainEmailDomain: true,
+      aliases: { select: { aliasName: true, normalizedAliasName: true } },
+    },
+  }) as KnownCompanyRow[];
 
   const rows = mails.map((mail) => {
     const extraction = extractFromMail(mail as MailExtractionSource);
+    const companyCandidate = inferGmailCompanyCandidateForExtraction({
+      mail: mail as MailExtractionSource,
+      extraction,
+      knownCompanies,
+    });
 
     if (extraction.target === "project") {
       return {
@@ -78,6 +98,10 @@ async function main(): Promise<void> {
         title: extraction.title,
         price: extraction.unitPriceMax,
         location: extraction.workLocationText,
+        companyCandidate: companyCandidate.candidateName,
+        companyCandidateSource: companyCandidate.source,
+        companyCandidateConfidence: companyCandidate.confidence,
+        companyCandidateReason: companyCandidate.reasonCodes.join(", "),
         startMonth: formatDate(extraction.startMonth)?.slice(0, 7) ?? null,
         skills: extraction.requiredSkills.slice(0, 5).join(", "),
         needsReview: extraction.needsReview,
@@ -97,6 +121,10 @@ async function main(): Promise<void> {
       reviewReasons: extraction.reviewReasons.join(", "),
       roleHeadline: extraction.roleHeadline,
       company: extraction.ownerCompanyName,
+      companyCandidate: companyCandidate.candidateName,
+      companyCandidateSource: companyCandidate.source,
+      companyCandidateConfidence: companyCandidate.confidence,
+      companyCandidateReason: companyCandidate.reasonCodes.join(", "),
       price: extraction.desiredUnitPrice,
       availableFrom: formatDate(extraction.availableFrom)?.slice(0, 7) ?? null,
       skillCount: extraction.skills.length,

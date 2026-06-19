@@ -188,6 +188,11 @@ function remoteLabel(remoteType?: string | null) {
   return remoteType ? labels[remoteType] || remoteType : EMPTY_VALUE;
 }
 
+function remoteTypeInputLabel(remoteType?: string | null) {
+  const label = remoteLabel(remoteType);
+  return label === EMPTY_VALUE ? "" : label;
+}
+
 function contractTypeLabel(contractType?: string | null) {
   const labels: Record<string, string> = {
     UNKNOWN: "未確認",
@@ -441,6 +446,7 @@ function mapProject(project: any) {
     workload: condition?.workload || "",
     startMonth: formatMonth(condition?.startMonth) === EMPTY_VALUE ? "" : formatMonth(condition?.startMonth),
     workEnvironment: condition?.workEnvironment || "",
+    remoteType: remoteTypeInputLabel(condition?.remoteType),
     prefecture: condition?.prefecture || "",
     workLocation: condition?.workLocationText || "",
     skills: skills.join("\n"),

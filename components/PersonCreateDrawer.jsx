@@ -2,39 +2,37 @@ import { useEffect, useState } from "react";
 
 const personGroups = [
   {
-    title: "基本情報",
+    title: "必須項目",
+    priority: "必須",
     fields: [
-      { name: "name", label: "要員名", type: "text", required: true },
-      { name: "initials", label: "イニシャル", type: "text" },
-      { name: "ownerCompanyName", label: "所属会社", type: "text" },
+      { name: "name", label: "要員名", type: "text", placeholder: "例: 山田 太郎 / Y.T", required: true },
+      { name: "initials", label: "イニシャル", type: "text", placeholder: "例: T.K" },
+      { name: "ownerCompanyName", label: "所属会社", type: "text", placeholder: "例: 株式会社○○" },
       { name: "status", label: "状態", type: "select", options: ["提案可", "提案中", "参画中", "停止"] },
-      { name: "availableFrom", label: "稼働開始日", type: "date" },
-      { name: "desiredUnitPrice", label: "希望単価", type: "number", suffix: "万円" },
-      { name: "age", label: "年齢", type: "number", suffix: "歳" },
-      { name: "nationality", label: "国籍", type: "text" }
+      { name: "skills", label: "使用技術", type: "textarea", placeholder: "例: Java、Spring Boot、AWS" },
+      { name: "availableFrom", label: "稼働開始日", type: "date" }
     ]
   },
   {
-    title: "スキル",
+    title: "推奨項目",
+    priority: "推奨",
     fields: [
-      { name: "careerSummary", label: "経験職種", type: "textarea" },
-      { name: "processes", label: "対応工程", type: "textarea" },
-      { name: "skills", label: "使用技術", type: "textarea" },
-      { name: "summary", label: "得意領域", type: "textarea" }
+      { name: "desiredUnitPrice", label: "希望単価", type: "number", placeholder: "例: 75", suffix: "万円" },
+      { name: "preferredLocation", label: "希望勤務地", type: "text", placeholder: "例: 東京、神奈川、フルリモート" },
+      { name: "remotePreference", label: "リモート可否", type: "text", placeholder: "例: 常駐可 / リモート希望 / フルリモート" },
+      { name: "age", label: "年齢", type: "number", placeholder: "例: 32", suffix: "歳" },
+      { name: "nationality", label: "国籍", type: "text", placeholder: "例: 日本" },
+      { name: "careerSummary", label: "経験職種", type: "textarea", placeholder: "例: バックエンドエンジニア、PL" },
+      { name: "processes", label: "対応工程", type: "textarea", placeholder: "例: 要件定義、基本設計、製造、テスト" },
+      { name: "summary", label: "得意領域", type: "textarea", placeholder: "例: API設計、性能改善" },
+      { name: "ownerContactName", label: "担当者", type: "text", placeholder: "例: 山田 太郎" },
+      { name: "ownerContactEmail", label: "担当者メール", type: "email", placeholder: "例: sales@example.com" }
     ]
   },
   {
-    title: "希望条件",
+    title: "任意項目",
+    priority: "任意",
     fields: [
-      { name: "preferredLocation", label: "希望勤務地", type: "text" },
-      { name: "remotePreference", label: "リモート可否", type: "text" }
-    ]
-  },
-  {
-    title: "営業情報",
-    fields: [
-      { name: "ownerContactName", label: "担当者", type: "text" },
-      { name: "ownerContactEmail", label: "担当者メール", type: "text" },
       { name: "createdBy", label: "作成者", type: "text" },
       { name: "createdAt", label: "作成日", type: "date" }
     ]
@@ -68,6 +66,12 @@ function FormControl({ disabled, field }) {
   }
 
   return <input {...commonProps} type={field.type} />;
+}
+
+function PriorityBadge({ value }) {
+  if (!value) return null;
+  const priorityClass = { 必須: "required", 推奨: "recommended", 任意: "optional" }[value] || "neutral";
+  return <span className={`field-priority ${priorityClass}`}>{value}</span>;
 }
 
 export default function PersonCreateDrawer({ onClose, onSaved }) {
@@ -136,11 +140,17 @@ export default function PersonCreateDrawer({ onClose, onSaved }) {
           <div className="detail-groups">
             {personGroups.map((group) => (
               <section className="detail-group" key={group.title}>
-                <h3>{group.title}</h3>
+                <h3>
+                  <span>{group.title}</span>
+                  <PriorityBadge value={group.priority} />
+                </h3>
                 <div className="create-group-body">
                   {group.fields.map((field) => (
                     <label className={`create-field ${field.type === "textarea" ? "wide" : ""}`} key={field.name}>
-                      <span>{field.label}</span>
+                      <span className="create-label-row">
+                        <span>{field.label}</span>
+                        <PriorityBadge value={field.priority || group.priority} />
+                      </span>
                       <div className="create-control-row">
                         <FormControl disabled={isSaving} field={field} />
                         {field.suffix ? <em>{field.suffix}</em> : null}

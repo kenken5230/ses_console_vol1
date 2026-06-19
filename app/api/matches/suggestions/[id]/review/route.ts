@@ -15,7 +15,7 @@ import { prisma } from "../../../../../../lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: Request, context: { params: { id: string } }) {
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireAnyRole(request, ["ADMIN", "MANAGER"]);
     const guard = matchSuggestionReviewUpdateGuard();
@@ -26,7 +26,8 @@ export async function PATCH(request: Request, context: { params: { id: string } 
     const body = await request.json().catch(() => {
       throw new MatchSuggestionReviewUpdateRequestError("Request body must be valid JSON");
     });
-    const result = await updateMatchSuggestionReviewSupervised(prisma, context.params.id, body, user);
+    const { id } = await context.params;
+    const result = await updateMatchSuggestionReviewSupervised(prisma, id, body, user);
     return NextResponse.json(result);
   } catch (error) {
     const authResponse = authErrorResponse(error);

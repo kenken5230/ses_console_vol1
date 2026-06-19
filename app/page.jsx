@@ -17,6 +17,7 @@ import SearchToolbar from "../components/SearchToolbar";
 import UnclassifiedMailDetailPane from "../components/UnclassifiedMailDetailPane";
 import UnclassifiedMailTable from "../components/UnclassifiedMailTable";
 import { filterFormRows, focusOptions, personFilterFormRows, quickFilters } from "../data/mockProjects";
+import { textMatchesSearchQuery } from "../lib/search-token-match";
 
 const defaultQuickFilters = Object.fromEntries(quickFilters.map((filter) => [filter.id, Boolean(filter.defaultChecked)]));
 const currentMocUserName = "営業担当A";
@@ -440,11 +441,11 @@ export default function Home() {
   };
 
   const filteredProjects = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+    const normalizedSearch = search.trim();
     let result = projects;
 
-    if (normalized) {
-      result = result.filter((project) => collectProjectText(project).includes(normalized));
+    if (normalizedSearch) {
+      result = result.filter((project) => textMatchesSearchQuery(collectProjectText(project), normalizedSearch));
     }
 
     if (filterValues.createdFrom || filterValues.createdTo) {
@@ -460,8 +461,8 @@ export default function Home() {
       result = result.filter((project) => String(project.id).includes(filterValues.projectId.trim()));
     }
     if (filterValues.exclude.trim()) {
-      const excluded = filterValues.exclude.trim().toLowerCase();
-      result = result.filter((project) => !collectProjectText(project).includes(excluded));
+      const excluded = filterValues.exclude.trim();
+      result = result.filter((project) => !textMatchesSearchQuery(collectProjectText(project), excluded));
     }
     if (filterValues.startMonthFrom || filterValues.startMonthTo) {
       result = result.filter((project) => {
@@ -473,8 +474,8 @@ export default function Home() {
       });
     }
     if (filterValues.skill.trim()) {
-      const skill = filterValues.skill.trim().toLowerCase();
-      result = result.filter((project) => collectProjectText(project).includes(skill));
+      const skill = filterValues.skill.trim();
+      result = result.filter((project) => textMatchesSearchQuery(collectProjectText(project), skill));
     }
     if (filterValues.unitUndecidedOnly) {
       result = result.filter((project) => project.unitPriceValue === 0 || project.unitPrice === "未定");
@@ -483,8 +484,8 @@ export default function Home() {
       if (filterValues.unitMax) result = result.filter((project) => project.unitPriceValue <= Number(filterValues.unitMax));
     }
     if (filterValues.prefecture.trim()) {
-      const prefecture = filterValues.prefecture.trim().toLowerCase();
-      result = result.filter((project) => collectProjectText(project).includes(prefecture));
+      const prefecture = filterValues.prefecture.trim();
+      result = result.filter((project) => textMatchesSearchQuery(collectProjectText(project), prefecture));
     }
     if (filterValues.remote.length) {
       result = result.filter((project) => {
@@ -532,11 +533,11 @@ export default function Home() {
   }, [checkedFilters, currentUserName, filterValues, projects, search, selectedFocus, selectedSort]);
 
   const filteredPersons = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+    const normalizedSearch = search.trim();
     let result = persons;
 
-    if (normalized) {
-      result = result.filter((person) => collectPersonText(person).includes(normalized));
+    if (normalizedSearch) {
+      result = result.filter((person) => textMatchesSearchQuery(collectPersonText(person), normalizedSearch));
     }
 
     if (filterValues.createdFrom || filterValues.createdTo) {
@@ -552,8 +553,8 @@ export default function Home() {
       result = result.filter((person) => String(person.id).includes(filterValues.projectId.trim()));
     }
     if (filterValues.exclude.trim()) {
-      const excluded = filterValues.exclude.trim().toLowerCase();
-      result = result.filter((person) => !collectPersonText(person).includes(excluded));
+      const excluded = filterValues.exclude.trim();
+      result = result.filter((person) => !textMatchesSearchQuery(collectPersonText(person), excluded));
     }
     if (filterValues.startMonthFrom || filterValues.startMonthTo) {
       result = result.filter((person) => {
@@ -565,8 +566,8 @@ export default function Home() {
       });
     }
     if (filterValues.skill.trim()) {
-      const skill = filterValues.skill.trim().toLowerCase();
-      result = result.filter((person) => collectPersonText(person).includes(skill));
+      const skill = filterValues.skill.trim();
+      result = result.filter((person) => textMatchesSearchQuery(collectPersonText(person), skill));
     }
     if (filterValues.unitUndecidedOnly) {
       result = result.filter((person) => person.unitPriceValue === 0 || person.unitPrice === "未定");
@@ -575,8 +576,8 @@ export default function Home() {
       if (filterValues.unitMax) result = result.filter((person) => person.unitPriceValue <= Number(filterValues.unitMax));
     }
     if (filterValues.prefecture.trim()) {
-      const location = filterValues.prefecture.trim().toLowerCase();
-      result = result.filter((person) => collectPersonText(person).includes(location));
+      const location = filterValues.prefecture.trim();
+      result = result.filter((person) => textMatchesSearchQuery(collectPersonText(person), location));
     }
     if (filterValues.remote.length) {
       result = result.filter((person) => {
@@ -612,11 +613,16 @@ export default function Home() {
   }, [checkedFilters, currentUserName, filterValues, persons, search, selectedSort]);
 
   const filteredUnclassifiedMails = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+    const normalizedSearch = search.trim();
     let result = unclassifiedMails;
 
-    if (normalized) {
-      result = result.filter((mail) => collectMailText(mail).includes(normalized));
+    if (normalizedSearch) {
+      result = result.filter((mail) => textMatchesSearchQuery(collectMailText(mail), normalizedSearch));
+    }
+
+    if (filterValues.exclude.trim()) {
+      const excluded = filterValues.exclude.trim();
+      result = result.filter((mail) => !textMatchesSearchQuery(collectMailText(mail), excluded));
     }
 
     if (checkedFilters.hasResult) result = result.filter((mail) => mail.hasResult);
@@ -630,7 +636,7 @@ export default function Home() {
     }
 
     return result;
-  }, [checkedFilters, search, selectedSort, unclassifiedMails]);
+  }, [checkedFilters, filterValues.exclude, search, selectedSort, unclassifiedMails]);
 
   const isProjectTab = activeTab === "案件";
   const isPersonTab = activeTab === "要員";
@@ -648,8 +654,6 @@ export default function Home() {
   const focusCount = isProjectTab
     ? projects.filter((project) => focusOptions.some((option) => matchesProjectFocus(project, option.id))).length
     : 0;
-  const proposalIds = [];
-
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, checkedFilters, filterValues, pageSize, search, selectedFocus, selectedSort]);
@@ -714,19 +718,19 @@ export default function Home() {
       setNotice("この操作を実行する権限がありません");
       return;
     }
-    console.log("project proposal draft", project?.id || project?.dbId || "");
-    setNotice(`「${project.title}」の提案開始を仮実行しました（DB登録なし）`);
+    console.log("project proposal unavailable", project?.id || project?.dbId || "");
+    setNotice("提案開始は未実装です。DB登録は行われません。");
     setMenuProjectId(null);
   };
 
   const handleCopyUrl = async (project) => {
     console.log("project copy draft", project?.id || project?.dbId || "");
-    const projectUrl = `${window.location.origin}/projects/${project.id}`;
+    const projectText = `案件ID: ${project.id}\n案件名: ${project.title}`;
     try {
-      await navigator.clipboard?.writeText(projectUrl);
-      setNotice(`案件URLをコピーしました: ${projectUrl}`);
+      await navigator.clipboard?.writeText(projectText);
+      setNotice(`案件情報をコピーしました: ${project.title}`);
     } catch {
-      setNotice(`コピー対象URL: ${projectUrl}`);
+      setNotice(`コピー対象: ${projectText}`);
     }
     setMenuProjectId(null);
   };
@@ -974,7 +978,6 @@ export default function Home() {
                   setMenuProjectId(null);
                 }}
                 projects={displayProjects}
-                proposalIds={proposalIds}
                 selectedProjectId={selectedProject?.id}
               />
               {!displayProjects.length && !isLoadingDbData ? <div className="empty-state">表示できる案件データがありません</div> : null}

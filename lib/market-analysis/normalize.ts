@@ -152,11 +152,21 @@ export function normalizeWorkStyle(remoteType?: string | null, text?: string | n
 
 export function toPriceBand(value: number | null | undefined): PriceBandKey {
   if (!isFinitePositiveNumber(value)) return "unknown";
-  if (value < 50) return "under_50";
-  if (value < 60) return "50_60";
-  if (value < 70) return "60_70";
-  if (value < 80) return "70_80";
-  return "80_over";
+
+  for (const band of PRICE_BANDS) {
+    if (band.key === "unknown") continue;
+    if (band.max === null) {
+      if (band.min !== null && value >= band.min) return band.key;
+      continue;
+    }
+    if (band.min === null) {
+      if (value <= band.max) return band.key;
+      continue;
+    }
+    if (value >= band.min && value < band.max) return band.key;
+  }
+
+  return "unknown";
 }
 
 export function pickProjectPrice(project: Pick<MarketProjectInput, "upperAmountMax" | "upperAmountMin" | "unitPriceMax" | "unitPriceMin">) {

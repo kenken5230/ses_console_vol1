@@ -9,6 +9,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 /app/generated/prisma
+tsconfig.tsbuildinfo
+__pr_*/
 
 secrets/
 gmail-oauth-client.json

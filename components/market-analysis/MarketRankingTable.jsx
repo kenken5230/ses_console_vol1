@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { MARKET_ANALYSIS_VISIBLE_RANKING_LIMIT, visibleMarketRankingRows } from "../../lib/market-analysis/ui-controls";
+
 const sectionStyle = {
   background: "#fff",
   border: "1px solid var(--line)",
@@ -13,13 +15,13 @@ const headerStyle = {
   alignItems: "center",
   borderBottom: "1px solid var(--line)",
   display: "flex",
-  gap: 12,
+  gap: 10,
   justifyContent: "space-between",
-  padding: "16px 18px",
+  padding: "10px 12px",
 };
 
 const titleStyle = {
-  fontSize: 19,
+  fontSize: 17,
   margin: 0,
 };
 
@@ -29,7 +31,7 @@ const tableWrapStyle = {
 
 const tableStyle = {
   borderCollapse: "collapse",
-  minWidth: 940,
+  minWidth: 860,
   width: "100%",
 };
 
@@ -37,9 +39,9 @@ const thStyle = {
   background: "#f8fafc",
   borderBottom: "1px solid var(--line)",
   color: "#475569",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 900,
-  padding: "11px 12px",
+  padding: "7px 8px",
   textAlign: "left",
   whiteSpace: "nowrap",
 };
@@ -47,9 +49,9 @@ const thStyle = {
 const tdStyle = {
   borderBottom: "1px solid #eef2f6",
   color: "#1f2937",
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 700,
-  padding: "12px",
+  padding: "7px 8px",
   verticalAlign: "top",
 };
 
@@ -65,7 +67,7 @@ const selectedRowStyle = {
 const headerActionsStyle = {
   alignItems: "center",
   display: "flex",
-  gap: 10,
+  gap: 8,
 };
 
 const copyButtonStyle = {
@@ -74,10 +76,10 @@ const copyButtonStyle = {
   borderRadius: 4,
   color: "#1f5fc5",
   cursor: "pointer",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 900,
-  minHeight: 36,
-  padding: "0 12px",
+  minHeight: 30,
+  padding: "0 10px",
 };
 
 const emptyStyle = {
@@ -93,6 +95,15 @@ const emptyTitleStyle = {
   fontSize: 15,
   marginBottom: 6,
 };
+
+const numericColumnKeys = new Set([
+  "projectCount",
+  "recruitingCount",
+  "personCount",
+  "demandSupplyGap",
+  "focusProjectCount",
+  "qualityIssueCount",
+]);
 
 function formatNumber(value) {
   if (value === null || value === undefined || value === "") return "-";
@@ -125,16 +136,46 @@ function valueFor(row, column) {
   return formatNumber(row[column.key]);
 }
 
+function isNumericColumn(column) {
+  return column.type === "price" || column.type === "score" || numericColumnKeys.has(column.key);
+}
+
+function headerStyleFor(column) {
+  return {
+    ...thStyle,
+    textAlign: isNumericColumn(column) ? "right" : "left",
+  };
+}
+
+function cellStyleFor(column) {
+  const isNumeric = isNumericColumn(column);
+  return {
+    ...tdStyle,
+    fontVariantNumeric: isNumeric ? "tabular-nums" : undefined,
+    textAlign: isNumeric ? "right" : "left",
+    whiteSpace: isNumeric ? "nowrap" : undefined,
+  };
+}
+
 async function copyText(text) {
   if (typeof navigator === "undefined" || !navigator.clipboard) return false;
   await navigator.clipboard.writeText(text);
   return true;
 }
 
-export default function MarketRankingTable({ columns, onRowSelect, rows = [], selectedRow = null, title, type }) {
+export default function MarketRankingTable({
+  columns,
+  onRowSelect,
+  rowLimit = MARKET_ANALYSIS_VISIBLE_RANKING_LIMIT,
+  rows = [],
+  selectedRow = null,
+  title,
+  type,
+}) {
   const [copied, setCopied] = useState(false);
-  const visibleRows = rows.slice(0, 20);
+  const visibleRows = visibleMarketRankingRows(rows, rowLimit);
   const isClickable = Boolean(onRowSelect);
+  const countLabel = rowLimit === null ? `全${visibleRows.length}件` : `上位${visibleRows.length}件`;
 
   async function handleCopy() {
     const header = columns.map((column) => column.label).join("\t");
@@ -150,7 +191,7 @@ export default function MarketRankingTable({ columns, onRowSelect, rows = [], se
       <div style={headerStyle}>
         <h2 style={titleStyle}>{title}</h2>
         <div style={headerActionsStyle}>
-          <span style={{ color: "#64748b", fontSize: 13, fontWeight: 800 }}>上位{visibleRows.length}件</span>
+          <span style={{ color: "#64748b", fontSize: 12, fontWeight: 800 }}>{countLabel}</span>
           <button disabled={!visibleRows.length} onClick={handleCopy} style={copyButtonStyle} type="button">
             {copied ? "コピー済み" : "表をコピー"}
           </button>
@@ -162,7 +203,7 @@ export default function MarketRankingTable({ columns, onRowSelect, rows = [], se
             <thead>
               <tr>
                 {columns.map((column) => (
-                  <th key={column.key} style={thStyle}>
+                  <th key={column.key} style={headerStyleFor(column)}>
                     {column.label}
                   </th>
                 ))}
@@ -188,7 +229,7 @@ export default function MarketRankingTable({ columns, onRowSelect, rows = [], se
                   tabIndex={isClickable ? 0 : undefined}
                 >
                   {columns.map((column) => (
-                    <td key={column.key} style={tdStyle}>
+                    <td key={column.key} style={cellStyleFor(column)}>
                       {valueFor(row, column)}
                     </td>
                   ))}
