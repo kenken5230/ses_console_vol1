@@ -58,10 +58,15 @@ function touchedFilesFromGit() {
 
 const allowedTouchedFiles = new Set([
   "app/api/dashboard-data/route.ts",
+  "app/api/persons/[id]/",
+  "app/api/persons/[id]/owner-company-contact/route.ts",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
+  "lib/person-owner-company-contact-link.ts",
+  "scripts/person-owner-link-api.test.ts",
   "scripts/person-owner-link-api-contract.test.ts",
   "scripts/company-contact-write-contract.test.ts",
   "scripts/person-company-contact-candidate-ui.test.ts",
@@ -85,6 +90,8 @@ const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
 const dashboardSource = readProjectFile("app/api/dashboard-data/route.ts");
 const ownerLinkRoutePath = "app/api/persons/[id]/owner-company-contact/route.ts";
+const ownerLinkHelperPath = "lib/person-owner-company-contact-link.ts";
+const ownerLinkDocsPath = "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md";
 
 for (const requiredText of [
   "PATCH /api/persons/[id]/owner-company-contact",
@@ -132,15 +139,56 @@ for (const requiredText of [
 }
 
 assert(packageSource.includes("test:person-owner-link-api-contract"), "package.json must expose the person owner link API contract test");
+assert(packageSource.includes("test:person-owner-link-api"), "package.json must expose the person owner link API implementation test");
 assert(packageSource.includes("npm run test:person-owner-link-api-contract"), "npm test must include the person owner link API contract test");
+assert(packageSource.includes("npm run test:person-owner-link-api"), "npm test must include the person owner link API implementation test");
 
 assert(!/export\s+(?:async\s+)?function\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons must not be introduced");
 assert(!/\bexport\s+const\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons must not be introduced");
 
-if (existsSync(path.join(rootDir, ownerLinkRoutePath))) {
-  const ownerLinkRouteSource = readProjectFile(ownerLinkRoutePath);
-  assert(!routeHasWriteHandler(ownerLinkRouteSource), `${ownerLinkRoutePath} must not expose a write handler yet`);
+assert(existsSync(path.join(rootDir, ownerLinkRoutePath)), `${ownerLinkRoutePath} must exist after implementation`);
+assert(existsSync(path.join(rootDir, ownerLinkHelperPath)), `${ownerLinkHelperPath} must exist after implementation`);
+assert(existsSync(path.join(rootDir, ownerLinkDocsPath)), `${ownerLinkDocsPath} must document the implementation`);
+
+const ownerLinkRouteSource = readProjectFile(ownerLinkRoutePath);
+const ownerLinkHelperSource = readProjectFile(ownerLinkHelperPath);
+const ownerLinkDocsSource = readProjectFile(ownerLinkDocsPath);
+
+assert(/\bexport\s+async\s+function\s+PATCH\b/.test(ownerLinkRouteSource), `${ownerLinkRoutePath} must expose PATCH`);
+assert(!/\bexport\s+(?:async\s+)?function\s+(POST|PUT|DELETE)\b/.test(ownerLinkRouteSource), `${ownerLinkRoutePath} must expose PATCH only`);
+assert(ownerLinkRouteSource.includes("requireAnyRole(request, [\"ADMIN\", \"MANAGER\"])"), "owner link route must allow only ADMIN/MANAGER");
+assert(ownerLinkRouteSource.includes("personOwnerCompanyContactLinkGuard"), "owner link route must use the feature guard");
+assert(ownerLinkRouteSource.indexOf("personOwnerCompanyContactLinkGuard") < ownerLinkRouteSource.indexOf("request.json()"), "feature guard must run before JSON body parsing");
+
+for (const requiredText of [
+  "COMPANY_CONTACT_LINK_WRITE_ENABLED",
+  "COMPANY_CONTACT_LINK_WRITE_TARGET",
+  "production",
+  "LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT",
+  "confirmCompanyContactLink",
+  "expectedOwnerCompanyId",
+  "expectedOwnerContactId",
+  "expectedUpdatedAt",
+  "company.findUnique",
+  "companyContact.findUnique",
+  "person.update",
+  "auditLog.create",
+  "$transaction",
+  "metadata",
+]) {
+  assert(ownerLinkHelperSource.includes(requiredText), `${ownerLinkHelperPath} must include: ${requiredText}`);
 }
+
+for (const forbiddenPattern of [
+  /\bcompany\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+  /\bcompanyContact\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+  /\bperson\s*\.\s*(create|createMany|upsert|delete|deleteMany)\s*\(/,
+]) {
+  assert(!forbiddenPattern.test(ownerLinkHelperSource), `owner link helper must not create/upsert/delete existing entities: ${forbiddenPattern}`);
+}
+
+assert(ownerLinkDocsSource.includes("PATCH /api/persons/[id]/owner-company-contact"), `${ownerLinkDocsPath} must document the route`);
+assert(ownerLinkDocsSource.includes("afterData.metadata"), `${ownerLinkDocsPath} must document current AuditLog metadata placement`);
 
 for (const forbiddenRouteDir of ["app/api/companies", "app/api/company-contacts"]) {
   for (const filePath of listFilesRecursively(forbiddenRouteDir)) {

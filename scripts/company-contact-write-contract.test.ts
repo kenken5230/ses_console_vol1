@@ -73,11 +73,16 @@ function sectionBetween(source: string, startNeedle: string, endNeedle: string) 
 
 const allowedTouchedFiles = new Set([
   "app/api/dashboard-data/route.ts",
+  "app/api/persons/[id]/",
+  "app/api/persons/[id]/owner-company-contact/route.ts",
   "components/ProjectDetailPane.jsx",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
+  "lib/person-owner-company-contact-link.ts",
+  "scripts/person-owner-link-api.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/company-contact-write-contract.test.ts",
