@@ -10,6 +10,7 @@ import MarketQualityAlerts from "../../components/market-analysis/MarketQualityA
 import MarketRankingTable from "../../components/market-analysis/MarketRankingTable";
 import MarketSummaryCards from "../../components/market-analysis/MarketSummaryCards";
 import { PRICE_BAND_LABELS } from "../../lib/market-analysis/constants";
+import { normalizeMarketAnalysisLimitInput } from "../../lib/market-analysis/ui-controls";
 
 const pageStyle = {
   background: "#f6f7f9",
@@ -230,11 +231,7 @@ function normalizeDefaultPeriod(filters) {
 
 function parseLimit(value) {
   if (value === null) return DEFAULT_LIMIT;
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_LIMIT;
-  return String(Math.trunc(parsed));
+  return normalizeMarketAnalysisLimitInput(value, DEFAULT_LIMIT);
 }
 
 function filtersFromParams(params) {
@@ -356,9 +353,10 @@ export default function MarketAnalysisPage() {
   }, [focusOnly, limit]);
 
   const changeLimit = useCallback((nextLimit) => {
+    const normalizedLimit = normalizeMarketAnalysisLimitInput(nextLimit);
     setSelectedDrilldown(null);
-    setLimit(nextLimit);
-    replaceMarketAnalysisUrl({ filters, focusOnly, limit: nextLimit });
+    setLimit(normalizedLimit);
+    replaceMarketAnalysisUrl({ filters, focusOnly, limit: normalizedLimit });
   }, [filters, focusOnly]);
 
   const changeFocusOnly = useCallback((nextFocusOnly) => {
@@ -489,6 +487,7 @@ export default function MarketAnalysisPage() {
             <MarketRankingTable
               columns={priceBandColumns}
               onRowSelect={selectDrilldown}
+              rowLimit={null}
               rows={data.priceBandRankings}
               selectedRow={selectedRowFor(selectedDrilldown, "priceBand")}
               title="単価帯別ランキング"

@@ -8,11 +8,13 @@ Market analysis UI and read-only API control fixes from `origin/main` commit `db
 
 - Replaced the fixed fetch-count select with a free numeric input.
 - Set the initial fetch count to `100`, ordered by newest records first through the existing `createdAt desc` API order.
-- Omit the `limit` query parameter when the fetch-count input is blank.
+- Normalize the fetch-count input to `1〜1000`; omit the `limit` query parameter when the fetch-count input is blank, meaning no fetch upper bound.
 - Default market-analysis period to the most recent 3 months when no period is specified.
 - Count cumulative projects, persons, and focus projects from `2026-01` with Prisma `count` queries instead of loading all records.
 - Changed price bands to 5万円 increments from `30万円以下` through `120万円以上`; `未設定` remains last.
 - Sort price-band rankings in natural price-band order instead of recruiting-count order.
+- Show all price-band ranking rows so `未設定` does not disappear behind the generic top-20 table display.
+- Label cumulative counts separately from the fetched/filter-applied ranking aggregation sample; when `focusOnly` is on, project counts state the focus scope and person counts remain labeled as all persons.
 - Preserve old shared `priceBand` URL keys by expanding them to the equivalent set of new 5万円 buckets.
 - Compacted ranking table spacing and right-aligned numeric cells with tabular numbers.
 - Added a visible link back to the original console screen.
