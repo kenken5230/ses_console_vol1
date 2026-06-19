@@ -52,71 +52,58 @@ const prefectures = [
 
 const createGroups = [
   {
-    title: "上位会社",
+    title: "必須項目",
+    priority: "必須",
     fields: [
-      { name: "upperCompanyName", label: "会社名", type: "text" },
+      { name: "upperCompanyName", label: "上位会社 / 入手元会社", type: "text", placeholder: "例: 株式会社○○" },
       { name: "tradeStatus", label: "取引可否", type: "select", options: ["未確認", "取引OK", "取引NG", "要確認"] },
-      { name: "tdbScore", label: "帝国データバンク点数", type: "number" }
+      { name: "workDescription", label: "業務内容", type: "textarea", placeholder: "例: ECサイトの機能追加、要件定義〜テスト" },
+      { name: "requiredSkills", label: "必須スキル", type: "textarea", placeholder: "例: Java、Spring Boot、SQL" },
+      { name: "projectStartMonth", label: "開始月", type: "month" },
+      { name: "prefecture", label: "勤務地（都道府県）", type: "select", options: prefectures },
+      { name: "workLocation", label: "勤務地（詳細）", type: "text", placeholder: "例: 東京都品川 / フルリモート" },
+      { name: "remoteType", label: "リモート条件", type: "select", options: ["未確認", "常駐", "リモート併用", "リモート", "フルリモート"] },
+      { name: "workEnvironment", label: "就業環境補足", type: "text", placeholder: "例: 週2出社、基本リモート" }
     ]
   },
   {
-    title: "作業内容",
+    title: "推奨項目",
+    priority: "推奨",
     fields: [
-      { name: "workDescription", label: "業務内容", type: "textarea" },
-      { name: "usedTechnologies", label: "使用技術", type: "textarea" },
-      { name: "requiredSkills", label: "必須スキル", type: "textarea" },
-      { name: "preferredSkills", label: "尚良スキル", type: "textarea" }
-    ]
-  },
-  {
-    title: "案件条件",
-    fields: [
-      { name: "company", label: "企業", type: "text" },
-      { name: "unitPrice", label: "単価", type: "number", suffix: "万円" },
-      { name: "recruitingCount", label: "募集人数", type: "number", suffix: "名" },
-      { name: "workload", label: "工数", type: "text" },
-      { name: "startMonth", label: "開始月", type: "month" },
-      { name: "workEnvironment", label: "就業環境", type: "text" },
-      { name: "prefecture", label: "都道府県", type: "select", options: prefectures },
-      { name: "workLocation", label: "作業場所", type: "text" },
-      { name: "skills", label: "スキル", type: "textarea" },
-      { name: "upperAmount", label: "上位金額", type: "number", suffix: "万円" },
-      { name: "settlementTimeRange", label: "精算時間幅", type: "text", placeholder: "例: 140〜180h" },
-      { name: "projectStartMonth", label: "案件開始月", type: "month" },
-      { name: "expectedWorkDaysPerWeek", label: "想定稼働日数", type: "number", suffix: "日/週" },
-      { name: "fixedWorkTime", label: "現場の定時", type: "text", placeholder: "例: 10:00〜19:00" },
-      { name: "coreTime", label: "コアタイム", type: "text", placeholder: "例: 11:00〜15:00" }
-    ]
-  },
-  {
-    title: "営業・契約条件",
-    fields: [
-      { name: "isFocus", label: "注力案件", type: "select", options: ["未選択", "該当", "非該当"] },
-      { name: "salesInterviewAttendanceRequired", label: "営業の面談同席の要否", type: "select", options: ["未確認", "必要", "不要"] },
+      { name: "unitPrice", label: "単価", type: "number", placeholder: "例: 80", suffix: "万円" },
+      { name: "settlementTimeRange", label: "精算幅", type: "text", placeholder: "例: 140〜180h" },
+      { name: "recruitingCount", label: "募集人数", type: "number", placeholder: "例: 2", suffix: "名" },
       { name: "contractType", label: "契約形態", type: "select", options: ["未確認", "準委任", "派遣", "請負", "その他"] },
       { name: "foreignNationalityPolicy", label: "外国籍の受け入れ", type: "select", options: ["未確認", "要確認", "可", "不可"] },
-      { name: "ageCondition", label: "年齢条件", type: "text" },
+      { name: "ageCondition", label: "年齢条件", type: "text", placeholder: "例: 50代前半まで" },
+      { name: "interviewCount", label: "面談回数", type: "number", placeholder: "例: 1", suffix: "回" },
+      { name: "preferredSkills", label: "尚良スキル", type: "textarea", placeholder: "例: React経験、AWS設計経験" },
+      { name: "usedTechnologies", label: "使用技術", type: "textarea", placeholder: "例: Java、Spring Boot、AWS" },
+      { name: "commerceFlow", label: "商流", type: "textarea", placeholder: "例: エンド → 元請 → 自社" },
+      { name: "isFocus", label: "注力案件", type: "select", options: ["未選択", "該当", "非該当"] },
+      { name: "upperContactName", label: "担当者名", type: "text", placeholder: "例: 山田 太郎" },
+      { name: "contact", label: "担当者連絡先", type: "text", placeholder: "メールまたは電話" }
+    ]
+  },
+  {
+    title: "任意項目",
+    priority: "任意",
+    fields: [
+      { name: "endUser", label: "エンドユーザー", type: "text", placeholder: "例: 株式会社△△" },
+      { name: "primeContractor", label: "元請", type: "text" },
+      { name: "secondaryContractor", label: "二次請け", type: "text" },
+      { name: "tertiaryContractor", label: "三次請け", type: "text" },
+      { name: "upperAmount", label: "上位金額", type: "number", placeholder: "例: 95", suffix: "万円" },
+      { name: "workload", label: "工数", type: "text", placeholder: "例: 1人月" },
+      { name: "expectedWorkDaysPerWeek", label: "想定稼働日数", type: "number", placeholder: "例: 5", suffix: "日/週" },
+      { name: "fixedWorkTime", label: "現場の定時", type: "text", placeholder: "例: 10:00〜19:00" },
+      { name: "coreTime", label: "コアタイム", type: "text", placeholder: "例: 11:00〜15:00" },
+      { name: "salesInterviewAttendanceRequired", label: "営業の面談同席の要否", type: "select", options: ["未確認", "必要", "不要"] },
       { name: "siteAtmosphere", label: "現場の雰囲気", type: "textarea" },
       { name: "dressCode", label: "作業時の服装", type: "text" },
       { name: "hairNailRule", label: "髪型、爪等の規定", type: "textarea" },
-      { name: "interviewCount", label: "面談回数", type: "number", suffix: "回" }
-    ]
-  },
-  {
-    title: "商流",
-    fields: [
-      { name: "commerceFlow", label: "商流", type: "textarea" },
-      { name: "endUser", label: "エンドユーザー", type: "text" },
-      { name: "primeContractor", label: "元請", type: "text" },
-      { name: "secondaryContractor", label: "二次請け", type: "text" },
-      { name: "tertiaryContractor", label: "三次請け", type: "text" }
-    ]
-  },
-  {
-    title: "担当者",
-    fields: [
-      { name: "upperContactName", label: "上位担当者", type: "text" },
-      { name: "contact", label: "連絡先", type: "text" },
+      { name: "tdbScore", label: "帝国データバンク点数", type: "number" },
+      { name: "skills", label: "その他スキル / メモ", type: "textarea" },
       { name: "createdBy", label: "案件作成者", type: "text" },
       { name: "createdAt", label: "案件作成日", type: "date" }
     ]
@@ -129,7 +116,8 @@ function FormControl({ disabled, field, value }) {
     defaultValue: value || "",
     disabled,
     name: field.name,
-    placeholder: field.placeholder || field.label
+    placeholder: field.placeholder || field.label,
+    required: field.required
   };
 
   if (field.type === "textarea") {
@@ -152,6 +140,12 @@ function FormControl({ disabled, field, value }) {
   }
 
   return <input {...commonProps} type={field.type} />;
+}
+
+function PriorityBadge({ value }) {
+  if (!value) return null;
+  const priorityClass = { 必須: "required", 推奨: "recommended", 任意: "optional" }[value] || "neutral";
+  return <span className={`field-priority ${priorityClass}`}>{value}</span>;
 }
 
 export default function ProjectCreateDrawer({ initialValues = {}, mode = "create", onClose, onSaved, projectId }) {
@@ -223,7 +217,10 @@ export default function ProjectCreateDrawer({ initialValues = {}, mode = "create
         <form className="detail-scroll create-drawer-form" onSubmit={handleSubmit}>
           <section className="detail-hero create-hero">
             <label>
-              <span className="drawer-eyebrow">案件名</span>
+              <span className="create-label-row">
+                <span className="drawer-eyebrow">案件名</span>
+                <PriorityBadge value="必須" />
+              </span>
               <input defaultValue={initialValues.title || ""} disabled={isSaving} name="title" placeholder="案件名を入力" required type="text" />
             </label>
             {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
@@ -232,11 +229,17 @@ export default function ProjectCreateDrawer({ initialValues = {}, mode = "create
           <div className="detail-groups">
             {createGroups.map((group) => (
               <section className="detail-group" key={group.title}>
-                <h3>{group.title}</h3>
+                <h3>
+                  <span>{group.title}</span>
+                  <PriorityBadge value={group.priority} />
+                </h3>
                 <div className="create-group-body">
                   {group.fields.map((field) => (
                     <label className={`create-field ${field.type === "textarea" ? "wide" : ""}`} key={field.name}>
-                      <span>{field.label}</span>
+                      <span className="create-label-row">
+                        <span>{field.label}</span>
+                        <PriorityBadge value={field.priority || group.priority} />
+                      </span>
                       <div className="create-control-row">
                         <FormControl disabled={isSaving} field={field} value={initialValues[field.name]} />
                         {field.suffix ? <em>{field.suffix}</em> : null}
