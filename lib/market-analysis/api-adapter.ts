@@ -13,6 +13,9 @@ import {
 } from "./anonymous-examples";
 import {
   CONTRACT_TYPE_KEYS,
+  MARKET_ANALYSIS_DEFAULT_LIMIT,
+  MARKET_ANALYSIS_MAX_LIMIT,
+  MARKET_ANALYSIS_RANKING_LIMIT,
   PRICE_BAND_LEGACY_KEY_MAP,
   PRICE_BANDS,
   UNKNOWN_REGION,
@@ -40,9 +43,11 @@ import type {
   WorkStyleKey,
 } from "./types";
 
-export const MARKET_ANALYSIS_DEFAULT_LIMIT = 100;
-export const MARKET_ANALYSIS_MAX_LIMIT = 1000;
-export const MARKET_ANALYSIS_RANKING_LIMIT = 50;
+export {
+  MARKET_ANALYSIS_DEFAULT_LIMIT,
+  MARKET_ANALYSIS_MAX_LIMIT,
+  MARKET_ANALYSIS_RANKING_LIMIT,
+} from "./constants";
 export const MARKET_ANALYSIS_CUMULATIVE_FROM_MONTH = "2026-01";
 
 type PriceBandFilter = PriceBandKey | PriceBandKey[];

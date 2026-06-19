@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { inferGmailCompanyCandidate } from "./gmail-company-candidate";
 import { classifyMailExtractionQuality, extractFromMail, extractPersonFromMail, extractProjectFromMail, type MailExtractionSource } from "./gmail-extraction";
 import { assertNoSensitiveOutput, buildAnonymizedIssueRow } from "./gmail-extraction-quality-report";
 
@@ -122,6 +123,69 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   assertNoSensitiveOutput(output);
   assert.equal(output.includes("sample@example.test"), false);
   assert.equal(output.includes("山田太郎"), false);
+}
+
+{
+  const candidate = inferGmailCompanyCandidate({
+    bodyLabelCompany: "Body Label Systems Inc.",
+    fromEmail: "sender@relay.example.invalid",
+  });
+  assert.equal(candidate.candidateName, "Body Label Systems Inc.");
+  assert.equal(candidate.source, "body_label");
+  assert.equal(candidate.confidence, "HIGH");
+  assert.ok(candidate.reasonCodes.includes("BODY_LABEL_COMPANY"));
+}
+
+{
+  const candidate = inferGmailCompanyCandidate({
+    fromName: "Taro Yamada / FromName Systems Inc.",
+    fromEmail: "taro@gmail.com",
+  });
+  assert.equal(candidate.candidateName, "FromName Systems Inc.");
+  assert.equal(candidate.source, "from_name");
+  assert.equal(candidate.candidateName?.includes("Taro Yamada"), false);
+}
+
+{
+  const candidate = inferGmailCompanyCandidate({
+    fromName: "Fixture Sender",
+    fromEmail: "sender@engineering.domain-match.example.invalid",
+    knownCompanies: [{ name: "Known Domain Company", mainEmailDomain: "domain-match.example.invalid" }],
+  });
+  assert.equal(candidate.candidateName, "Known Domain Company");
+  assert.equal(candidate.source, "known_main_email_domain");
+  assert.equal(candidate.confidence, "HIGH");
+}
+
+{
+  const candidate = inferGmailCompanyCandidate({
+    fromName: "Alias Labs recruiting",
+    fromEmail: "sender@gmail.com",
+    knownCompanies: [{ name: "Known Alias Company", aliases: ["Alias Labs"] }],
+  });
+  assert.equal(candidate.candidateName, "Known Alias Company");
+  assert.equal(candidate.source, "known_alias");
+}
+
+{
+  const candidate = inferGmailCompanyCandidate({
+    fromName: "Taro Yamada",
+    fromEmail: "taro@gmail.com",
+  });
+  assert.equal(candidate.candidateName, null);
+  assert.equal(candidate.source, "generic_domain");
+  assert.equal(candidate.confidence, "LOW");
+  assert.equal(candidate.isGenericDomain, true);
+}
+
+{
+  const candidate = inferGmailCompanyCandidate({
+    fromEmail: "sales@relay.example.invalid",
+    bodyText: "Regards,\nSignature Systems LLC\nSales Team\n",
+  });
+  assert.equal(candidate.candidateName, "Signature Systems LLC");
+  assert.equal(candidate.source, "signature_company");
+  assert.equal(candidate.confidence, "MEDIUM");
 }
 
 console.log("gmail extraction quality tests passed");

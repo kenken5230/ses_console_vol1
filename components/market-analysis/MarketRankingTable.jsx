@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { MARKET_ANALYSIS_VISIBLE_RANKING_LIMIT, visibleMarketRankingRows } from "../../lib/market-analysis/ui-controls";
+
 const sectionStyle = {
   background: "#fff",
   border: "1px solid var(--line)",
@@ -161,10 +163,19 @@ async function copyText(text) {
   return true;
 }
 
-export default function MarketRankingTable({ columns, onRowSelect, rows = [], selectedRow = null, title, type }) {
+export default function MarketRankingTable({
+  columns,
+  onRowSelect,
+  rowLimit = MARKET_ANALYSIS_VISIBLE_RANKING_LIMIT,
+  rows = [],
+  selectedRow = null,
+  title,
+  type,
+}) {
   const [copied, setCopied] = useState(false);
-  const visibleRows = rows.slice(0, 20);
+  const visibleRows = visibleMarketRankingRows(rows, rowLimit);
   const isClickable = Boolean(onRowSelect);
+  const countLabel = rowLimit === null ? `全${visibleRows.length}件` : `上位${visibleRows.length}件`;
 
   async function handleCopy() {
     const header = columns.map((column) => column.label).join("\t");
@@ -180,7 +191,7 @@ export default function MarketRankingTable({ columns, onRowSelect, rows = [], se
       <div style={headerStyle}>
         <h2 style={titleStyle}>{title}</h2>
         <div style={headerActionsStyle}>
-          <span style={{ color: "#64748b", fontSize: 12, fontWeight: 800 }}>上位{visibleRows.length}件</span>
+          <span style={{ color: "#64748b", fontSize: 12, fontWeight: 800 }}>{countLabel}</span>
           <button disabled={!visibleRows.length} onClick={handleCopy} style={copyButtonStyle} type="button">
             {copied ? "コピー済み" : "表をコピー"}
           </button>
