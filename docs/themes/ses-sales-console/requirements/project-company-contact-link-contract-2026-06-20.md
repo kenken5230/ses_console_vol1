@@ -110,7 +110,7 @@ Unknown `reasonCode` values return `400` and must not reach write logic.
 - `roleOrder` and `isPrimary` must be derived from the role decision table and must not be accepted from the payload.
 - Unknown `reasonCode` values are rejected before any create, upsert, update, delete, or AuditLog write.
 - Existing same `projectId + role` returns `409`; the route must not overwrite an existing role.
-- Filling in only `companyContactId` for an existing role is out of scope and requires a separate PR and separate approval.
+- Filling in only `companyContactId` for an existing role is out of scope and requires separate approval and evidence. Whether it is handled in a separate PR or explicitly deferred within the current PR is a PM gate decision.
 - The future route must not call the broad `/api/projects` PATCH handler internally.
 
 ## Stale Write Detection
@@ -154,7 +154,7 @@ The guarded project detail UI may use this narrow route only after a candidate i
 - Real DB write smoke.
 - Deployment.
 
-Smoke testing and real DB writes require a separate approval and a separate PR.
+Smoke testing and real DB writes require separate approval/evidence and a separate execution record. The PM gate may explicitly defer real DB smoke and/or Browser QA before Ready, but Ready must not imply those checks were completed unless evidence is recorded.
 
 ## Implementation Status
 

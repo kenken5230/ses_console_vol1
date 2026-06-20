@@ -118,14 +118,24 @@ Closed or ready to close:
 - Docs push auditor: verified Draft/open, no Ready/merge, no `next-env.d.ts` inclusion.
 - PR body update executor: updated PR body.
 - PR body auditor: verified body and Draft/open state.
+- Handoff commit executor: added this handoff file to PR #89.
+- Handoff commit auditor: verified the commit scope, then found live-head self-reference drift.
+- Handoff self-reference executor: replaced live head fixed-SHA wording with "verify on GitHub before acting".
+- Handoff self-reference auditor: approved the self-reference fix.
+- Sequence 2 executor: proposed the Ready checklist, DB smoke runbook expansion, Browser QA checklist, and status index update.
+- Sequence 2 auditor: prepared safety criteria for the proposed checklist/runbook content.
+- Sequence 2 PMO: confirmed PC-unavailable work should stay read-only/planning/checklist oriented.
+- Sequence 2 technical lead: confirmed #89 is implementation-complete but blocked on real DB smoke and login-after Browser QA.
 
 Open concern:
 
 - If any completed sub-agent remains open in the tool state, it can be closed after this handoff is saved.
 
-## Four-Role Operating Rule
+## Minimum Four-Role Operating Rule
 
-Target roles:
+This is a minimum four-role operating rule. The preferred model is a five-role model including Parent PM.
+
+Preferred five-role model:
 
 1. Parent PM: owns task order, approvals, and final integration.
 2. Executor sub-agent: performs one bounded task.
@@ -133,12 +143,12 @@ Target roles:
 4. PMO monitor: checks process, forbidden actions, and status clarity.
 5. Technical lead monitor: checks technical risk and readiness gates.
 
-If sub-agent limits prevent all four non-parent roles from staying open:
+Minimum four-role fallback:
 
-- Keep executor + audit active on the immediate task.
-- Re-open PMO and technical lead at every major gate.
-- Record which roles are active and which are paused.
-- Do not silently collapse the workflow to two roles.
+- Keep Parent PM, executor, audit, and at least one of PMO or technical lead active.
+- Re-open the paused PMO or technical lead role at every major gate, especially before DB write, Ready, merge, deploy, cleanup, or commit.
+- Record which roles are active and which role is paused.
+- Do not silently collapse the workflow to Parent PM + executor, or executor + audit only.
 
 ## PC-Not-Available Work Queue
 
@@ -154,8 +164,61 @@ Can proceed without local secrets:
 7. Review docs for old or contradictory status after #88/#89.
 8. Continue sequence 2 planning where it does not require DB, local login, or destructive cleanup.
 
+Current sequence 2 doc targets:
+
+1. Add a dedicated Ready checklist:
+   - `docs/status/project-company-contact-role-link-ready-checklist-2026-06-21.md`
+   - It must separate `Not run`, `Blocked`, `Pass`, and `Fail`.
+   - It must not present DB smoke or Browser QA as completed.
+2. Expand the project company/contact role link smoke runbook:
+   - `docs/themes/ses-sales-console/operations/project-company-contact-role-link-smoke-runbook-2026-06-20.md`
+   - It should include DB target classification, read-only preflight, fixture scope, write cases, rollback/cleanup, required report, and hard stop conditions.
+3. Add a PR #89 specific Browser QA section:
+   - Prefer placing it in the new Ready checklist.
+   - Normal login only; no auth bypass, cookie injection, token injection, or auth proxy.
+4. Update status discovery:
+   - Add the new checklist to `docs/status/README.md`.
+
+Required wording for not-yet-run work:
+
+- `Real DB write smoke: Not run. Blocked by missing process-only local/test env and fixture approval.`
+- `Browser QA after login: Not run. Normal-auth session was unavailable in this no-PC pass.`
+- `DB classification command: drafted/audited only unless an actual classification output is recorded.`
+- `Ready for review remains blocked until DB/Browser QA evidence is recorded or explicitly deferred by the PM gate.`
+
 Blocked until PC/env access:
 
 1. Actual login-after Browser QA.
 2. Real DB write smoke.
 3. Any cleanup that requires interactive confirmation of local state.
+
+## Sequence 2 Docs Handoff
+
+Docs target for this sub-agent pass:
+
+- Add `docs/status/project-company-contact-role-link-ready-checklist-2026-06-21.md`.
+- Expand `docs/themes/ses-sales-console/operations/project-company-contact-role-link-smoke-runbook-2026-06-20.md`.
+- Add the checklist link to `docs/status/README.md`.
+- Keep this `docs/status/pm-handoff-2026-06-21.md` consistent with the PMO wording correction and final handoff.
+- Update `docs/themes/ses-sales-console/requirements/project-company-contact-link-contract-2026-06-20.md` so real DB write smoke requires separate approval/execution evidence, while separate PR vs PM deferral remains a PM gate decision.
+- Technical lead follow-up added detailed Browser QA checks for candidate display, `projectCompanyContactRoleLinkWriteAllowed`, role/reason/confirmation behavior, disabled submit states, narrow route usage, reload/reselect, no optimistic write, role permissions, `409`/`403` display, visual integrity, and PR body/comment sync fields.
+
+Forbidden operations not performed in this pass:
+
+- No DB connection, DB write, migration, seed, reset, deploy, Ready, merge, close, stage, commit, worktree deletion, package/schema/env change, auth bypass, cookie injection, token injection, or proxy login.
+
+Still incomplete / blocked gates:
+
+- `Real DB write smoke: Not run. Blocked by missing process-only local/test env and fixture approval.`
+- `Browser QA after login: Not run. Normal-auth session was unavailable in this no-PC pass.`
+- `DB classification command: drafted/audited only unless an actual classification output is recorded.`
+- `Ready for review remains blocked until DB/Browser QA evidence is recorded or explicitly deferred by the PM gate.`
+
+Next audit / commit-before checks:
+
+- Re-run `git diff --check`.
+- Re-run `git diff --name-status`.
+- Re-run `git diff --name-status --diff-filter=D`.
+- Re-run `git diff --stat`.
+- Confirm changed files are docs-only and no DB/schema/env/package/lockfile changes are present.
+- Before any Ready consideration, sync PR body/comment with latest PR head, changed files count, DB smoke status, Browser QA status, deferral state, deleted files, and DB/schema/env/package/lockfile change status.
