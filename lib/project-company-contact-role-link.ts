@@ -1,10 +1,17 @@
 import type { AuthUser } from "./auth";
+import {
+  companyLinkTradeStatusReasonCode,
+  findUnsafeLinkPayloadField,
+  isAllowedNonProductionLinkWriteTarget,
+  isCompanyContactLinkWriterRole,
+  isLinkProductionRuntime,
+  LINK_NON_PRODUCTION_WRITE_TARGETS,
+  LINK_SENSITIVE_VALUE_PATTERNS,
+} from "./link-safety-policy";
 
 export const PROJECT_COMPANY_CONTACT_ROLE_LINK_INTENT = "LINK_EXISTING_PROJECT_COMPANY_CONTACT_ROLE";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const BLOCKED_TRADE_STATUSES = new Set(["NG", "NEEDS_REVIEW", "SUSPENDED"]);
-const ALLOWED_WRITE_TARGETS = ["local", "test", "staging"] as const;
 
 export const PROJECT_COMPANY_CONTACT_ROLE_VALUES = [
   "UPPER_COMPANY",
@@ -65,57 +72,7 @@ const REQUIRED_BODY_KEYS = [
   "confirmationToken",
 ] as const;
 
-const FORBIDDEN_TOP_LEVEL_KEYS = new Set([
-  "body",
-  "bodyText",
-  "comment",
-  "comments",
-  "company",
-  "companyName",
-  "contact",
-  "contactEmail",
-  "contactName",
-  "customer",
-  "customerData",
-  "csvRawValue",
-  "email",
-  "emailAddress",
-  "freeNote",
-  "fullBody",
-  "fullNote",
-  "fullNotes",
-  "generatedMemo",
-  "isPrimary",
-  "mailBody",
-  "memo",
-  "name",
-  "note",
-  "notes",
-  "phone",
-  "phoneText",
-  "project",
-  "projectId",
-  "projectName",
-  "rawBody",
-  "rawCsv",
-  "rawMailBody",
-  "rawSourcePayload",
-  "rawText",
-  "rawValue",
-  "roleOrder",
-  "sourceBody",
-  "subject",
-  "text",
-]);
-
-const SENSITIVE_VALUE_PATTERNS = [
-  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
-  /\b(?:postgres(?:ql)?|mysql|sqlserver):\/\//i,
-  /\bBearer\s+[A-Za-z0-9._-]+/i,
-  /\b(?:api[_-]?key|password|secret|token)\s*[:=]/i,
-  /[A-Za-z]:\\(?:Users|OneDrive|Documents|Desktop|Downloads)\\/i,
-  /\\\\[A-Za-z0-9_.-]+\\[A-Za-z0-9_.-]+/,
-];
+const DERIVED_BODY_KEYS = ["roleOrder", "isPrimary"] as const;
 
 const projectSelect = {
   id: true,
@@ -231,7 +188,7 @@ function requiredTimestampValue(body: Record<string, unknown>, field: string) {
   }
 
   const value = body[field];
-  if (typeof value !== "string" || SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value))) {
+  if (typeof value !== "string" || LINK_SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value))) {
     throw new ProjectCompanyContactRoleLinkRequestError(`${field} must be a valid timestamp`);
   }
 
@@ -257,28 +214,21 @@ function reasonCodeValue(value: unknown) {
   return value as ProjectCompanyContactRoleReasonCode;
 }
 
-function containsSensitiveValue(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "string") return SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value));
-  if (Array.isArray(value)) return value.some(containsSensitiveValue);
-  if (!isObject(value)) return false;
-  return Object.values(asRecord(value)).some(containsSensitiveValue);
-}
-
 function isPrismaRecordNotFoundError(error: unknown) {
   return asRecord(error).code === "P2025";
 }
 
 function assertNoUnsupportedOrRawFields(body: Record<string, unknown>) {
-  for (const [key, value] of Object.entries(body)) {
-    if (!ALLOWED_BODY_KEYS.has(key) || FORBIDDEN_TOP_LEVEL_KEYS.has(key)) {
-      throw new ProjectCompanyContactRoleLinkRequestError("Request contains unsupported raw, note, or customer data fields");
-    }
+  const unsafeField = findUnsafeLinkPayloadField(body, ALLOWED_BODY_KEYS, {
+    extraForbiddenKeys: DERIVED_BODY_KEYS,
+  });
+  if (!unsafeField) return;
 
-    if (containsSensitiveValue(value)) {
-      throw new ProjectCompanyContactRoleLinkRequestError("Request contains unsafe raw or customer data values");
-    }
+  if (unsafeField.kind === "unsupported-key") {
+    throw new ProjectCompanyContactRoleLinkRequestError("Request contains unsupported raw, note, or customer data fields");
   }
+
+  throw new ProjectCompanyContactRoleLinkRequestError("Request contains unsafe raw or customer data values");
 }
 
 function safeRecordId(record: unknown) {
@@ -354,18 +304,15 @@ export function projectCompanyContactRoleLinkGuard(
 ): ProjectCompanyContactRoleLinkGuard {
   const enabled = env.PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_ENABLED === "true";
   const rawTarget = env.PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET;
-  const target: ProjectCompanyContactRoleLinkTarget = rawTarget === "local"
-    || rawTarget === "test"
-    || rawTarget === "staging"
-    || rawTarget === "production"
+  const target: ProjectCompanyContactRoleLinkTarget = isAllowedNonProductionLinkWriteTarget(rawTarget)
     ? rawTarget
-    : "unsupported";
-  const productionRuntime = target === "production"
-    || env.NODE_ENV === "production"
-    || env.VERCEL_ENV === "production";
+    : rawTarget === "production"
+      ? "production"
+      : "unsupported";
+  const productionRuntime = isLinkProductionRuntime(env, target);
 
   return {
-    allowed: enabled && ALLOWED_WRITE_TARGETS.includes(target as (typeof ALLOWED_WRITE_TARGETS)[number]) && !productionRuntime,
+    allowed: enabled && LINK_NON_PRODUCTION_WRITE_TARGETS.includes(target as (typeof LINK_NON_PRODUCTION_WRITE_TARGETS)[number]) && !productionRuntime,
     enabled,
     target,
     productionRuntime,
@@ -406,7 +353,7 @@ export function projectCompanyContactRoleLinkErrorResponse(error: ProjectCompany
 export function isProjectCompanyContactRoleLinkUser(user: unknown): user is ProjectCompanyContactRoleLinkUser {
   const record = asRecord(user);
   return typeof record.id === "string"
-    && (record.role === "ADMIN" || record.role === "MANAGER")
+    && isCompanyContactLinkWriterRole(record.role)
     && record.isActive !== false;
 }
 
@@ -503,11 +450,12 @@ export async function linkExistingProjectCompanyContactRole(
   }
 
   const tradeStatus = safeTradeStatus(company);
-  if (BLOCKED_TRADE_STATUSES.has(tradeStatus)) {
+  const tradeStatusReasonCode = companyLinkTradeStatusReasonCode(tradeStatus);
+  if (tradeStatusReasonCode) {
     throw new ProjectCompanyContactRoleLinkRequestError(
       "Company trade status requires manual review before linking.",
       409,
-      `COMPANY_TRADE_STATUS_${tradeStatus}`,
+      tradeStatusReasonCode,
     );
   }
 
@@ -611,7 +559,7 @@ export async function linkExistingProjectCompanyContactRole(
 }
 
 export function assertNoSensitiveProjectCompanyContactRoleLinkOutput(output: string) {
-  for (const pattern of SENSITIVE_VALUE_PATTERNS) {
+  for (const pattern of LINK_SENSITIVE_VALUE_PATTERNS) {
     if (pattern.test(output)) {
       throw new Error("Sensitive project company/contact role link output detected");
     }
