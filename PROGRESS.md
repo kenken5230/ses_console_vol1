@@ -1,6 +1,6 @@
 # Project Progress
 
-Updated: 2026-06-20 21:10 JST
+Updated: 2026-06-20 22:49 JST
 
 This file is the current project snapshot. Dated history belongs in `docs/status/progress-log-YYYY-MM-DD.md` or in a focused status/runbook document.
 
@@ -8,8 +8,8 @@ This file is the current project snapshot. Dated history belongs in `docs/status
 
 | Item | State | Notes |
 |---|---|---|
-| Latest `origin/main` | `cedd740b4d45ca076216b4c45887b6f809e1a2f7` | Merge commit for PR #87. |
-| Recent final PR results | #82 merged at `b0d4cc1`; #83 merged at `c3082a8`; #84 merged at `b2df444`; #85 merged at `fee6581`; #86 merged at `89e38ed`; #87 merged at `cedd740` | Keep only final outcomes here. Details are in `docs/status/progress-log-2026-06-20.md`. |
+| Latest `origin/main` | `da54eb43078c86c58adb143cc761602fee27f11a` | Merge commit for PR #88 docs sync after PR #87. |
+| Recent final PR results | #82 merged at `b0d4cc1`; #83 merged at `c3082a8`; #84 merged at `b2df444`; #85 merged at `fee6581`; #86 merged at `89e38ed`; #87 merged at `cedd740`; #88 merged at `da54eb4` | Keep only final outcomes here. Details through #87 are in `docs/status/progress-log-2026-06-20.md`. |
 | Original active workspace | Dirty and old | `C:\Users\ke919\OneDrive\ドキュメント\1234project\ses_console_vol1` has many pre-existing modified/untracked files on `codex/market-analysis-docs`. Do not use it as a base for new PR work. |
 | New work base | Clean worktree from latest `origin/main` | Fetch first, verify the base commit, then create a separate worktree/branch. |
 
@@ -19,6 +19,7 @@ This file is the current project snapshot. Dated history belongs in `docs/status
 - If implementation is involved, also read `docs/shared/quality/two-pass-task-test-policy-v0.1.md`.
 - Keep `PROGRESS.md` focused on current facts, open risks, and next choices.
 - Put completed task details, PR-by-PR history, and time-sensitive observations in dated progress logs or focused status docs.
+- After a PR merges, fetch `origin/main`, verify the merge commit, and sync this snapshot plus the dated progress log when the merge changes current state.
 - Do not write secrets, DB connection URLs, passwords, cookies, tokens, or raw personal data into docs.
 - Do not edit the old dirty active workspace for new PRs unless the user explicitly asks for that workspace.
 
@@ -27,7 +28,7 @@ This file is the current project snapshot. Dated history belongs in `docs/status
 | Area | Current status | Next decision or action |
 |---|---|---|
 | Person owner link HTTP smoke | Runbook and read-only preflight preparation are merged in #84. The real HTTP smoke body has not been executed. | Select approved synthetic/disposable fixtures, run read-only preflight on the approved target, then request explicit approval before any DB write smoke. |
-| Project company/contact role link | Contract (#83), API (#85), shared safety policy (#86), and docs sync (#87) are merged. Guarded project detail UI is being implemented in a clean worktree. Real DB write smoke has not been run. | Validate the UI/helper tests from the clean worktree. Run smoke only under the approved runbook/fixture process. |
+| Project company/contact role link | Contract (#83), API (#85), shared safety policy (#86), progress snapshot/log split (#87), and docs sync (#88) are merged. Guarded project detail UI is being implemented in a clean worktree. Real DB write smoke has not been run. | Validate the UI/helper tests from the clean worktree. Run smoke only under the approved runbook/fixture process. |
 | Staging/production operations | No deploy, staging DB operation, production DB operation, migration, or schema change is part of the latest docs/status work. | Keep these behind explicit owner approval and documented rollback/evidence requirements. |
 | Browser/UI QA | Several flows have code-level tests, but manual browser/UI QA remains separate where status docs call it out. | Run browser QA from a clean latest-main worktree when the user asks for visual or interaction verification. |
 | SearchHistory DB-backed work | PM investigations still treat the stale #55 path as needing a latest-main rebuild, not a direct merge. | Use `docs/status/pm-investigations/2026-06-17/README.md` before planning #55R or DB-backed SearchHistory work. |
