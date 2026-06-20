@@ -32,6 +32,23 @@ Allowed role enum values are the current `ProjectCompanyRoleType` values:
 
 `roleOrder` and `isPrimary` are not accepted from the client. The future route must derive them from `role` server-side.
 
+Any payload containing `roleOrder` or `isPrimary` returns `400` and must not reach write logic.
+
+Server-derived role decision table:
+
+| `role` | `roleOrder` | `isPrimary` | Meaning |
+|---|---:|---|---|
+| `UPPER_COMPANY` | `1` | `true` | Primary upper company link. |
+| `END_USER` | `2` | `false` | End-user/end-client company link. |
+| `PRIME_CONTRACTOR` | `3` | `false` | Prime contractor company link. |
+| `SECONDARY_CONTRACTOR` | `4` | `false` | Secondary contractor company link. |
+| `TERTIARY_CONTRACTOR` | `5` | `false` | Tertiary contractor company link. |
+| `ACCOUNT_MANAGER_COMPANY` | `80` | `false` | Account manager company link outside commerce-flow ordering. |
+| `PROPOSAL_TARGET` | `90` | `false` | Proposal target company link outside commerce-flow ordering. |
+| `OTHER` | `99` | `false` | Explicit fallback role, sorted last. |
+
+The table above is exhaustive for current schema/contract values. `END_CLIENT`, `CLIENT`, and `PARTNER` are not accepted role values unless a future schema/contract update adds them to `ProjectCompanyRoleType`.
+
 ## Auth
 
 - Allowed roles: `ADMIN` and `MANAGER` only.
@@ -59,12 +76,26 @@ Example:
   "contactId": "contact-uuid",
   "role": "UPPER_COMPANY",
   "expectedUpdatedAt": "2026-06-20T00:00:00.000Z",
-  "reasonCode": "PROJECT_COMPANY_CONTACT_CANDIDATE_CONFIRMED",
+  "reasonCode": "candidate_verified",
   "confirmationToken": "project-company-contact-role-link:project-uuid:UPPER_COMPANY:company-uuid:contact-uuid"
 }
 ```
 
 Any unsupported top-level field is rejected before write logic. The route must reject raw mail body, free note, customer data, generated memo, names, emails, phone text, source body, and arbitrary comments. The payload contains identifiers, enum values, a stale token, and a bounded reason only.
+
+## Reason Code Contract
+
+`reasonCode` is required for this write and must be one of the bounded enum values below. No raw/free text reason is accepted.
+
+Allowed `reasonCode` enum values are:
+
+- `candidate_verified`
+- `manual_admin_review`
+- `sales_ops_cleanup`
+- `stale_candidate_recheck`
+- `duplicate_role_cleanup`
+
+Unknown `reasonCode` values return `400` and must not reach write logic.
 
 ## Validation Rules
 
@@ -74,6 +105,8 @@ Any unsupported top-level field is rejected before write logic. The route must r
 - `CompanyContact.isActive=false` returns `409` with `manual-review` or refusal.
 - Company `tradeStatus` values `NG`, `NEEDS_REVIEW`, and `SUSPENDED` return `409` with `manual-review` or refusal.
 - `role` must be one of the allowed `ProjectCompanyRoleType` enum values.
+- `roleOrder` and `isPrimary` must be derived from the role decision table and must not be accepted from the payload.
+- Unknown `reasonCode` values are rejected before any create, upsert, update, delete, or AuditLog write.
 - Existing same `projectId + role` returns `409`; the route must not overwrite an existing role.
 - Filling in only `companyContactId` for an existing role is out of scope and requires a separate PR and separate approval.
 - The future route must not call the broad `/api/projects` PATCH handler internally.
@@ -131,6 +164,9 @@ Smoke testing and real DB writes require a separate approval and a separate PR.
 - Company/contact mismatch returns `409`.
 - Inactive contact returns `409`.
 - `NG`, `NEEDS_REVIEW`, and `SUSPENDED` company statuses return `409`.
+- Unknown `reasonCode` is rejected.
+- `roleOrder` and `isPrimary` payload fields are rejected.
+- The role decision table covers every allowed `ProjectCompanyRoleType` value.
 - Stale `Project.updatedAt` returns `409`.
 - Existing same `projectId + role` returns `409` without overwrite.
 - Unsupported raw fields are rejected.

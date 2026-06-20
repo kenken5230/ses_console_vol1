@@ -46,6 +46,25 @@ const scriptPath = "scripts/project-company-contact-link-contract.test.ts";
 const packagePath = "package.json";
 const progressPath = "PROGRESS.md";
 
+const allowedReasonCodes = [
+  "candidate_verified",
+  "manual_admin_review",
+  "sales_ops_cleanup",
+  "stale_candidate_recheck",
+  "duplicate_role_cleanup"
+] as const;
+
+const roleDerivationTable = [
+  { role: "UPPER_COMPANY", roleOrder: 1, isPrimary: true },
+  { role: "END_USER", roleOrder: 2, isPrimary: false },
+  { role: "PRIME_CONTRACTOR", roleOrder: 3, isPrimary: false },
+  { role: "SECONDARY_CONTRACTOR", roleOrder: 4, isPrimary: false },
+  { role: "TERTIARY_CONTRACTOR", roleOrder: 5, isPrimary: false },
+  { role: "ACCOUNT_MANAGER_COMPANY", roleOrder: 80, isPrimary: false },
+  { role: "PROPOSAL_TARGET", roleOrder: 90, isPrimary: false },
+  { role: "OTHER", roleOrder: 99, isPrimary: false }
+] as const;
+
 const allowedTouchedFiles = new Set([
   docsPath,
   scriptPath,
@@ -90,18 +109,28 @@ for (const requiredText of [
   "`PROPOSAL_TARGET`",
   "`OTHER`",
   "`roleOrder` and `isPrimary` are not accepted from the client",
+  "Any payload containing `roleOrder` or `isPrimary` returns `400` and must not reach write logic.",
+  "Server-derived role decision table:",
+  "`END_CLIENT`, `CLIENT`, and `PARTNER` are not accepted role values",
   "Allowed roles: `ADMIN` and `MANAGER` only",
   "Forbidden roles: `SALES`",
   "PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_ENABLED=true",
   "`local`, `test`, or `staging`",
   "PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET=production",
   "Allowed request fields: `companyId`, `contactId`, `role`, `expectedUpdatedAt`, `reasonCode`, `confirmationToken`.",
+  "\"reasonCode\": \"candidate_verified\"",
   "reject raw mail body, free note, customer data",
+  "`reasonCode` is required for this write",
+  "No raw/free text reason is accepted.",
+  "Allowed `reasonCode` enum values are:",
+  "Unknown `reasonCode` values return `400` and must not reach write logic.",
   "Existing `Company` and existing `CompanyContact` only",
   "never creates or upserts companies or contacts",
   "`contact.companyId` must equal `companyId`",
   "`CompanyContact.isActive=false` returns `409`",
   "Company `tradeStatus` values `NG`, `NEEDS_REVIEW`, and `SUSPENDED` return `409`",
+  "`roleOrder` and `isPrimary` must be derived from the role decision table",
+  "Unknown `reasonCode` values are rejected before any create, upsert, update, delete, or AuditLog write.",
   "Existing same `projectId + role` returns `409`",
   "must not overwrite an existing role",
   "Contact-only completion of an existing role",
@@ -115,6 +144,9 @@ for (const requiredText of [
   "same transaction",
   "UI must reload/reselect the project from server data",
   "must not apply an optimistic write",
+  "Unknown `reasonCode` is rejected.",
+  "`roleOrder` and `isPrimary` payload fields are rejected.",
+  "The role decision table covers every allowed `ProjectCompanyRoleType` value.",
   "Smoke testing and real DB writes require a separate approval and a separate PR"
 ]) {
   assert(docsSource.includes(requiredText), `${docsPath} must include: ${requiredText}`);
@@ -133,18 +165,19 @@ const projectModel = sectionBetween(schemaSource, "model Project {", "model Proj
 assert(projectModel.includes("updatedAt"), "Project.updatedAt must be available for stale write detection");
 
 const roleEnum = sectionBetween(schemaSource, "enum ProjectCompanyRoleType {", "enum ProjectSkillType {");
-for (const role of [
-  "UPPER_COMPANY",
-  "END_USER",
-  "PRIME_CONTRACTOR",
-  "SECONDARY_CONTRACTOR",
-  "TERTIARY_CONTRACTOR",
-  "ACCOUNT_MANAGER_COMPANY",
-  "PROPOSAL_TARGET",
-  "OTHER"
-]) {
+const roleDecisionSection = sectionBetween(docsSource, "Server-derived role decision table:", "## Auth");
+for (const { role, roleOrder, isPrimary } of roleDerivationTable) {
   assert(roleEnum.includes(role), `schema must include ProjectCompanyRoleType.${role}`);
   assert(docsSource.includes(`\`${role}\``), `${docsPath} must document ProjectCompanyRoleType.${role}`);
+  assert(
+    roleDecisionSection.includes(`| \`${role}\` | \`${roleOrder}\` | \`${isPrimary}\` |`),
+    `${docsPath} must document server-derived roleOrder/isPrimary for ${role}`
+  );
+}
+
+const reasonCodeSection = sectionBetween(docsSource, "## Reason Code Contract", "## Validation Rules");
+for (const reasonCode of allowedReasonCodes) {
+  assert(reasonCodeSection.includes(`\`${reasonCode}\``), `${docsPath} must document reasonCode.${reasonCode}`);
 }
 
 for (const forbiddenDocText of [
@@ -152,7 +185,8 @@ for (const forbiddenDocText of [
   "default role is UPPER_COMPANY",
   "production writes are allowed",
   "optimistic write is allowed",
-  "schema migration is required"
+  "schema migration is required",
+  "PROJECT_COMPANY_CONTACT_CANDIDATE_CONFIRMED"
 ]) {
   assert(!docsSource.includes(forbiddenDocText), `${docsPath} must not include unsafe policy: ${forbiddenDocText}`);
 }
