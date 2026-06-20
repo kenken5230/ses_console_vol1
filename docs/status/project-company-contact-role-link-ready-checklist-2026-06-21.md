@@ -30,11 +30,13 @@ This checklist is a docs-only readiness record. It does not approve DB access, D
 
 - Do not record `DATABASE_URL`, `AUTH_SECRET`, passwords, cookies, bearer tokens, session tokens, JWTs, or other secret values.
 - Record only presence/absence and sanitized classification output: host category, database name category, runtime classification, guard classification, and approval state.
+- Use the no-connect DB classifier command and output schema fixed in the smoke runbook; it parses `DATABASE_URL` only and never prints the full URL, user, password, raw host, query values, tokens, or secrets.
 - DB write is forbidden until the DB target is classified as local/test by sanitized evidence and the fixture set is approved.
 - `NODE_ENV=test` alone does not classify a database as test.
 - `PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET=test` alone does not classify a database as test.
 - The implementation guard recognizes `local`, `test`, and `staging`, but this unapproved Ready checklist stops at local/test only.
 - Production, staging, shared, and unknown DB write targets are forbidden for this checklist.
+- Unknown means Blocked: do not proceed while classification remains unknown.
 - Staging write requires a separate explicit approval, execution window, rollback owner, evidence plan, and PM gate decision.
 - Browser QA must use normal login only. Auth bypass, cookie injection, token injection, and auth proxy are forbidden.
 - Ready for review, merge, deploy, close, and worktree cleanup require separate approval.
@@ -68,8 +70,9 @@ Staging scope separation for this Ready checklist:
 | Check | Status | Required record |
 | --- | --- | --- |
 | `DATABASE_URL` presence | Not run / Blocked | Present/missing only; never full URL or credentials. |
-| DB host classification | Not run / Blocked | `local`, `test`, `staging`, `production`, `shared`, or `unknown`; sanitized only. |
-| DB name/category classification | Not run / Blocked | Disposable/synthetic/local/test vs production-like/shared/unknown; sanitized only. |
+| DB target classification | Not run / Blocked | `local`, `test`, `staging`, `production`, `shared`, or `unknown`; derived from sanitized URL evidence only. |
+| DB host classification | Not run / Blocked | `localhost`, `loopback`, `local-docker`, `private-network`, `remote`, or `unknown`; raw host omitted. |
+| DB name/category classification | Not run / Blocked | Disposable/synthetic/local/test vs production-like/staging-like/shared/unknown; sanitized only. |
 | Runtime classification | Not run / Blocked | `NODE_ENV` and `VERCEL_ENV` category only; no env dump. |
 | Feature guard classification | Not run / Blocked | Whether write enabled is exactly true and target category; no unrelated env values. |
 | Auth config presence | Not run / Blocked | `AUTH_SECRET` present/missing/invalid-length only; never the value. |

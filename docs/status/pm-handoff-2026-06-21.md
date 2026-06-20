@@ -60,8 +60,9 @@ Local PostgreSQL observation:
 
 Safe DB classification command status:
 
+- The smoke runbook now fixes the no-connect DB classification command and sanitized output schema.
 - A DB classification command was drafted and audited.
-- It parses `DATABASE_URL` only.
+- It parses `DATABASE_URL` only for DB target classification; runtime and write guard fields are category-only and cannot make the DB local/test.
 - It does not connect to DB.
 - It does not print full URL, username, password, query values, tokens, or secrets.
 - It classifies only `localhost`, `127.*`, and `::1` as local.
