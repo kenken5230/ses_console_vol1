@@ -22,6 +22,7 @@ export type CompanyContactCandidateCompanyLike = {
 
 export type CompanyContactCandidateContactLike = {
   id?: Nullable<string>;
+  companyId?: Nullable<string>;
   name?: Nullable<string>;
   email?: Nullable<string>;
   phone?: Nullable<string>;
@@ -57,6 +58,7 @@ export type CompanyContactCandidateCompany = {
 
 export type CompanyContactCandidateContact = {
   id: string | null;
+  companyId: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -289,6 +291,7 @@ function safeContact(contact: Nullable<CompanyContactCandidateContactLike>): Com
   if (!name && !email && !phone) return null;
   return {
     id: cleanText(contact.id, 80),
+    companyId: cleanText(contact.companyId, 80),
     name: name || email || phone || "-",
     email,
     phone,

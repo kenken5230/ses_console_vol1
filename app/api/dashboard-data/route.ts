@@ -311,14 +311,18 @@ function matchingExtractionResults(sourceMail: any, targetType: "PROJECT" | "PER
   });
 }
 
-function latestNormalizedExtraction(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
-  const results = matchingExtractionResults(sourceMail, targetType, targetId).sort((a: any, b: any) => {
+function latestMatchingExtractionResult(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
+  return matchingExtractionResults(sourceMail, targetType, targetId).sort((a: any, b: any) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return bTime - aTime;
-  });
-  return results[0]?.normalizedResult && typeof results[0].normalizedResult === "object"
-    ? results[0].normalizedResult
+  })[0];
+}
+
+function latestNormalizedExtraction(sourceMail: any, targetType: "PROJECT" | "PERSON", targetId: string) {
+  const result = latestMatchingExtractionResult(sourceMail, targetType, targetId);
+  return result?.normalizedResult && typeof result.normalizedResult === "object"
+    ? result.normalizedResult
     : {};
 }
 
@@ -770,6 +774,8 @@ function mapPerson(person: any, companyContactCandidateSources: readonly Company
   const ownerCompanyTradeStatus = person.ownerCompany?.tradeStatus || "UNKNOWN";
   const { ownerCompany, ownerContact } = mapPersonOwnerReadOnly(person);
   const needsReview = hasNeedsReviewExtraction(person.sourceMail, "PERSON", person.id);
+  const latestExtractionResult = latestMatchingExtractionResult(person.sourceMail, "PERSON", person.id);
+  const ownerLinkReviewStatus = typeof latestExtractionResult?.reviewStatus === "string" ? latestExtractionResult.reviewStatus : "";
   const normalizedExtraction = latestNormalizedExtraction(person.sourceMail, "PERSON", person.id);
   const reviewReasons = normalizedStringArray(normalizedExtraction.reviewReasons);
   const nameConfidence = typeof normalizedExtraction.nameConfidence === "string" ? normalizedExtraction.nameConfidence : "";
@@ -850,6 +856,10 @@ function mapPerson(person: any, companyContactCandidateSources: readonly Company
     id: person.personCode || person.id.slice(0, 8),
     dbId: person.id,
     sourceMailDbId: person.sourceMail?.id || person.sourceMailId || null,
+    ownerCompanyId: person.ownerCompanyId || null,
+    ownerContactId: person.ownerContactId || null,
+    ownerLinkUpdatedAt: person.updatedAt?.toISOString?.() || "",
+    ownerLinkReviewStatus,
     name: displayName,
     initials: person.initials || "",
     status,
@@ -958,6 +968,7 @@ function mapUnclassifiedMail(mail: any, companies: any[]) {
 export async function GET(request: Request) {
   try {
     const currentUser = await requireAuth(request);
+    const personOwnerLinkWriteAllowed = currentUser.role === "ADMIN" || currentUser.role === "MANAGER";
     const [projects, persons, unclassifiedMails, companies, companyContactCandidateCompanies] = await Promise.all([
     prisma.project.findMany({
       where: {
@@ -1040,6 +1051,7 @@ export async function GET(request: Request) {
         ownerContact: {
           select: {
             id: true,
+            companyId: true,
             name: true,
             email: true,
             phone: true,
@@ -1141,6 +1153,7 @@ export async function GET(request: Request) {
           ],
           select: {
             id: true,
+            companyId: true,
             name: true,
             email: true,
             phone: true,
@@ -1157,6 +1170,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       currentUser,
+      personOwnerLinkWriteAllowed,
       projects: projects.map((project) => mapProject(project, companyContactCandidateSources)),
       persons: persons.map((person) => mapPerson(person, companyContactCandidateSources)),
       unclassifiedMails: unclassifiedMails.map((mail) => mapUnclassifiedMail(mail, companies))
