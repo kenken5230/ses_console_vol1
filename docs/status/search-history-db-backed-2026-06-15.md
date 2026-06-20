@@ -60,7 +60,7 @@ Required gates for this PR:
 
 ## Current Validation Note
 
-This Codex session cannot execute local shell/git/npm commands because command execution is blocked by the Windows sandbox backend. The PR remains Draft. No real DB write smoke was executed.
+This Codex session could not execute local shell/git/npm commands because command execution was blocked by the Windows sandbox backend. At the time of this note, the replacement PR was Draft; check GitHub for current state. No real DB write smoke was executed.
 
 Not run in this session:
 

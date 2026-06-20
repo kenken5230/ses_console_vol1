@@ -8,8 +8,8 @@ Owner視点: PdM / PM
 プロジェクト作業では、各チャットが進捗を確認する運用は必要です。ただし、毎回重い報告を義務化すると開発速度が落ちるため、必須にするのは次の3点だけです。
 
 - 開始時に `PROGRESS.md` を読む。
-- 編集前に担当範囲と衝突リスクを確認する。
-- 終了時に現在状態を `PROGRESS.md` へ残し、履歴化したほうがよい詳細は dated progress log または focused status doc へ残す。
+- 編集前に `PROGRESS.md` の最新スナップショット、dated progress log / 関連status doc、`git status` で衝突リスクを確認する。
+- 終了時に `PROGRESS.md` の短い進捗スナップショットを最新化し、履歴化したほうがよい詳細は dated progress log または focused status doc へ残す。
 
 調査だけで成果物や判断が残らない場合は、終了時更新は省略できます。
 
@@ -29,18 +29,18 @@ Owner視点: PdM / PM
 2. 作業テーマに該当するdocsを読む。
 3. 実装を伴う場合は `docs/shared/quality/two-pass-task-test-policy-v0.1.md` を読む。
 4. 既存の未コミット差分がある場合は、自分の作業範囲と重なるか確認する。
-5. 編集前に `PROGRESS.md` のアクティブ作業枠へ担当範囲を書く。
+5. 編集前に `PROGRESS.md` の最新スナップショットと dated progress log / 関連status docを確認し、重なりそうな作業や未完了事項を把握する。
 
 ### 作業中
 
-- 予定外のファイルに触る必要が出たら、作業範囲を更新する。
-- 他チャットの作業枠と重なる場合は、勝手に進めずユーザーへ確認する。
+- 予定外のファイルに触る必要が出たら、ユーザーに範囲拡張を報告し、終了時のスナップショットまたはdated progress logへ残す。
+- 他チャットのスナップショットやdated progress log上の作業範囲と重なる場合は、勝手に進めずユーザーへ確認する。
 - DB更新、migration、secret、外部サービス、本番・staging操作は、実行前に安全条件を書く。
 - read-only、dry-run、previewで済む確認は先に実行する。
 
 ### 終了時
 
-`PROGRESS.md` には現在状態として必要な以下を残します。
+`PROGRESS.md` には、次チャットが短時間で把握できる現在状態のスナップショットとして必要な以下を残します。
 
 - 実施したこと
 - 変更した主なファイル
@@ -93,21 +93,21 @@ PRごとの経緯、当時の一時的なPR状態、長い検証ログは `docs/
 ```text
 このチャットで作業を始める前に、ルートの `PROGRESS.md` を確認してください。
 確認後、担当する範囲・触る予定の主なファイル・衝突しそうな既存作業があるかを最初に宣言してください。
-実装を伴う場合は `docs/shared/quality/two-pass-task-test-policy-v0.1.md` も確認し、終了時に `PROGRESS.md` へ変更内容・確認結果・残タスクを追記してください。
+実装を伴う場合は `docs/shared/quality/two-pass-task-test-policy-v0.1.md` も確認し、終了時に `PROGRESS.md` の短いスナップショットと、必要に応じて dated progress log / 関連status docへ変更内容・確認結果・残タスクを追記してください。
 ```
 
 ### 既存作業と重なりそうな時
 
 ```text
 この作業は他チャットの担当範囲または未コミット差分と重なる可能性があります。
-先に `PROGRESS.md` のアクティブ作業枠と `git status` を確認し、重なるファイル、進めてよい範囲、待つべき作業を整理してから着手してください。
+先に `PROGRESS.md` の最新スナップショット、dated progress log / 関連status doc、`git status` を確認し、重なるファイル、進めてよい範囲、待つべき作業を整理してから着手してください。
 判断が必要な場合は、実装せずに確認事項として返してください。
 ```
 
 ### 作業終了時
 
 ```text
-作業終了前に現在状態を `PROGRESS.md` に更新してください。
+作業終了前に、短い現在状態スナップショットとして `PROGRESS.md` を更新してください。
 長い履歴、PRごとの経緯、当時だけ有効なPR状態は `docs/status/progress-log-YYYY-MM-DD.md` または focused status doc に分けてください。
 最低限、実施内容、変更ファイル、確認結果、未完了、次チャットへの連携事項、Owner確認が必要な事項が現在状態または履歴ログとして追えるようにしてください。
 secret、DB接続URL、パスワード、個人情報は書かないでください。
