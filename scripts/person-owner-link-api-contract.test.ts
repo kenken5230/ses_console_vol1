@@ -69,9 +69,9 @@ function runPreflightClassifyOnly(databaseUrl: string) {
     COMPANY_CONTACT_LINK_WRITE_ENABLED: "false",
     COMPANY_CONTACT_LINK_WRITE_TARGET: "",
     DATABASE_URL: databaseUrl,
-    NODE_ENV: "",
-    VERCEL_ENV: "",
-  };
+    NODE_ENV: undefined,
+    VERCEL_ENV: undefined,
+  } as unknown as NodeJS.ProcessEnv;
 
   try {
     const stdout = execSync(
@@ -126,6 +126,7 @@ const allowedTouchedFiles = new Set([
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
   "docs/status/README.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/project-company-contact-link-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-link-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md",
@@ -143,6 +144,7 @@ const allowedTouchedFiles = new Set([
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
   "scripts/person-owner-link-http-smoke-preflight.ts",
+  "scripts/project-company-contact-link-contract.test.ts",
   "package.json",
   "PROGRESS.md"
 ]);
