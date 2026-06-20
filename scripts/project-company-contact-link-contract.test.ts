@@ -42,6 +42,7 @@ function sectionBetween(source: string, startNeedle: string, endNeedle: string) 
 }
 
 const docsPath = "docs/themes/ses-sales-console/requirements/project-company-contact-link-contract-2026-06-20.md";
+const operationsPath = "docs/themes/ses-sales-console/operations/project-company-contact-role-link-smoke-runbook-2026-06-20.md";
 const scriptPath = "scripts/project-company-contact-link-contract.test.ts";
 const packagePath = "package.json";
 const progressPath = "PROGRESS.md";
@@ -66,8 +67,15 @@ const roleDerivationTable = [
 ] as const;
 
 const allowedTouchedFiles = new Set([
+  "app/api/projects/[id]/company-contact-role/route.ts",
+  "app/api/projects/[id]/",
   docsPath,
+  operationsPath,
   scriptPath,
+  "lib/project-company-contact-role-link.ts",
+  "lib/project-company-contact-role-link-route.ts",
+  "scripts/project-company-contact-link-api.test.ts",
+  "scripts/project-company-contact-link-api-route.test.ts",
   "docs/status/README.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
   "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
@@ -83,18 +91,20 @@ const allowedTouchedFiles = new Set([
 for (const filePath of touchedFilesFromGit()) {
   assert(
     allowedTouchedFiles.has(filePath),
-    `project company/contact link contract PR must stay docs/tests only: ${filePath}`
+    `project company/contact role link API PR touched an unexpected file: ${filePath}`
   );
-  assert(!filePath.startsWith("app/"), `API/UI route files are out of scope: ${filePath}`);
+  assert(filePath !== "app/api/projects/route.ts", `broad projects PATCH route is out of scope: ${filePath}`);
   assert(!filePath.startsWith("components/"), `UI files are out of scope: ${filePath}`);
-  assert(!filePath.startsWith("lib/"), `write helper implementation is out of scope: ${filePath}`);
   assert(!filePath.startsWith("prisma/"), `schema/migration changes are out of scope: ${filePath}`);
 }
 
 const docsSource = readProjectFile(docsPath);
+const operationsSource = readProjectFile(operationsPath);
 const packageSource = readProjectFile(packagePath);
 const schemaSource = readProjectFile("prisma/schema.prisma");
 const projectRoutePath = "app/api/projects/[id]/company-contact-role/route.ts";
+const helperPath = "lib/project-company-contact-role-link.ts";
+const routeHelperPath = "lib/project-company-contact-role-link-route.ts";
 
 for (const requiredText of [
   "PATCH /api/projects/[id]/company-contact-role",
@@ -145,7 +155,10 @@ for (const requiredText of [
   "AuditLog rows must never be deleted",
   "projectCompanyRole.create",
   "auditLog.create",
+  "project.update",
   "same transaction",
+  "Implemented in this PR",
+  "real DB write smoke was not executed",
   "UI must reload/reselect the project from server data",
   "must not apply an optimistic write",
   "Unknown `reasonCode` is rejected.",
@@ -156,10 +169,71 @@ for (const requiredText of [
   assert(docsSource.includes(requiredText), `${docsPath} must include: ${requiredText}`);
 }
 
-assert(packageSource.includes("test:project-company-contact-link-contract"), "package.json must expose the project company/contact link contract test");
-assert(packageSource.includes("npm run test:project-company-contact-link-contract"), "npm test must include the project company/contact link contract test");
+for (const requiredText of [
+  "PATCH /api/projects/[id]/company-contact-role",
+  "real DB write smoke was not executed",
+  "No real DB write smoke was executed",
+  "production",
+  "PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_ENABLED=true",
+  "PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET",
+  "ADMIN",
+  "MANAGER",
+  "AuditLog",
+  "No migration, schema change, deploy, staging operation, production operation, or UI change was performed"
+]) {
+  assert(operationsSource.includes(requiredText), `${operationsPath} must include: ${requiredText}`);
+}
 
-assert(!existsSync(path.join(rootDir, projectRoutePath)), `${projectRoutePath} must not be implemented in this PR`);
+assert(packageSource.includes("test:project-company-contact-link-contract"), "package.json must expose the project company/contact link contract test");
+assert(packageSource.includes("test:project-company-contact-link-api"), "package.json must expose the project company/contact link API test");
+assert(packageSource.includes("npm run test:project-company-contact-link-contract"), "npm test must include the project company/contact link contract test");
+assert(packageSource.includes("npm run test:project-company-contact-link-api"), "npm test must include the project company/contact link API test");
+
+assert(existsSync(path.join(rootDir, projectRoutePath)), `${projectRoutePath} must be implemented in this PR`);
+assert(existsSync(path.join(rootDir, helperPath)), `${helperPath} must be implemented in this PR`);
+assert(existsSync(path.join(rootDir, routeHelperPath)), `${routeHelperPath} must be implemented in this PR`);
+
+const routeSource = readProjectFile(projectRoutePath);
+const helperSource = readProjectFile(helperPath);
+const routeHelperSource = readProjectFile(routeHelperPath);
+const broadProjectsRouteSource = readProjectFile("app/api/projects/route.ts");
+
+assert(/\bexport\s+async\s+function\s+PATCH\b/.test(routeSource), `${projectRoutePath} must expose PATCH`);
+assert(!/\bexport\s+(?:async\s+)?function\s+(POST|PUT|DELETE)\b/.test(routeSource), `${projectRoutePath} must expose PATCH only`);
+assert(routeSource.includes("handleProjectCompanyContactRolePatch"), "project company/contact role route must delegate to the route handler");
+assert(routeHelperSource.includes("requireAnyRole(request, [\"ADMIN\", \"MANAGER\"])"), "route handler must allow only ADMIN/MANAGER");
+assert(routeHelperSource.indexOf("projectCompanyContactRoleLinkGuard") < routeHelperSource.indexOf("request.json()"), "feature guard must run before JSON parsing");
+assert(!broadProjectsRouteSource.includes("handleProjectCompanyContactRolePatch"), "broad /api/projects PATCH must not be reused for this flow");
+assert(!broadProjectsRouteSource.includes("linkExistingProjectCompanyContactRole"), "broad /api/projects route must not call the guarded project role helper");
+
+for (const requiredText of [
+  "PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_ENABLED",
+  "PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET",
+  "local",
+  "test",
+  "staging",
+  "production",
+  "PROJECT_COMPANY_CONTACT_ROLE_DERIVATION",
+  "PROJECT_COMPANY_CONTACT_ROLE_REASON_CODES",
+  "expectedUpdatedAt",
+  "confirmationToken",
+  "project.update",
+  "projectCompanyRole.findFirst",
+  "projectCompanyRole.create",
+  "auditLog.create",
+  "$transaction",
+  "COMPANY_TRADE_STATUS_",
+]) {
+  assert(helperSource.includes(requiredText), `${helperPath} must include: ${requiredText}`);
+}
+
+for (const forbiddenPattern of [
+  /\bcompany\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+  /\bcompanyContact\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+  /\bprojectCompanyRole\s*\.\s*(update|updateMany|upsert|delete|deleteMany)\s*\(/,
+]) {
+  assert(!forbiddenPattern.test(helperSource), `project role helper must not create/update/delete unrelated entities: ${forbiddenPattern}`);
+}
 
 const projectCompanyRoleModel = sectionBetween(schemaSource, "model ProjectCompanyRole {", "model ProjectSkill {");
 assert(!projectCompanyRoleModel.includes("updatedAt"), "ProjectCompanyRole has no updatedAt; contract must use Project.updatedAt without migration");
