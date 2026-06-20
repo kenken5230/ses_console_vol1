@@ -107,7 +107,8 @@
 - Scope: latest `origin/main` から clean worktree/branch `codex/person-owner-link-ui-20260620` を作成し、Person detail から既存 Company/CompanyContact へ安全にリンクする guarded UI flow を追加する。
 - Done: dashboard payload に owner link 用 timestamp/owner IDs/review status/write flag を追加。候補リスト下に確認必須の link panel を追加。UI gating helper と test/docs を追加。
 - Changed: `app/page.jsx`, `app/api/dashboard-data/route.ts`, `components/PersonDetailPane.jsx`, `app/globals.css`, `lib/person-owner-link-ui.ts`, `lib/company-contact-candidates.ts`, `scripts/person-owner-link-ui.test.ts`, related contract tests/docs。
-- Validation: 実装後に `git diff --check`, focused tests, API tests, typecheck, full test, build, audit, Prisma validate/generate を実行予定。
+- Validation: `git diff --check` pass(CRLF warningのみ)、`npm.cmd run test:person-owner-link-ui` pass、`npm.cmd run test:person-owner-link-api` pass、`npm.cmd run test:person-owner-link-api-route` pass、`npm.cmd run test:person-owner-link-api-contract` pass、`npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、`npm.cmd audit --audit-level=high` pass(0 vulnerabilities)、`npx.cmd prisma validate` pass、`npx.cmd prisma generate` pass。
+- Dependency note: `npm ci` postinstall は `DATABASE_URL` 未設定で停止したため、依存導入は `npm ci --ignore-scripts`。Prisma/Next 検証は dummy `DATABASE_URL` 付きで実行。
 - Remaining: Draft PR 作成後、親PMの review agent に引き継ぐ。
 - Risk / Need coordination: 実DB write smoke、migration、deploy、production/staging DB 操作は行わない。
 
