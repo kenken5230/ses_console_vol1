@@ -2,8 +2,9 @@ import "dotenv/config";
 
 import { Client } from "pg";
 
+import { BLOCKED_COMPANY_LINK_TRADE_STATUSES } from "../lib/link-safety-policy";
+
 const INTENT = "LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT";
-const BLOCKED_TRADE_STATUSES = new Set(["NG", "NEEDS_REVIEW", "SUSPENDED"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PRODUCTION_LIKE_SIGNAL_PATTERN = /production|prod(?!uct)|live|primary/;
 
@@ -288,7 +289,9 @@ function evaluateFixture(caseName: SmokeCase, rows: FixtureRows) {
   const tradeStatus = asString(rows.company?.tradeStatus) || "UNKNOWN";
   const hasOwner = Boolean(ownerCompanyId || ownerContactId);
   const contactMatches = Boolean(rows.company && rows.contact && contactCompanyId === rows.company.id);
-  const companyBlocked = BLOCKED_TRADE_STATUSES.has(tradeStatus);
+  const companyBlocked = BLOCKED_COMPANY_LINK_TRADE_STATUSES.includes(
+    tradeStatus as (typeof BLOCKED_COMPANY_LINK_TRADE_STATUSES)[number],
+  );
 
   if (!rows.person) failures.push("Person fixture was not found");
   if (!rows.company) failures.push("Company fixture was not found");

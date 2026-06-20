@@ -1,10 +1,14 @@
 import type { AuthUser } from "./auth";
+import {
+  companyLinkTradeStatusReasonCode,
+  findUnsafeLinkPayloadField,
+  isCompanyContactLinkWriterRole,
+  LINK_SENSITIVE_VALUE_PATTERNS,
+} from "./link-safety-policy";
 
 export const PERSON_OWNER_COMPANY_CONTACT_LINK_INTENT = "LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const BLOCKED_TRADE_STATUSES = new Set(["NG", "NEEDS_REVIEW", "SUSPENDED"]);
-
 const ALLOWED_BODY_KEYS = new Set([
   "intent",
   "companyId",
@@ -14,48 +18,6 @@ const ALLOWED_BODY_KEYS = new Set([
   "expectedOwnerContactId",
   "expectedUpdatedAt",
 ]);
-
-const FORBIDDEN_TOP_LEVEL_KEYS = new Set([
-  "body",
-  "bodyText",
-  "company",
-  "companyName",
-  "contact",
-  "contactEmail",
-  "contactName",
-  "csvRawValue",
-  "email",
-  "emailAddress",
-  "freeNote",
-  "fullBody",
-  "fullNote",
-  "fullNotes",
-  "mailBody",
-  "memo",
-  "name",
-  "note",
-  "notes",
-  "person",
-  "personName",
-  "rawBody",
-  "rawCsv",
-  "rawMailBody",
-  "rawPersonText",
-  "rawSourcePayload",
-  "rawText",
-  "rawValue",
-  "subject",
-  "text",
-]);
-
-const SENSITIVE_VALUE_PATTERNS = [
-  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
-  /\b(?:postgres(?:ql)?|mysql|sqlserver):\/\//i,
-  /\bBearer\s+[A-Za-z0-9._-]+/i,
-  /\b(?:api[_-]?key|password|secret|token)\s*[:=]/i,
-  /[A-Za-z]:\\(?:Users|OneDrive|Documents|Desktop|Downloads)\\/i,
-  /\\\\[A-Za-z0-9_.-]+\\[A-Za-z0-9_.-]+/,
-];
 
 const personSelect = {
   id: true,
@@ -165,7 +127,7 @@ function requiredTimestampValue(body: Record<string, unknown>, field: string) {
   }
 
   const value = body[field];
-  if (typeof value !== "string" || SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value))) {
+  if (typeof value !== "string" || LINK_SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value))) {
     throw new PersonOwnerCompanyContactLinkRequestError(`${field} must be a valid timestamp`);
   }
 
@@ -181,28 +143,19 @@ function ownerId(value: unknown) {
   return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
 }
 
-function containsSensitiveValue(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "string") return SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value));
-  if (Array.isArray(value)) return value.some(containsSensitiveValue);
-  if (!isObject(value)) return false;
-  return Object.values(asRecord(value)).some(containsSensitiveValue);
-}
-
 function isPrismaRecordNotFoundError(error: unknown) {
   return asRecord(error).code === "P2025";
 }
 
 function assertNoUnsupportedOrRawFields(body: Record<string, unknown>) {
-  for (const [key, value] of Object.entries(body)) {
-    if (!ALLOWED_BODY_KEYS.has(key) || FORBIDDEN_TOP_LEVEL_KEYS.has(key)) {
-      throw new PersonOwnerCompanyContactLinkRequestError("Request contains unsupported raw, note, or PII fields");
-    }
+  const unsafeField = findUnsafeLinkPayloadField(body, ALLOWED_BODY_KEYS);
+  if (!unsafeField) return;
 
-    if (containsSensitiveValue(value)) {
-      throw new PersonOwnerCompanyContactLinkRequestError("Request contains unsafe raw or PII values");
-    }
+  if (unsafeField.kind === "unsupported-key") {
+    throw new PersonOwnerCompanyContactLinkRequestError("Request contains unsupported raw, note, or PII fields");
   }
+
+  throw new PersonOwnerCompanyContactLinkRequestError("Request contains unsafe raw or PII values");
 }
 
 function safeRecordId(record: unknown) {
@@ -329,7 +282,7 @@ export function personOwnerCompanyContactLinkErrorResponse(error: PersonOwnerCom
 export function isPersonOwnerCompanyContactLinkUser(user: unknown): user is PersonOwnerCompanyContactLinkUser {
   const record = asRecord(user);
   return typeof record.id === "string"
-    && (record.role === "ADMIN" || record.role === "MANAGER")
+    && isCompanyContactLinkWriterRole(record.role)
     && record.isActive !== false;
 }
 
@@ -423,11 +376,12 @@ export async function linkExistingPersonOwnerCompanyContact(
   }
 
   const tradeStatus = safeTradeStatus(company);
-  if (BLOCKED_TRADE_STATUSES.has(tradeStatus)) {
+  const tradeStatusReasonCode = companyLinkTradeStatusReasonCode(tradeStatus);
+  if (tradeStatusReasonCode) {
     throw new PersonOwnerCompanyContactLinkRequestError(
       "Company trade status requires manual review before linking.",
       409,
-      `COMPANY_TRADE_STATUS_${tradeStatus}`,
+      tradeStatusReasonCode,
     );
   }
 
@@ -506,7 +460,7 @@ export async function linkExistingPersonOwnerCompanyContact(
 }
 
 export function assertNoSensitivePersonOwnerCompanyContactLinkOutput(output: string) {
-  for (const pattern of SENSITIVE_VALUE_PATTERNS) {
+  for (const pattern of LINK_SENSITIVE_VALUE_PATTERNS) {
     if (pattern.test(output)) {
       throw new Error("Sensitive person owner company/contact link output detected");
     }

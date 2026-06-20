@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { AppRole } from "./auth";
+import { LINK_WRITER_ROLES } from "./link-safety-policy";
 import {
   disabledPersonOwnerCompanyContactLinkResponse,
   type PersonOwnerCompanyContactLinkDb,
@@ -34,7 +35,7 @@ export async function handlePersonOwnerCompanyContactPatch(
   deps: PersonOwnerCompanyContactPatchDependencies,
 ) {
   try {
-    const user = await deps.requireAnyRole(request, ["ADMIN", "MANAGER"]);
+    const user = await deps.requireAnyRole(request, [...LINK_WRITER_ROLES]);
     const guard = deps.personOwnerCompanyContactLinkGuard();
     if (!guard.allowed) {
       return NextResponse.json(disabledPersonOwnerCompanyContactLinkResponse(guard), { status: 403 });

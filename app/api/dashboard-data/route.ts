@@ -13,6 +13,7 @@ import {
   type CompanyContactCandidate,
   type CompanyContactCandidateSource
 } from "../../../lib/company-contact-candidates";
+import { isCompanyContactLinkWriterRole } from "../../../lib/link-safety-policy";
 import { mergePersonFormInitialValues } from "../../../lib/person-form-contract";
 
 export const dynamic = "force-dynamic";
@@ -968,7 +969,7 @@ function mapUnclassifiedMail(mail: any, companies: any[]) {
 export async function GET(request: Request) {
   try {
     const currentUser = await requireAuth(request);
-    const personOwnerLinkWriteAllowed = currentUser.role === "ADMIN" || currentUser.role === "MANAGER";
+    const personOwnerLinkWriteAllowed = isCompanyContactLinkWriterRole(currentUser.role);
     const [projects, persons, unclassifiedMails, companies, companyContactCandidateCompanies] = await Promise.all([
     prisma.project.findMany({
       where: {

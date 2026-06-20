@@ -67,23 +67,33 @@ const roleDerivationTable = [
 ] as const;
 
 const allowedTouchedFiles = new Set([
+  "app/api/dashboard-data/route.ts",
   "app/api/projects/[id]/company-contact-role/route.ts",
   "app/api/projects/[id]/",
   docsPath,
   operationsPath,
   scriptPath,
+  "lib/person-owner-company-contact-link.ts",
+  "lib/person-owner-company-contact-link-route.ts",
+  "lib/person-owner-link-ui.ts",
   "lib/project-company-contact-role-link.ts",
   "lib/project-company-contact-role-link-route.ts",
   "scripts/project-company-contact-link-api.test.ts",
   "scripts/project-company-contact-link-api-route.test.ts",
+  "lib/link-safety-policy.ts",
   "docs/status/README.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
+  "docs/status/link-safety-policy-2026-06-20.md",
   "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
   "scripts/company-contact-write-contract.test.ts",
+  "scripts/link-safety-policy.test.ts",
   "scripts/person-owner-link-api-contract.test.ts",
+  "scripts/person-owner-link-api-route.test.ts",
+  "scripts/person-owner-link-api.test.ts",
   "scripts/person-owner-link-http-smoke-preflight.ts",
+  "scripts/person-owner-link-ui.test.ts",
   packagePath,
   progressPath
 ]);
@@ -196,12 +206,13 @@ assert(existsSync(path.join(rootDir, routeHelperPath)), `${routeHelperPath} must
 const routeSource = readProjectFile(projectRoutePath);
 const helperSource = readProjectFile(helperPath);
 const routeHelperSource = readProjectFile(routeHelperPath);
+const linkSafetyPolicySource = readProjectFile("lib/link-safety-policy.ts");
 const broadProjectsRouteSource = readProjectFile("app/api/projects/route.ts");
 
 assert(/\bexport\s+async\s+function\s+PATCH\b/.test(routeSource), `${projectRoutePath} must expose PATCH`);
 assert(!/\bexport\s+(?:async\s+)?function\s+(POST|PUT|DELETE)\b/.test(routeSource), `${projectRoutePath} must expose PATCH only`);
 assert(routeSource.includes("handleProjectCompanyContactRolePatch"), "project company/contact role route must delegate to the route handler");
-assert(routeHelperSource.includes("requireAnyRole(request, [\"ADMIN\", \"MANAGER\"])"), "route handler must allow only ADMIN/MANAGER");
+assert(routeHelperSource.includes("requireAnyRole(request, [...LINK_WRITER_ROLES])"), "route handler must use the shared ADMIN/MANAGER writer roles");
 assert(routeHelperSource.indexOf("projectCompanyContactRoleLinkGuard") < routeHelperSource.indexOf("request.json()"), "feature guard must run before JSON parsing");
 assert(!broadProjectsRouteSource.includes("handleProjectCompanyContactRolePatch"), "broad /api/projects PATCH must not be reused for this flow");
 assert(!broadProjectsRouteSource.includes("linkExistingProjectCompanyContactRole"), "broad /api/projects route must not call the guarded project role helper");
@@ -222,10 +233,10 @@ for (const requiredText of [
   "projectCompanyRole.create",
   "auditLog.create",
   "$transaction",
-  "COMPANY_TRADE_STATUS_",
 ]) {
   assert(helperSource.includes(requiredText), `${helperPath} must include: ${requiredText}`);
 }
+assert(linkSafetyPolicySource.includes("COMPANY_TRADE_STATUS_"), "link safety policy must centralize company trade status reason codes");
 
 for (const forbiddenPattern of [
   /\bcompany\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,

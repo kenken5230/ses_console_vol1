@@ -109,6 +109,7 @@ for (const forbiddenKey of ["note", "notes", "freeNote", "bodyText", "mailBody",
 }
 
 const helperSource = readProjectFile("lib/person-owner-link-ui.ts");
+const policySource = readProjectFile("lib/link-safety-policy.ts");
 const paneSource = readProjectFile("components/PersonDetailPane.jsx");
 const appSource = readProjectFile("app/page.jsx");
 const dashboardSource = readProjectFile("app/api/dashboard-data/route.ts");
@@ -116,7 +117,8 @@ const packageSource = readProjectFile("package.json");
 const ownerLinkPanelSource = sectionBetween(paneSource, "function PersonOwnerLinkPanel", "export default function PersonDetailPane");
 const ownerLinkHandlerSource = sectionBetween(appSource, "const handlePersonOwnerLinkLinked", "const handleAuthenticated");
 
-assert(helperSource.includes("ADMIN") && helperSource.includes("MANAGER"), "UI gate must explicitly allow ADMIN/MANAGER");
+assert(helperSource.includes("isCompanyContactLinkWriterRole"), "UI gate must use the shared writer role policy");
+assert(policySource.includes("LINK_WRITER_ROLES") && policySource.includes("ADMIN") && policySource.includes("MANAGER"), "shared policy must explicitly allow ADMIN/MANAGER");
 assert(!helperSource.includes("canEditEntities"), "UI gate must not reuse canEditEntities");
 assert(ownerLinkPanelSource.includes("method: \"PATCH\""), "confirm action must call PATCH");
 assert(ownerLinkPanelSource.includes("buildPersonOwnerLinkPayload"), "PATCH body must come from the safe payload builder");

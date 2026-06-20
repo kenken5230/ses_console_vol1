@@ -1,8 +1,12 @@
+import {
+  isBlockedCompanyLinkTradeStatus,
+  isCompanyContactLinkWriterRole,
+} from "./link-safety-policy";
+
 export const PERSON_OWNER_LINK_INTENT = "LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT";
 export const PERSON_OWNER_LINK_CONFIRMATION_LABEL = "上記の会社・担当者が正しいことを確認しました";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const BLOCKED_COMPANY_STATUSES = new Set(["NG", "NEEDS_REVIEW", "SUSPENDED"]);
 const BLOCKED_REVIEW_STATUSES = new Set(["NEEDS_REVIEW", "FAILED", "ERROR", "REJECTED"]);
 const MIN_SAFE_CANDIDATE_SCORE = 60;
 
@@ -60,10 +64,6 @@ export type PersonOwnerLinkPayload = {
   expectedUpdatedAt: string;
 };
 
-function isAdminOrManager(role: Nullable<PersonOwnerLinkRole>) {
-  return role === "ADMIN" || role === "MANAGER";
-}
-
 function isUuid(value: Nullable<string>) {
   return typeof value === "string" && UUID_PATTERN.test(value);
 }
@@ -114,7 +114,7 @@ export function getPersonOwnerLinkGate(input: PersonOwnerLinkGateInput): PersonO
   const company = candidate.company || {};
   const contact = candidate.contact || {};
 
-  if (!isAdminOrManager(input.currentUserRole) || input.personOwnerLinkWriteAllowed !== true) {
+  if (!isCompanyContactLinkWriterRole(input.currentUserRole) || input.personOwnerLinkWriteAllowed !== true) {
     return disabled("ROLE_NOT_ALLOWED", "会社・担当者リンクは ADMIN/MANAGER のみ実行できます。", false);
   }
 
@@ -151,7 +151,7 @@ export function getPersonOwnerLinkGate(input: PersonOwnerLinkGateInput): PersonO
   }
 
   const tradeStatus = String(company.tradeStatus || "UNKNOWN").trim().toUpperCase();
-  if (BLOCKED_COMPANY_STATUSES.has(tradeStatus)) {
+  if (isBlockedCompanyLinkTradeStatus(tradeStatus)) {
     return disabled("COMPANY_STATUS_BLOCKED", "候補会社の取引ステータスが手動確認対象のため、リンクできません。");
   }
 

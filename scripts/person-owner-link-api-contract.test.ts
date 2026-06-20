@@ -127,6 +127,7 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/operations/person-owner-link-db-smoke-preflight-2026-06-20.md",
   "docs/themes/ses-sales-console/operations/project-company-contact-role-link-smoke-runbook-2026-06-20.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
+  "docs/status/link-safety-policy-2026-06-20.md",
   "docs/status/README.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-link-contract-2026-06-20.md",
@@ -136,6 +137,7 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
   "lib/company-contact-candidates.ts",
+  "lib/link-safety-policy.ts",
   "lib/person-owner-company-contact-link.ts",
   "lib/person-owner-company-contact-link-route.ts",
   "lib/project-company-contact-role-link.ts",
@@ -143,6 +145,7 @@ const allowedTouchedFiles = new Set([
   "lib/person-owner-link-ui.ts",
   "scripts/project-company-contact-link-api-route.test.ts",
   "scripts/project-company-contact-link-api.test.ts",
+  "scripts/link-safety-policy.test.ts",
   "scripts/person-owner-link-api-route.test.ts",
   "scripts/person-owner-link-api.test.ts",
   "scripts/person-owner-link-api-contract.test.ts",
@@ -177,6 +180,7 @@ const ownerLinkRoutePath = "app/api/persons/[id]/owner-company-contact/route.ts"
 const ownerLinkRouteHandlerPath = "lib/person-owner-company-contact-link-route.ts";
 const ownerLinkHelperPath = "lib/person-owner-company-contact-link.ts";
 const ownerLinkDocsPath = "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md";
+const linkSafetyPolicySource = readProjectFile("lib/link-safety-policy.ts");
 
 for (const requiredText of [
   "PATCH /api/persons/[id]/owner-company-contact",
@@ -282,7 +286,8 @@ const ownerLinkDocsSource = readProjectFile(ownerLinkDocsPath);
 assert(/\bexport\s+async\s+function\s+PATCH\b/.test(ownerLinkRouteSource), `${ownerLinkRoutePath} must expose PATCH`);
 assert(!/\bexport\s+(?:async\s+)?function\s+(POST|PUT|DELETE)\b/.test(ownerLinkRouteSource), `${ownerLinkRoutePath} must expose PATCH only`);
 assert(ownerLinkRouteSource.includes("handlePersonOwnerCompanyContactPatch"), "owner link route must delegate to the route handler");
-assert(ownerLinkRouteHandlerSource.includes("requireAnyRole(request, [\"ADMIN\", \"MANAGER\"])"), "owner link route handler must allow only ADMIN/MANAGER");
+assert(ownerLinkRouteHandlerSource.includes("requireAnyRole(request, [...LINK_WRITER_ROLES])"), "owner link route handler must use the shared ADMIN/MANAGER writer roles");
+assert(linkSafetyPolicySource.includes("LINK_WRITER_ROLES") && linkSafetyPolicySource.includes("ADMIN") && linkSafetyPolicySource.includes("MANAGER"), "link safety policy must define shared ADMIN/MANAGER writer roles");
 assert(ownerLinkRouteHandlerSource.includes("personOwnerCompanyContactLinkGuard"), "owner link route handler must use the feature guard");
 assert(ownerLinkRouteHandlerSource.indexOf("personOwnerCompanyContactLinkGuard") < ownerLinkRouteHandlerSource.indexOf("request.json()"), "feature guard must run before JSON body parsing");
 

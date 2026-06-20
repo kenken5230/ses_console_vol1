@@ -321,7 +321,7 @@ async function main() {
     assert.equal(routeHasHandler(routeSource, method), false, `${method} must not be exported`);
   }
   assert.match(routeSource, /handlePersonOwnerCompanyContactPatch/);
-  assert.match(handlerSource, /requireAnyRole\(request,\s*\["ADMIN",\s*"MANAGER"\]\)/);
+  assert.match(handlerSource, /requireAnyRole\(request,\s*\[\.\.\.LINK_WRITER_ROLES\]\)/);
   assert.match(handlerSource, /personOwnerCompanyContactLinkGuard/);
   assert.match(handlerSource, /disabledPersonOwnerCompanyContactLinkResponse/);
   assert.ok(handlerSource.indexOf("personOwnerCompanyContactLinkGuard") < handlerSource.indexOf("request.json()"));
