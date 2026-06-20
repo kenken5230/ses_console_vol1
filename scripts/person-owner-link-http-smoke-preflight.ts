@@ -5,6 +5,7 @@ import { Client } from "pg";
 const INTENT = "LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT";
 const BLOCKED_TRADE_STATUSES = new Set(["NG", "NEEDS_REVIEW", "SUSPENDED"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PRODUCTION_LIKE_SIGNAL_PATTERN = /production|prod(?!uct)|live|primary/;
 
 type SmokeCase =
   | "success"
@@ -153,7 +154,7 @@ function parseDatabaseUrl(rawUrl: string) {
 
 function classifyTarget(signalText: string, host: string, database: string): TargetClass {
   const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-  if (/\b(prod|production|live|primary)\b/.test(signalText)) return "production";
+  if (PRODUCTION_LIKE_SIGNAL_PATTERN.test(signalText)) return "production";
   if (/\b(staging|stage|uat|preview)\b/.test(signalText)) return "staging";
   if (/\b(test|testing|ci|spec|smoke|fixture)\b/.test(signalText)) return "test";
   if (localHosts.has(host.toLowerCase()) || database.toLowerCase().endsWith("_dev")) return "local";
