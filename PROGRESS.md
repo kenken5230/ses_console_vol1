@@ -1,6 +1,6 @@
 # Project Progress
 
-Updated: 2026-06-20 19:16 JST
+Updated: 2026-06-20 19:53 JST
 
 This file is the current project snapshot. Dated history belongs in `docs/status/progress-log-YYYY-MM-DD.md` or in a focused status/runbook document.
 
@@ -8,8 +8,8 @@ This file is the current project snapshot. Dated history belongs in `docs/status
 
 | Item | State | Notes |
 |---|---|---|
-| Latest `origin/main` | `89e38ed63ca55e1342bd5edc5ee10cd191d05920` | Merge commit for PR #86. |
-| Recent final PR results | #82 merged at `b0d4cc1`; #83 merged at `c3082a8`; #84 merged at `b2df444`; #85 merged at `fee6581`; #86 merged at `89e38ed` | Keep only final outcomes here. Details are in `docs/status/progress-log-2026-06-20.md`. |
+| Latest `origin/main` | `cedd740b4d45ca076216b4c45887b6f809e1a2f7` | Merge commit for PR #87. |
+| Recent final PR results | #82 merged at `b0d4cc1`; #83 merged at `c3082a8`; #84 merged at `b2df444`; #85 merged at `fee6581`; #86 merged at `89e38ed`; #87 merged at `cedd740` | Keep only final outcomes here. Details are in `docs/status/progress-log-2026-06-20.md`. |
 | Original active workspace | Dirty and old | `C:\Users\ke919\OneDrive\ドキュメント\1234project\ses_console_vol1` has many pre-existing modified/untracked files on `codex/market-analysis-docs`. Do not use it as a base for new PR work. |
 | New work base | Clean worktree from latest `origin/main` | Fetch first, verify the base commit, then create a separate worktree/branch. |
 
@@ -19,6 +19,7 @@ This file is the current project snapshot. Dated history belongs in `docs/status
 - If implementation is involved, also read `docs/shared/quality/two-pass-task-test-policy-v0.1.md`.
 - Keep `PROGRESS.md` focused on current facts, open risks, and next choices.
 - Put completed task details, PR-by-PR history, and time-sensitive observations in dated progress logs or focused status docs.
+- After a PR merges, fetch `origin/main`, verify the merge commit, and sync this snapshot plus the dated progress log when the merge changes current state.
 - Do not write secrets, DB connection URLs, passwords, cookies, tokens, or raw personal data into docs.
 - Do not edit the old dirty active workspace for new PRs unless the user explicitly asks for that workspace.
 

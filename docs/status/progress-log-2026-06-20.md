@@ -1,11 +1,12 @@
 # Progress Log - 2026-06-20
 
-Observed at: 2026-06-20 19:16 JST
+Observed at: 2026-06-20 19:16 JST for PR #82 through #86; post-merge sync observed at 2026-06-20 19:53 JST.
 
 Source checks:
 
 - `origin/main` merge history after fetch.
 - `gh pr view` metadata for PR #82 through #86.
+- `git show` merge metadata for PR #87.
 - Existing PR bodies and status docs for recorded validation and out-of-scope notes.
 
 This is historical context. Current project state belongs in `../../PROGRESS.md`.
@@ -13,6 +14,10 @@ This is historical context. Current project state belongs in `../../PROGRESS.md`
 ## Latest Main at Observation
 
 `89e38ed63ca55e1342bd5edc5ee10cd191d05920`
+
+## Latest Main After PR #87 Sync
+
+`cedd740b4d45ca076216b4c45887b6f809e1a2f7`
 
 ## PR #82 - Person Owner Link UI
 
@@ -53,6 +58,14 @@ This is historical context. Current project state belongs in `../../PROGRESS.md`
 - Scope: Centralized the small shared safety policy pieces for Person owner links and Project company/contact role links: writer roles, blocked company statuses, production runtime checks, forbidden raw/sensitive payload keys, and shared sensitive value patterns.
 - Validation recorded in PR body: `git diff --check`, `npm.cmd run test:link-safety-policy`, `npm.cmd run test:person-owner-link-api`, `npm.cmd run test:project-company-contact-link-api`, `npm.cmd run test:person-owner-link-api-contract`, `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run build`, `npm.cmd audit --audit-level=high`, `npx.cmd prisma validate`, `npx.cmd prisma generate`.
 - Not executed in that PR: DB write, migration, schema change, deploy, real HTTP smoke.
+
+## PR #87 - Progress Snapshot/Log Split
+
+- Final result: merged into `main` at `cedd740b4d45ca076216b4c45887b6f809e1a2f7`.
+- Title: `Split progress snapshot from dated progress log`.
+- Scope: Split the live project snapshot in `PROGRESS.md` from the dated progress log in `docs/status/progress-log-2026-06-20.md`.
+- Post-merge sync: `PROGRESS.md` now points at PR #87 as latest `origin/main`; this log and `docs/status/README.md` now include PR #87.
+- Validation in this docs-sync worker: `git diff --check`, stale-expression `rg` checks, simple markdown link existence check, and deleted-file diff check.
 
 ## Cross-PR Notes
 
