@@ -1,5 +1,14 @@
 # Project Progress
 
+### 2026-06-20 JST / Codex project company/contact link contract
+
+- Scope: Created clean worktree/branch `codex/project-company-contact-link-contract-20260620` from latest `origin/main` at `b0d4cc1e547a6f37f3e2571e71a2d4df3ab5c2ad` after PR #82, and limited the PR to Project company/contact role link contract docs and static tests.
+- Done: Added `PATCH /api/projects/[id]/company-contact-role` contract as a future route only. Fixed the safety decisions: do not use existing `/api/projects` PATCH, require explicit `role`, allow only current `ProjectCompanyRoleType` enum values, reject existing `projectId + role` with `409`, use `Project.updatedAt` as `expectedUpdatedAt`, require existing Company/CompanyContact, reject mismatch/inactive/blocked status cases, require ADMIN/MANAGER, reject SALES, require non-production feature guard, require AuditLog, and require UI reload/reselect after success.
+- Changed: `docs/themes/ses-sales-console/requirements/project-company-contact-link-contract-2026-06-20.md`, `scripts/project-company-contact-link-contract.test.ts`, `package.json`, scope guard allow-list updates in related contract tests, and this `PROGRESS.md` entry.
+- Validation: `git diff --check` pass with CRLF warnings only; `npm.cmd run test:project-company-contact-link-contract` pass; `npm.cmd run typecheck` pass with dummy `DATABASE_URL`; `npm.cmd test` pass with dummy `DATABASE_URL`; `npm.cmd run build` pass with dummy `DATABASE_URL`; `npm.cmd audit --audit-level=high` pass with 0 vulnerabilities; `npx.cmd prisma validate` pass with dummy `DATABASE_URL`; `npx.cmd prisma generate` pass with dummy `DATABASE_URL`.
+- Remaining: Commit, push, and open Draft PR.
+- Risk / Need coordination: No route implementation, no UI change, no DB write helper, no Prisma schema/migration, no deploy, no real DB write smoke, no production/staging DB operation. Smoke and implementation remain separate approval/PR work.
+
 作成日: 2026-06-13 JST
 
 このファイルは、複数チャットで同じプロジェクトを進めるための進捗ボードです。各チャットは作業開始時に必ずこのファイルを読み、作業終了時に必要な更新を残します。
