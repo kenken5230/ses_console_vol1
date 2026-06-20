@@ -1,5 +1,14 @@
 # Project Progress
 
+### 2026-06-20 JST / Codex project company/contact role link API
+
+- Scope: Created clean worktree/branch `codex/project-company-contact-link-api-20260620` from latest `origin/main` at `b2df444ca8c12178465c17cc474a9da7b20726c2` after PR #84; implement guarded Project company/contact role link API without UI, schema, migration, deploy, or real DB smoke.
+- Done: Added `PATCH /api/projects/[id]/company-contact-role`, route handler, guarded helper, exact payload validation, role/reason bounded enums, UUID/stale validation, existing-role conflict handling, existing Company/CompanyContact checks, contact mismatch/inactive/blocked-company manual review refusals, transaction-scoped `ProjectCompanyRole` create + `Project.updatedAt` touch + `AuditLog` create, and mock/pure/route tests.
+- Changed: `app/api/projects/[id]/company-contact-role/route.ts`, `lib/project-company-contact-role-link.ts`, `lib/project-company-contact-role-link-route.ts`, `scripts/project-company-contact-link-api.test.ts`, `scripts/project-company-contact-link-api-route.test.ts`, project contract/operation docs, related scope guard tests, `package.json`, and this `PROGRESS.md` entry.
+- Validation: `git diff --check` pass with CRLF warnings only; `npm.cmd run test:project-company-contact-link-api` pass; `npm.cmd run test:project-company-contact-link-contract` pass; `npm.cmd test` pass; `npm.cmd run typecheck` pass with dummy `DATABASE_URL` after explicit `npx.cmd prisma generate`; `npm.cmd run build` pass with dummy `DATABASE_URL`; `npm.cmd audit --audit-level=high` pass with 0 vulnerabilities; `npx.cmd prisma validate` pass with dummy `DATABASE_URL`; `npx.cmd prisma generate` pass with dummy `DATABASE_URL`.
+- Remaining: Draft PR #85 is open. Ready/merge, real DB smoke, UI, deploy, and staging/production operations are not done.
+- Risk / Need coordination: No real DB write smoke, migration/schema change, deploy, UI change, staging/production operation, or broad `/api/projects` PATCH reuse. Role/reason enum and roleOrder/isPrimary are centralized as exported helper constants, but docs/static tests intentionally duplicate the contract and must be updated together when those enums/tables change.
+
 ### 2026-06-20 JST / Codex project company/contact link contract
 
 - Scope: Created clean worktree/branch `codex/project-company-contact-link-contract-20260620` from latest `origin/main` at `b0d4cc1e547a6f37f3e2571e71a2d4df3ab5c2ad` after PR #82, and limited the PR to Project company/contact role link contract docs and static tests.

@@ -4,7 +4,9 @@
 
 This contract fixes the write boundary for linking an existing `Company` and an existing `CompanyContact` to a `ProjectCompanyRole`.
 
-This PR is contract/docs/tests only. It does not implement an API route, UI flow, Prisma schema change, migration, deploy, or real DB write smoke.
+Implemented in this PR: guarded helper, narrow route, and mock/pure/route tests for `PATCH /api/projects/[id]/company-contact-role`.
+
+This PR does not implement a UI flow, Prisma schema change, migration, deploy, staging/production operation, or real DB write smoke. The real DB write smoke was not executed.
 
 ## Endpoint Proposal
 
@@ -119,7 +121,7 @@ The minimum stale check uses `Project.updatedAt` as `expectedUpdatedAt`.
 
 ## Transaction And Audit
 
-The future write must run `projectCompanyRole.create` and `auditLog.create` in the same transaction.
+The write must run `projectCompanyRole.create`, `project.update` for the `Project.updatedAt` stale token touch, and `auditLog.create` in the same transaction.
 
 `AuditLog` is mandatory. The audit record must include actor, action, entity type, project id, role, before data, after data, safe reason code, and feature guard target. AuditLog rows must never be deleted by this flow. Rollback or correction must be represented by a separate approved write and its own AuditLog entry.
 
@@ -141,10 +143,8 @@ After success, UI must reload/reselect the project from server data. It must not
 
 ## Out Of Scope
 
-- Implementing `PATCH /api/projects/[id]/company-contact-role`.
 - Changing `app/api/projects/route.ts`.
 - UI changes.
-- DB write helper implementation.
 - Prisma schema changes or migrations.
 - Creating companies or contacts.
 - Updating existing `ProjectCompanyRole` rows.
@@ -153,6 +153,25 @@ After success, UI must reload/reselect the project from server data. It must not
 - Deployment.
 
 Smoke testing and real DB writes require a separate approval and a separate PR.
+
+## Implementation Status
+
+- Route implemented: `app/api/projects/[id]/company-contact-role/route.ts`.
+- Helper implemented: `lib/project-company-contact-role-link.ts`.
+- Route handler implemented: `lib/project-company-contact-role-link-route.ts`.
+- Tests implemented: `scripts/project-company-contact-link-api.test.ts`, `scripts/project-company-contact-link-api-route.test.ts`, and this contract test.
+- Guard behavior implemented: `PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_ENABLED=true` plus `PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET=local|test|staging`; `production`, `NODE_ENV=production`, and `VERCEL_ENV=production` are refused before JSON parsing.
+- DB smoke status: real DB write smoke was not executed.
+
+## Future Improvement / Residual Risk
+
+The implementation centralizes runtime role and reason validation in exported helper constants:
+
+- `PROJECT_COMPANY_CONTACT_ROLE_VALUES`
+- `PROJECT_COMPANY_CONTACT_ROLE_REASON_CODES`
+- `PROJECT_COMPANY_CONTACT_ROLE_DERIVATION`
+
+The contract docs and static contract tests intentionally duplicate those enum/table values to catch accidental drift. Future role or reason expansion must update the helper constants, this contract document, and the static tests together. A future cleanup could generate the docs/test assertions from the exported constants, but that is out of scope for this route implementation PR.
 
 ## Future Test Checklist
 
