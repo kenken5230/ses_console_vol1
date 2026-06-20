@@ -335,14 +335,16 @@ async function main() {
   assert.equal(racingUpdateMock.calls.some(([name]) => name === "auditLog.create"), false);
 
   const routeSource = readProjectFile("app/api/persons/[id]/owner-company-contact/route.ts");
+  const routeHandlerSource = readProjectFile("lib/person-owner-company-contact-link-route.ts");
   assert(routeHasHandler(routeSource, "PATCH"));
   for (const method of ["POST", "PUT", "DELETE"]) {
     assert.equal(routeHasHandler(routeSource, method), false, `${method} must not be exported`);
   }
-  assert.match(routeSource, /requireAnyRole\(request,\s*\["ADMIN",\s*"MANAGER"\]\)/);
-  assert.match(routeSource, /personOwnerCompanyContactLinkGuard/);
-  assert.match(routeSource, /disabledPersonOwnerCompanyContactLinkResponse/);
-  assert.ok(routeSource.indexOf("personOwnerCompanyContactLinkGuard") < routeSource.indexOf("request.json()"));
+  assert.match(routeSource, /handlePersonOwnerCompanyContactPatch/);
+  assert.match(routeHandlerSource, /requireAnyRole\(request,\s*\["ADMIN",\s*"MANAGER"\]\)/);
+  assert.match(routeHandlerSource, /personOwnerCompanyContactLinkGuard/);
+  assert.match(routeHandlerSource, /disabledPersonOwnerCompanyContactLinkResponse/);
+  assert.ok(routeHandlerSource.indexOf("personOwnerCompanyContactLinkGuard") < routeHandlerSource.indexOf("request.json()"));
 
   const personsRouteSource = readProjectFile("app/api/persons/route.ts");
   assert.equal(routeHasHandler(personsRouteSource, "PATCH"), false, "PATCH /api/persons must not be introduced");
