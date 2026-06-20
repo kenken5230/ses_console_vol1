@@ -1,5 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "./Badge";
+import {
+  buildProjectCompanyContactRoleLinkPayload,
+  getProjectCompanyContactRoleLinkGate,
+  PROJECT_COMPANY_CONTACT_ROLE_LINK_CONFIRMATION_LABEL,
+  PROJECT_COMPANY_CONTACT_ROLE_LINK_DEFAULT_REASON_CODE,
+  PROJECT_COMPANY_CONTACT_ROLE_LINK_REASON_OPTIONS,
+  PROJECT_COMPANY_CONTACT_ROLE_LINK_ROLE_OPTIONS
+} from "../lib/project-company-contact-role-link-ui";
 
 function isEmpty(value) {
   return value === "-" || value === "未入力" || value === "" || value === null || value === undefined;
@@ -88,7 +96,14 @@ function CompanyContactCandidateList({ candidates = [] }) {
   );
 }
 
-function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
+function DetailItemValue({
+  currentUserRole,
+  item,
+  itemKeyPrefix = "detail-item",
+  onCompanyContactRoleLinked,
+  project,
+  projectCompanyContactRoleLinkWriteAllowed
+}) {
   if (item.type === "block") {
     return <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>;
   }
@@ -161,13 +176,242 @@ function DetailItemValue({ item, itemKeyPrefix = "detail-item" }) {
   }
 
   if (item.type === "companyContactCandidates") {
-    return <CompanyContactCandidateList candidates={item.companyContactCandidates || []} />;
+    const candidates = item.companyContactCandidates || [];
+    return (
+      <>
+        <CompanyContactCandidateList candidates={candidates} />
+        <ProjectCompanyContactRoleLinkPanel
+          candidates={candidates}
+          currentUserRole={currentUserRole}
+          onCompanyContactRoleLinked={onCompanyContactRoleLinked}
+          project={project}
+          projectCompanyContactRoleLinkWriteAllowed={projectCompanyContactRoleLinkWriteAllowed}
+        />
+      </>
+    );
   }
 
   return <strong className={`${item.emphasis ? "important-value" : ""} ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</strong>;
 }
 
-export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClose, onCopyUrl, onDetailAction, project }) {
+function candidateTitle(candidate) {
+  const company = candidate.company || {};
+  const contact = candidate.contact || {};
+  return [company.name, contact.name].filter(Boolean).join(" / ") || "候補";
+}
+
+function projectLinkErrorMessage(status, result) {
+  const reason = result?.reasonCode ? ` (${result.reasonCode})` : "";
+  if (status === 409 || result?.status === "manual-review") {
+    return `手動確認が必要です。最新状態を確認してから再実行してください${reason}`;
+  }
+  if (status === 403 || result?.status === "disabled") {
+    return `この環境または権限ではリンクできません${reason}`;
+  }
+  return result?.message ? `${result.message}${reason}` : `リンクに失敗しました${reason}`;
+}
+
+function ProjectCompanyContactRoleLinkPanel({
+  candidates,
+  currentUserRole,
+  onCompanyContactRoleLinked,
+  project,
+  projectCompanyContactRoleLinkWriteAllowed
+}) {
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [selectedRole, setSelectedRole] = useState("");
+  const [selectedReasonCode, setSelectedReasonCode] = useState(PROJECT_COMPANY_CONTACT_ROLE_LINK_DEFAULT_REASON_CODE);
+  const [confirmed, setConfirmed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    setSelectedIndex(null);
+    setSelectedRole("");
+    setSelectedReasonCode(PROJECT_COMPANY_CONTACT_ROLE_LINK_DEFAULT_REASON_CODE);
+    setConfirmed(false);
+    setNotice("");
+  }, [project?.dbId]);
+
+  const rows = useMemo(() => {
+    return candidates
+      .map((candidate, index) => ({
+        candidate,
+        gate: getProjectCompanyContactRoleLinkGate({
+          candidate,
+          currentUserRole,
+          project,
+          projectCompanyContactRoleLinkWriteAllowed
+        }),
+        index
+      }))
+      .filter((row) => row.gate.visible);
+  }, [candidates, currentUserRole, project, projectCompanyContactRoleLinkWriteAllowed]);
+
+  if (!candidates.length || !rows.length) return null;
+
+  const selectedRow = rows.find((row) => row.index === selectedIndex) || null;
+  const selectedGate = selectedRow
+    ? getProjectCompanyContactRoleLinkGate({
+      candidate: selectedRow.candidate,
+      currentUserRole,
+      project,
+      projectCompanyContactRoleLinkWriteAllowed,
+      role: selectedRole || undefined
+    })
+    : null;
+  const canSubmit = Boolean(selectedRow && selectedRole && selectedReasonCode && selectedGate?.enabled && confirmed && !isSubmitting);
+
+  const openConfirmation = (row) => {
+    if (!row.gate.enabled) return;
+    setSelectedIndex(row.index);
+    setSelectedRole("");
+    setSelectedReasonCode(PROJECT_COMPANY_CONTACT_ROLE_LINK_DEFAULT_REASON_CODE);
+    setConfirmed(false);
+    setNotice("");
+  };
+
+  const handleRoleChange = (event) => {
+    setSelectedRole(event.target.value);
+    setConfirmed(false);
+  };
+
+  const handleReasonCodeChange = (event) => {
+    setSelectedReasonCode(event.target.value);
+    setConfirmed(false);
+  };
+
+  const submitLink = async () => {
+    if (!canSubmit || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setNotice("");
+    try {
+      const payload = buildProjectCompanyContactRoleLinkPayload(
+        project,
+        selectedRow.candidate,
+        selectedRole,
+        selectedReasonCode
+      );
+      const response = await fetch(`/api/projects/${encodeURIComponent(project.dbId)}/company-contact-role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || result?.status === "manual-review" || result?.status === "disabled" || result?.status === "error") {
+        setNotice(projectLinkErrorMessage(response.status, result));
+        return;
+      }
+
+      setNotice("リンクを保存しました。最新データを再取得しています。");
+      await onCompanyContactRoleLinked?.(project.dbId, result);
+      setSelectedIndex(null);
+      setSelectedRole("");
+      setSelectedReasonCode(PROJECT_COMPANY_CONTACT_ROLE_LINK_DEFAULT_REASON_CODE);
+      setConfirmed(false);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "リンクに失敗しました");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="person-owner-link-panel">
+      <div className="person-owner-link-heading">
+        <strong>既存会社・既存担当者にリンク</strong>
+        <span>新規作成や上書きは行いません</span>
+      </div>
+      <div className="person-owner-link-candidates">
+        {rows.map((row) => (
+          <div className="person-owner-link-row" key={`project-company-contact-role-link-${row.index}-${candidateTitle(row.candidate)}`}>
+            <div>
+              <strong>{candidateTitle(row.candidate)}</strong>
+              <span>
+                Company ID: {row.candidate.company?.id || "-"} / Contact ID: {row.candidate.contact?.id || "-"}
+              </span>
+              {!row.gate.enabled ? <em>{row.gate.reason}</em> : null}
+            </div>
+            <button
+              className="outline-primary"
+              disabled={!row.gate.enabled || isSubmitting}
+              onClick={() => openConfirmation(row)}
+              type="button"
+            >
+              リンク確認へ
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {selectedRow ? (
+        <div className="person-owner-link-confirmation" role="group" aria-label="案件の既存会社・既存担当者リンク確認">
+          <strong>{candidateTitle(selectedRow.candidate)}</strong>
+          <label className="person-owner-link-check">
+            <span>ロール</span>
+            <select disabled={isSubmitting} onChange={handleRoleChange} value={selectedRole}>
+              <option value="">選択してください</option>
+              {PROJECT_COMPANY_CONTACT_ROLE_LINK_ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="person-owner-link-check">
+            <span>理由コード</span>
+            <select disabled={isSubmitting} onChange={handleReasonCodeChange} value={selectedReasonCode}>
+              {PROJECT_COMPANY_CONTACT_ROLE_LINK_REASON_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <ul>
+            <li>既存会社・既存担当者を案件ロールにリンクするだけです。</li>
+            <li>新規会社・新規担当者は作成しません。</li>
+            <li>既存ロールは上書きしません。</li>
+            <li>元メール本文や自由メモは送信しません。</li>
+          </ul>
+          {selectedRole && !selectedGate?.enabled ? <p className="person-owner-link-notice" role="status">{selectedGate?.reason}</p> : null}
+          <label className="person-owner-link-check">
+            <input
+              checked={confirmed}
+              onChange={(event) => setConfirmed(event.target.checked)}
+              type="checkbox"
+            />
+            <span>{PROJECT_COMPANY_CONTACT_ROLE_LINK_CONFIRMATION_LABEL}</span>
+          </label>
+          <div className="person-owner-link-actions">
+            <button className="ghost-button" disabled={isSubmitting} onClick={() => setSelectedIndex(null)} type="button">
+              キャンセル
+            </button>
+            <button className="primary-button" disabled={!canSubmit} onClick={submitLink} type="button">
+              {isSubmitting ? "リンク中..." : "確定してリンク"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {notice ? <p className="person-owner-link-notice" role="status">{notice}</p> : null}
+    </div>
+  );
+}
+
+export default function ProjectDetailPane({
+  canEdit = true,
+  currentUserRole,
+  onAddProposal,
+  onClose,
+  onCompanyContactRoleLinked,
+  onCopyUrl,
+  onDetailAction,
+  project,
+  projectCompanyContactRoleLinkWriteAllowed = false
+}) {
   useEffect(() => {
     if (!project) return undefined;
 
@@ -296,7 +540,14 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
                     return (
                       <div className={`detail-item ${item.type === "block" || item.type === "tags" || item.type === "commerce" || item.type === "mail" || item.type === "companyContacts" || item.type === "companyContactCandidates" ? "detail-item-wide" : ""}`} key={itemKeyPrefix}>
                         <span className="field-label">{item.label}</span>
-                        <DetailItemValue item={item} itemKeyPrefix={itemKeyPrefix} />
+                        <DetailItemValue
+                          currentUserRole={currentUserRole}
+                          item={item}
+                          itemKeyPrefix={itemKeyPrefix}
+                          onCompanyContactRoleLinked={onCompanyContactRoleLinked}
+                          project={project}
+                          projectCompanyContactRoleLinkWriteAllowed={projectCompanyContactRoleLinkWriteAllowed}
+                        />
                       </div>
                     );
                   })}

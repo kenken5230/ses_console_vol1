@@ -228,6 +228,7 @@ export default function Home() {
   const [authStatus, setAuthStatus] = useState("checking");
   const [currentUser, setCurrentUser] = useState(null);
   const [personOwnerLinkWriteAllowed, setPersonOwnerLinkWriteAllowed] = useState(false);
+  const [projectCompanyContactRoleLinkWriteAllowed, setProjectCompanyContactRoleLinkWriteAllowed] = useState(false);
   const [activeTab, setActiveTab] = useState("案件");
   const [search, setSearch] = useState("");
   const [checkedFilters, setCheckedFilters] = useState(defaultQuickFilters);
@@ -263,6 +264,7 @@ export default function Home() {
           if (ignore) return;
           setCurrentUser(null);
           setPersonOwnerLinkWriteAllowed(false);
+          setProjectCompanyContactRoleLinkWriteAllowed(false);
           setAuthStatus("unauthenticated");
           setProjects([]);
           setPersons([]);
@@ -278,12 +280,14 @@ export default function Home() {
         if (ignore) return;
         if (nextData.currentUser) setCurrentUser(nextData.currentUser);
         setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
+        setProjectCompanyContactRoleLinkWriteAllowed(nextData.projectCompanyContactRoleLinkWriteAllowed === true);
         setProjects(nextData.projects || []);
         setPersons(nextData.persons || []);
         setUnclassifiedMails(nextData.unclassifiedMails || []);
       } catch (error) {
         if (!ignore) {
           setPersonOwnerLinkWriteAllowed(false);
+          setProjectCompanyContactRoleLinkWriteAllowed(false);
           setAuthStatus("unauthenticated");
           setNotice(error instanceof Error ? error.message : "DBデータの取得に失敗しました");
         }
@@ -316,6 +320,7 @@ export default function Home() {
       const nextData = await fetchDashboardData();
       if (nextData.currentUser) setCurrentUser(nextData.currentUser);
       setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
+      setProjectCompanyContactRoleLinkWriteAllowed(nextData.projectCompanyContactRoleLinkWriteAllowed === true);
       setProjects(nextData.projects || []);
       setPersons(nextData.persons || []);
       setUnclassifiedMails(nextData.unclassifiedMails || []);
@@ -332,6 +337,7 @@ export default function Home() {
     const nextData = await fetchDashboardData();
     if (nextData.currentUser) setCurrentUser(nextData.currentUser);
     setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
+    setProjectCompanyContactRoleLinkWriteAllowed(nextData.projectCompanyContactRoleLinkWriteAllowed === true);
     setProjects(nextData.projects || []);
     setPersons(nextData.persons || []);
     setUnclassifiedMails(nextData.unclassifiedMails || []);
@@ -344,6 +350,14 @@ export default function Home() {
     setSelectedPerson(nextSelectedPerson);
     setNotice("既存会社・既存担当者へのリンクを保存し、最新データを再取得しました");
     return nextSelectedPerson;
+  };
+
+  const handleProjectCompanyContactRoleLinked = async (projectDbId) => {
+    const nextData = await reloadDashboardData();
+    const nextSelectedProject = nextData.projects?.find((project) => project.dbId === projectDbId || project.id === projectDbId) || null;
+    setSelectedProject(nextSelectedProject);
+    setNotice("案件の既存会社・既存担当者リンクを保存し、最新データを再取得しました");
+    return nextSelectedProject;
   };
 
   const handleAuthenticated = async (user) => {
@@ -364,6 +378,7 @@ export default function Home() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     setCurrentUser(null);
     setPersonOwnerLinkWriteAllowed(false);
+    setProjectCompanyContactRoleLinkWriteAllowed(false);
     setAuthStatus("unauthenticated");
     setProjects([]);
     setPersons([]);
@@ -1029,11 +1044,14 @@ export default function Home() {
         {isProjectTab ? (
           <ProjectDetailPane
             canEdit={canEditEntities}
+            currentUserRole={currentUser?.role}
             onAddProposal={handleAddProposal}
             onClose={() => setSelectedProject(null)}
+            onCompanyContactRoleLinked={handleProjectCompanyContactRoleLinked}
             onCopyUrl={handleCopyUrl}
             onDetailAction={handleDetailAction}
             project={selectedProject}
+            projectCompanyContactRoleLinkWriteAllowed={projectCompanyContactRoleLinkWriteAllowed}
           />
         ) : null}
         {isPersonTab ? (

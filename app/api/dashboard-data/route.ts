@@ -15,6 +15,7 @@ import {
 } from "../../../lib/company-contact-candidates";
 import { isCompanyContactLinkWriterRole } from "../../../lib/link-safety-policy";
 import { mergePersonFormInitialValues } from "../../../lib/person-form-contract";
+import { projectCompanyContactRoleLinkGuard } from "../../../lib/project-company-contact-role-link";
 
 export const dynamic = "force-dynamic";
 const EMPTY_VALUE = "-";
@@ -720,6 +721,7 @@ function mapProject(project: any, companyContactCandidateSources: readonly Compa
   return {
     id: project.projectCode || project.id.slice(0, 8),
     dbId: project.id,
+    projectCompanyContactRoleLinkUpdatedAt: project.updatedAt?.toISOString?.() || "",
     sourceMailDbId: project.sourceMail?.id || project.sourceMailId || null,
     title: project.title,
     category: "SES",
@@ -970,6 +972,8 @@ export async function GET(request: Request) {
   try {
     const currentUser = await requireAuth(request);
     const personOwnerLinkWriteAllowed = isCompanyContactLinkWriterRole(currentUser.role);
+    const projectCompanyContactRoleLinkWriteAllowed =
+      isCompanyContactLinkWriterRole(currentUser.role) && projectCompanyContactRoleLinkGuard().allowed;
     const [projects, persons, unclassifiedMails, companies, companyContactCandidateCompanies] = await Promise.all([
     prisma.project.findMany({
       where: {
@@ -1172,6 +1176,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       currentUser,
       personOwnerLinkWriteAllowed,
+      projectCompanyContactRoleLinkWriteAllowed,
       projects: projects.map((project) => mapProject(project, companyContactCandidateSources)),
       persons: persons.map((person) => mapPerson(person, companyContactCandidateSources)),
       unclassifiedMails: unclassifiedMails.map((mail) => mapUnclassifiedMail(mail, companies))

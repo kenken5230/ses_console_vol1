@@ -141,10 +141,12 @@ Success response contains only minimal identifiers:
 
 After success, UI must reload/reselect the project from server data. It must not apply an optimistic write to local project details.
 
+The guarded project detail UI may use this narrow route only after a candidate is shown, an operator opens the confirmation panel, selects a bounded `role` and bounded `reasonCode`, and checks the confirmation checkbox. The UI payload must be built from the contract fields above and must not include raw mail body, notes, names, emails, phone text, or arbitrary free text.
+
 ## Out Of Scope
 
 - Changing `app/api/projects/route.ts`.
-- UI changes.
+- Further UI changes beyond the guarded project detail link panel.
 - Prisma schema changes or migrations.
 - Creating companies or contacts.
 - Updating existing `ProjectCompanyRole` rows.
@@ -159,6 +161,8 @@ Smoke testing and real DB writes require a separate approval and a separate PR.
 - Route implemented: `app/api/projects/[id]/company-contact-role/route.ts`.
 - Helper implemented: `lib/project-company-contact-role-link.ts`.
 - Route handler implemented: `lib/project-company-contact-role-link-route.ts`.
+- Guarded UI helper implemented: `lib/project-company-contact-role-link-ui.ts`.
+- Project detail UI implemented: `components/ProjectDetailPane.jsx` calls only `PATCH /api/projects/[id]/company-contact-role` and reloads/reselects after success.
 - Tests implemented: `scripts/project-company-contact-link-api.test.ts`, `scripts/project-company-contact-link-api-route.test.ts`, and this contract test.
 - Guard behavior implemented: `PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_ENABLED=true` plus `PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET=local|test|staging`; `production`, `NODE_ENV=production`, and `VERCEL_ENV=production` are refused before JSON parsing.
 - DB smoke status: real DB write smoke was not executed.

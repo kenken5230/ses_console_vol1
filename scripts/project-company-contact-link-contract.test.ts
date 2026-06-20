@@ -71,15 +71,19 @@ const allowedTouchedFiles = new Set([
   "app/api/projects/[id]/company-contact-role/route.ts",
   "app/api/projects/[id]/",
   docsPath,
+  "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   operationsPath,
   scriptPath,
   "lib/person-owner-company-contact-link.ts",
   "lib/person-owner-company-contact-link-route.ts",
   "lib/person-owner-link-ui.ts",
   "lib/project-company-contact-role-link.ts",
+  "lib/project-company-contact-role-link-contract.ts",
   "lib/project-company-contact-role-link-route.ts",
+  "lib/project-company-contact-role-link-ui.ts",
   "scripts/project-company-contact-link-api.test.ts",
   "scripts/project-company-contact-link-api-route.test.ts",
+  "scripts/project-company-contact-link-ui.test.ts",
   "lib/link-safety-policy.ts",
   "docs/status/README.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
@@ -94,6 +98,9 @@ const allowedTouchedFiles = new Set([
   "scripts/person-owner-link-api.test.ts",
   "scripts/person-owner-link-http-smoke-preflight.ts",
   "scripts/person-owner-link-ui.test.ts",
+  "app/globals.css",
+  "app/page.jsx",
+  "components/ProjectDetailPane.jsx",
   packagePath,
   progressPath
 ]);
@@ -104,7 +111,6 @@ for (const filePath of touchedFilesFromGit()) {
     `project company/contact role link API PR touched an unexpected file: ${filePath}`
   );
   assert(filePath !== "app/api/projects/route.ts", `broad projects PATCH route is out of scope: ${filePath}`);
-  assert(!filePath.startsWith("components/"), `UI files are out of scope: ${filePath}`);
   assert(!filePath.startsWith("prisma/"), `schema/migration changes are out of scope: ${filePath}`);
 }
 
@@ -195,8 +201,10 @@ for (const requiredText of [
 }
 
 assert(packageSource.includes("test:project-company-contact-link-contract"), "package.json must expose the project company/contact link contract test");
+assert(packageSource.includes("test:project-company-contact-link-ui"), "package.json must expose the project company/contact link UI test");
 assert(packageSource.includes("test:project-company-contact-link-api"), "package.json must expose the project company/contact link API test");
 assert(packageSource.includes("npm run test:project-company-contact-link-contract"), "npm test must include the project company/contact link contract test");
+assert(packageSource.includes("npm run test:project-company-contact-link-ui"), "npm test must include the project company/contact link UI test");
 assert(packageSource.includes("npm run test:project-company-contact-link-api"), "npm test must include the project company/contact link API test");
 
 assert(existsSync(path.join(rootDir, projectRoutePath)), `${projectRoutePath} must be implemented in this PR`);
