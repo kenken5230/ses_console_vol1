@@ -6,7 +6,7 @@ This contract fixes the write boundary for linking an existing `Company` and an 
 
 Implemented in this PR: guarded helper, narrow route, and mock/pure/route tests for `PATCH /api/projects/[id]/company-contact-role`.
 
-This PR does not implement a UI flow, Prisma schema change, migration, deploy, staging/production operation, or real DB write smoke. The real DB write smoke was not executed.
+This PR implements the guarded Project detail UI flow for existing company/contact role linking. It does not implement a Prisma schema change, migration, deploy, staging/production operation, or real DB write smoke. The real DB write smoke was not executed.
 
 ## Endpoint Proposal
 
