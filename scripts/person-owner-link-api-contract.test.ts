@@ -64,7 +64,10 @@ const allowedTouchedFiles = new Set([
   "app/page.jsx",
   "components/PersonDetailPane.jsx",
   "docs/themes/ses-sales-console/operations/",
+  "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
   "docs/themes/ses-sales-console/operations/person-owner-link-db-smoke-preflight-2026-06-20.md",
+  "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
+  "docs/status/README.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-link-ui-2026-06-20.md",
@@ -82,6 +85,7 @@ const allowedTouchedFiles = new Set([
   "scripts/company-contact-write-contract.test.ts",
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
+  "scripts/person-owner-link-http-smoke-preflight.ts",
   "package.json",
   "PROGRESS.md"
 ]);
