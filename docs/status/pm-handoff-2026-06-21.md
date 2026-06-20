@@ -7,9 +7,12 @@ This handoff records the parent-PM state for PR #89 and the current sub-agent wo
 - PR: #89 `Add guarded project company contact link UI`
 - URL: https://github.com/kenken5230/ses_console_vol1/pull/89
 - State: open / Draft
-- Latest head: `189a5caa999b1884050d816bb50d19a971a666ff`
+- Live PR head: verify on GitHub before acting; this file is part of the PR and may move the head when updated.
+- Last audited PR head before this maintenance series: `959c8d5132734173b101c1f426d22ede4c3f4970`
+- Handoff doc added in commit: `189a5caa999b1884050d816bb50d19a971a666ff`
+- Handoff self-reference fix commit will move the PR head again; do not treat embedded commit IDs as live state.
 - Base: `main`
-- PR changed files: 21 after this handoff doc was added
+- PR changed files: 21 at the time of this handoff maintenance; verify current count on GitHub before acting
 - Mergeable at last check: true
 - Vercel status at last check: success
 - Manual deploy: not run
@@ -31,7 +34,7 @@ This handoff records the parent-PM state for PR #89 and the current sub-agent wo
   - deleted files: none
 - Updated PR #89 body:
   - changed files count corrected to 20 at the docs sync commit, before this handoff doc was added
-  - PR changed files count is 21 after this handoff doc was added
+  - PR changed files count was 21 after this handoff doc was added; verify current count on GitHub before acting
   - manual deploy and auto Vercel Preview are separated
   - Browser QA and real DB write smoke remain pending
 
