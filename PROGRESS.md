@@ -102,6 +102,15 @@
 - Remaining: Vercel/PR checks確認、Browser visual QAは別枠。
 - Risk / Need coordination: Next major updateを含むため、復旧PR #53とは別PRにする。
 
+### 2026-06-20 JST / Codex person owner link UI
+
+- Scope: latest `origin/main` から clean worktree/branch `codex/person-owner-link-ui-20260620` を作成し、Person detail から既存 Company/CompanyContact へ安全にリンクする guarded UI flow を追加する。
+- Done: dashboard payload に owner link 用 timestamp/owner IDs/review status/write flag を追加。候補リスト下に確認必須の link panel を追加。UI gating helper と test/docs を追加。
+- Changed: `app/page.jsx`, `app/api/dashboard-data/route.ts`, `components/PersonDetailPane.jsx`, `app/globals.css`, `lib/person-owner-link-ui.ts`, `lib/company-contact-candidates.ts`, `scripts/person-owner-link-ui.test.ts`, related contract tests/docs。
+- Validation: 実装後に `git diff --check`, focused tests, API tests, typecheck, full test, build, audit, Prisma validate/generate を実行予定。
+- Remaining: Draft PR 作成後、親PMの review agent に引き継ぐ。
+- Risk / Need coordination: 実DB write smoke、migration、deploy、production/staging DB 操作は行わない。
+
 ## 引き継ぎテンプレート
 
 ```md

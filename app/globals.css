@@ -1628,6 +1628,124 @@ input[type="radio"] {
   grid-column: 1 / -1;
 }
 
+.person-owner-link-panel {
+  background: #fff;
+  border: 1px solid #cfd8e3;
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.person-owner-link-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.person-owner-link-heading strong {
+  color: #263241;
+  font-size: 15px;
+}
+
+.person-owner-link-heading span,
+.person-owner-link-row span,
+.person-owner-link-row em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.person-owner-link-candidates {
+  display: grid;
+  gap: 8px;
+}
+
+.person-owner-link-row {
+  align-items: center;
+  border: 1px solid #e3e8f0;
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.person-owner-link-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.person-owner-link-row strong,
+.person-owner-link-row span,
+.person-owner-link-row em {
+  overflow-wrap: anywhere;
+}
+
+.person-owner-link-row em {
+  color: #b81f38;
+}
+
+.person-owner-link-confirmation {
+  background: #f7f9fc;
+  border: 1px solid #d8dee9;
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.person-owner-link-confirmation ul {
+  color: #344154;
+  display: grid;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 5px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.person-owner-link-check {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.person-owner-link-check input {
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.person-owner-link-check span {
+  font-size: 14px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.person-owner-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.person-owner-link-notice {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  color: #8a3a05;
+  font-size: 13px;
+  font-weight: 900;
+  margin: 0;
+  padding: 9px 10px;
+}
+
 .person-value {
   align-items: center;
   display: inline-flex;
@@ -3380,6 +3498,7 @@ input[type="radio"] {
   .match-help-grid,
   .readonly-company-row,
   .readonly-candidate-row,
+  .person-owner-link-row,
   .match-reference-grid {
     grid-template-columns: 1fr;
   }

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Person の既存会社/担当者紐づけを DB 保存APIへ進める前に、最小 write API contract を固定する。このPRでは API route 本体、DB write route、migration、schema変更、UI保存ボタン、deploy は行わない。
+Person の既存会社/担当者紐づけを DB 保存APIへ進める前に、最小 write API contract を固定する。現在は `PATCH /api/persons/[id]/owner-company-contact` と guarded UI flow が実装済み。migration、schema変更、generic Company/CompanyContact write route、Project link UI、deploy は行わない。
 
-## Endpoint Draft
+## Endpoint
 
 - Method/path: `PATCH /api/persons/[id]/owner-company-contact`
 - Intent: `LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT`
@@ -101,7 +101,7 @@ Example manual-review response:
 
 ## Future API Implementation Required Case Table
 
-将来のAPI実装PRでは、少なくとも次のケースを contract test に含める。
+API 実装済みの現在も、少なくとも次のケースを contract test に含め続ける。
 
 | Case | Input / State | Expected |
 | --- | --- | --- |
@@ -123,7 +123,7 @@ Example manual-review response:
 
 ## AuditLog Draft
 
-DB write 実装時は、同一 transaction 内で `AuditLog` に beforeData / afterData を残す。
+DB write は同一 transaction 内で `AuditLog` に beforeData / afterData を残す。現在の実装では metadata は `afterData.metadata` に入る。
 
 ```json
 {
@@ -138,16 +138,16 @@ DB write 実装時は、同一 transaction 内で `AuditLog` に beforeData / af
   "afterData": {
     "ownerCompanyId": "company-uuid",
     "ownerContactId": "contact-uuid",
-    "updatedAt": "2026-06-20T00:00:01.000Z"
-  },
-  "metadata": {
-    "intent": "LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT",
-    "companyId": "company-uuid",
-    "contactId": "contact-uuid",
-    "confirmed": true,
-    "featureGuard": {
-      "COMPANY_CONTACT_LINK_WRITE_ENABLED": "true",
-      "COMPANY_CONTACT_LINK_WRITE_TARGET": "staging"
+    "updatedAt": "2026-06-20T00:00:01.000Z",
+    "metadata": {
+      "intent": "LINK_EXISTING_PERSON_OWNER_COMPANY_CONTACT",
+      "companyId": "company-uuid",
+      "contactId": "contact-uuid",
+      "confirmed": true,
+      "featureGuard": {
+        "COMPANY_CONTACT_LINK_WRITE_ENABLED": "true",
+        "COMPANY_CONTACT_LINK_WRITE_TARGET": "staging"
+      }
     }
   }
 }
@@ -155,12 +155,11 @@ DB write 実装時は、同一 transaction 内で `AuditLog` に beforeData / af
 
 ## Out Of Scope
 
-- API route 本体作成。
-- DB write route 追加。
 - `PATCH /api/persons` 追加。
 - `app/api/companies/**` / `app/api/company-contacts/**` 新設。
 - Prisma schema / migration 変更。
-- UI保存ボタン追加。
+- Project owner/company/contact link UI。
+- generic Company/CompanyContact write UI。
 - rollback route 実装。
 - 実DB write smoke。
 - production write。

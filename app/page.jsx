@@ -227,6 +227,7 @@ export default function Home() {
   const [isLoadingDbData, setIsLoadingDbData] = useState(true);
   const [authStatus, setAuthStatus] = useState("checking");
   const [currentUser, setCurrentUser] = useState(null);
+  const [personOwnerLinkWriteAllowed, setPersonOwnerLinkWriteAllowed] = useState(false);
   const [activeTab, setActiveTab] = useState("案件");
   const [search, setSearch] = useState("");
   const [checkedFilters, setCheckedFilters] = useState(defaultQuickFilters);
@@ -261,6 +262,7 @@ export default function Home() {
         if (!session?.authenticated || !session?.user) {
           if (ignore) return;
           setCurrentUser(null);
+          setPersonOwnerLinkWriteAllowed(false);
           setAuthStatus("unauthenticated");
           setProjects([]);
           setPersons([]);
@@ -275,11 +277,13 @@ export default function Home() {
         const nextData = await fetchDashboardData();
         if (ignore) return;
         if (nextData.currentUser) setCurrentUser(nextData.currentUser);
+        setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
         setProjects(nextData.projects || []);
         setPersons(nextData.persons || []);
         setUnclassifiedMails(nextData.unclassifiedMails || []);
       } catch (error) {
         if (!ignore) {
+          setPersonOwnerLinkWriteAllowed(false);
           setAuthStatus("unauthenticated");
           setNotice(error instanceof Error ? error.message : "DBデータの取得に失敗しました");
         }
@@ -310,6 +314,8 @@ export default function Home() {
     setIsLoadingDbData(true);
     try {
       const nextData = await fetchDashboardData();
+      if (nextData.currentUser) setCurrentUser(nextData.currentUser);
+      setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
       setProjects(nextData.projects || []);
       setPersons(nextData.persons || []);
       setUnclassifiedMails(nextData.unclassifiedMails || []);
@@ -325,10 +331,19 @@ export default function Home() {
   const reloadDashboardData = async () => {
     const nextData = await fetchDashboardData();
     if (nextData.currentUser) setCurrentUser(nextData.currentUser);
+    setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
     setProjects(nextData.projects || []);
     setPersons(nextData.persons || []);
     setUnclassifiedMails(nextData.unclassifiedMails || []);
     return nextData;
+  };
+
+  const handlePersonOwnerLinkLinked = async (personDbId) => {
+    const nextData = await reloadDashboardData();
+    const nextSelectedPerson = nextData.persons?.find((person) => person.dbId === personDbId) || null;
+    setSelectedPerson(nextSelectedPerson);
+    setNotice("既存会社・既存担当者へのリンクを保存し、最新データを再取得しました");
+    return nextSelectedPerson;
   };
 
   const handleAuthenticated = async (user) => {
@@ -348,6 +363,7 @@ export default function Home() {
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     setCurrentUser(null);
+    setPersonOwnerLinkWriteAllowed(false);
     setAuthStatus("unauthenticated");
     setProjects([]);
     setPersons([]);
@@ -1023,9 +1039,12 @@ export default function Home() {
         {isPersonTab ? (
           <PersonDetailPane
             canEdit={canEditEntities}
+            currentUserRole={currentUser?.role}
             onClose={() => setSelectedPerson(null)}
             onMoveToUnclassified={(person) => handleMoveEntityToUnclassified("person", person)}
+            onOwnerLinkLinked={handlePersonOwnerLinkLinked}
             person={selectedPerson}
+            personOwnerLinkWriteAllowed={personOwnerLinkWriteAllowed}
           />
         ) : null}
         {isUnclassifiedTab ? (

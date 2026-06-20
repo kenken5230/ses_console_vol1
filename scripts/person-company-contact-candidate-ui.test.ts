@@ -42,9 +42,11 @@ function touchedFilesFromGit() {
 }
 
 const allowedTouchedFiles = new Set([
+  "app/globals.css",
   "app/api/dashboard-data/route.ts",
   "app/api/persons/[id]/",
   "app/api/persons/[id]/owner-company-contact/route.ts",
+  "app/page.jsx",
   "components/PersonDetailPane.jsx",
   "components/ProjectDetailPane.jsx",
   "app/globals.css",
@@ -53,17 +55,22 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/person-owner-link-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
+  "lib/company-contact-candidates.ts",
   "lib/person-owner-company-contact-link.ts",
   "lib/person-owner-company-contact-link-route.ts",
+  "lib/person-owner-link-ui.ts",
   "scripts/person-owner-link-api-route.test.ts",
   "scripts/person-owner-link-api.test.ts",
+  "scripts/person-owner-link-ui.test.ts",
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
   "scripts/company-contact-write-contract.test.ts",
   "scripts/person-owner-link-api-contract.test.ts",
-  "package.json"
+  "package.json",
+  "PROGRESS.md"
 ]);
 
 for (const filePath of touchedFilesFromGit()) {
