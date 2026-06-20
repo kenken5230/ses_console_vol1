@@ -1,153 +1,49 @@
 # Project Progress
 
-### 2026-06-20 JST / Codex project company/contact role link API
+Updated: 2026-06-20 19:16 JST
 
-- Scope: Created clean worktree/branch `codex/project-company-contact-link-api-20260620` from latest `origin/main` at `b2df444ca8c12178465c17cc474a9da7b20726c2` after PR #84; implement guarded Project company/contact role link API without UI, schema, migration, deploy, or real DB smoke.
-- Done: Added `PATCH /api/projects/[id]/company-contact-role`, route handler, guarded helper, exact payload validation, role/reason bounded enums, UUID/stale validation, existing-role conflict handling, existing Company/CompanyContact checks, contact mismatch/inactive/blocked-company manual review refusals, transaction-scoped `ProjectCompanyRole` create + `Project.updatedAt` touch + `AuditLog` create, and mock/pure/route tests.
-- Changed: `app/api/projects/[id]/company-contact-role/route.ts`, `lib/project-company-contact-role-link.ts`, `lib/project-company-contact-role-link-route.ts`, `scripts/project-company-contact-link-api.test.ts`, `scripts/project-company-contact-link-api-route.test.ts`, project contract/operation docs, related scope guard tests, `package.json`, and this `PROGRESS.md` entry.
-- Validation: `git diff --check` pass with CRLF warnings only; `npm.cmd run test:project-company-contact-link-api` pass; `npm.cmd run test:project-company-contact-link-contract` pass; `npm.cmd test` pass; `npm.cmd run typecheck` pass with dummy `DATABASE_URL` after explicit `npx.cmd prisma generate`; `npm.cmd run build` pass with dummy `DATABASE_URL`; `npm.cmd audit --audit-level=high` pass with 0 vulnerabilities; `npx.cmd prisma validate` pass with dummy `DATABASE_URL`; `npx.cmd prisma generate` pass with dummy `DATABASE_URL`.
-- Remaining: Draft PR #85 is open. Ready/merge, real DB smoke, UI, deploy, and staging/production operations are not done.
-- Risk / Need coordination: No real DB write smoke, migration/schema change, deploy, UI change, staging/production operation, or broad `/api/projects` PATCH reuse. Role/reason enum and roleOrder/isPrimary are centralized as exported helper constants, but docs/static tests intentionally duplicate the contract and must be updated together when those enums/tables change.
+This file is the current project snapshot. Dated history belongs in `docs/status/progress-log-YYYY-MM-DD.md` or in a focused status/runbook document.
 
-### 2026-06-20 JST / Codex project company/contact link contract
+## Current Base
 
-- Scope: Created clean worktree/branch `codex/project-company-contact-link-contract-20260620` from latest `origin/main` at `b0d4cc1e547a6f37f3e2571e71a2d4df3ab5c2ad` after PR #82, and limited the PR to Project company/contact role link contract docs and static tests.
-- Done: Added `PATCH /api/projects/[id]/company-contact-role` contract as a future route only. Fixed the safety decisions: do not use existing `/api/projects` PATCH, require explicit `role`, allow only current `ProjectCompanyRoleType` enum values, reject existing `projectId + role` with `409`, use `Project.updatedAt` as `expectedUpdatedAt`, require existing Company/CompanyContact, reject mismatch/inactive/blocked status cases, require ADMIN/MANAGER, reject SALES, require non-production feature guard, require AuditLog, and require UI reload/reselect after success.
-- Changed: `docs/themes/ses-sales-console/requirements/project-company-contact-link-contract-2026-06-20.md`, `scripts/project-company-contact-link-contract.test.ts`, `package.json`, scope guard allow-list updates in related contract tests, and this `PROGRESS.md` entry.
-- Validation: `git diff --check` pass with CRLF warnings only; `npm.cmd run test:project-company-contact-link-contract` pass; `npm.cmd run typecheck` pass with dummy `DATABASE_URL`; `npm.cmd test` pass with dummy `DATABASE_URL`; `npm.cmd run build` pass with dummy `DATABASE_URL`; `npm.cmd audit --audit-level=high` pass with 0 vulnerabilities; `npx.cmd prisma validate` pass with dummy `DATABASE_URL`; `npx.cmd prisma generate` pass with dummy `DATABASE_URL`.
-- Remaining: PR #83 remains open as Draft; review-fix commit pushed; await review/next approval. Route implementation, DB write smoke, and deploy remain separate approval/PR work.
-- Risk / Need coordination: No route implementation, no UI change, no DB write helper, no Prisma schema/migration, no deploy, no real DB write smoke, no production/staging DB operation. Smoke and implementation remain separate approval/PR work.
-
-作成日: 2026-06-13 JST
-
-このファイルは、複数チャットで同じプロジェクトを進めるための進捗ボードです。各チャットは作業開始時に必ずこのファイルを読み、作業終了時に必要な更新を残します。
-
-## 運用ルール
-
-- 開始時: `PROGRESS.md` を読み、重複作業・衝突リスク・未完了タスクを確認する。
-- 編集前: 触る予定の範囲が既存の作業枠と重なる場合は、先にユーザーへ確認する。
-- 実装時: `docs/shared/quality/two-pass-task-test-policy-v0.1.md` を確認し、2周テスト方針に従う。
-- 終了時: 変更内容、確認結果、残タスク、他チャットへの連携事項をこのファイルに残す。
-- 更新不要: 調査だけで成果物・判断・未完了事項が残らない場合は、読み取り確認だけでよい。
-- 禁止: secret、DB接続URL、パスワード、実データの個人情報をここに書かない。
-
-詳細ルール: `docs/shared/operations/chat-progress-coordination-v0.1.md`
-
-## 現在の全体状況
-
-| 項目 | 状態 | メモ |
+| Item | State | Notes |
 |---|---|---|
-| チャット横断進捗管理 | GitHub共有準備中 | 2026-06-13 に本ファイルと運用ルールを追加 |
-| 事故防止ルール | 運用開始 | 開始時確認、編集前衝突確認、終了時更新を基本にする |
-| 既存タスク群 | 要確認 | 既存の未コミット変更が複数ある可能性があるため、各チャットは担当範囲を明示してから作業する |
+| Latest `origin/main` | `89e38ed63ca55e1342bd5edc5ee10cd191d05920` | Merge commit for PR #86. |
+| Recent final PR results | #82 merged at `b0d4cc1`; #83 merged at `c3082a8`; #84 merged at `b2df444`; #85 merged at `fee6581`; #86 merged at `89e38ed` | Keep only final outcomes here. Details are in `docs/status/progress-log-2026-06-20.md`. |
+| Original active workspace | Dirty and old | `C:\Users\ke919\OneDrive\ドキュメント\1234project\ses_console_vol1` has many pre-existing modified/untracked files on `codex/market-analysis-docs`. Do not use it as a base for new PR work. |
+| New work base | Clean worktree from latest `origin/main` | Fetch first, verify the base commit, then create a separate worktree/branch. |
 
-## アクティブ作業枠
+## Operating Rules
 
-作業中のチャットは、編集前に1行追加します。完了したらステータスを `Done` にし、必要に応じて下の引き継ぎログへ要点を残します。
+- Start by reading this snapshot and the status docs relevant to the task.
+- If implementation is involved, also read `docs/shared/quality/two-pass-task-test-policy-v0.1.md`.
+- Keep `PROGRESS.md` focused on current facts, open risks, and next choices.
+- Put completed task details, PR-by-PR history, and time-sensitive observations in dated progress logs or focused status docs.
+- Do not write secrets, DB connection URLs, passwords, cookies, tokens, or raw personal data into docs.
+- Do not edit the old dirty active workspace for new PRs unless the user explicitly asks for that workspace.
 
-| Chat / Owner | Scope | Main Files | Status | Last Update | Blocker / Coordination |
-|---|---|---|---|---|---|
-| PM setup chat | チャット横断進捗管理の初期整備 | `PROGRESS.md`, `docs/shared/operations/` | Done | 2026-06-13 | なし |
-| Codex GitHub sync chat | GitHub上に進捗共有docsを配置 | `PROGRESS.md`, `docs/shared/operations/`, `docs/shared/README.md` | Done | 2026-06-13 | ローカル `git status` はsandbox制約で未確認 |
-| Codex recovery/main alignment | `origin/main` clean worktree で復旧・UI真実性・検証基盤を修正 | `app/page.jsx`, `components/*`, `data/mockProjects.js`, `tsconfig.json`, `.gitignore`, `docs/status/recovery-main-alignment-report-2026-06-15.md` | Done | 2026-06-15 | SearchHistory DB 実装、dependency upgrade、Browser visual QA は別タスク |
-| Codex dependency security audit | npm audit high以上の改善調査と依存更新 | `package.json`, `package-lock.json`, `docs/status/dependency-security-audit-2026-06-15.md` | Done | 2026-06-15 | Next 16更新、overrides、dynamic route型対応、audit 0件 |
-| Codex UI regression restore | #49基準で消えた既存UI導線の復旧と#53/#54/#55変更台帳 | `app/page.jsx`, `components/Header.jsx`, `components/SearchToolbar.jsx`, `components/SearchHistoryModal.jsx`, `components/ProjectTable.jsx`, `components/ProjectDetailPane.jsx`, `data/mockProjects.js`, `docs/status/ui-change-ledger-2026-06-15.md`, `docs/status/ui-regression-restore-2026-06-15.md`, `docs/status/ui-restore-plan-2026-06-15.md` | In Progress | 2026-06-15 | #55 DB-backed SearchHistoryは削除せず別統合。main mergeはユーザー承認後 |
+## Important Open Items
 
-## 衝突注意エリア
-
-既存の未コミット変更がある可能性があるため、以下の領域を触るチャットは開始時に差分と担当範囲を確認します。
-
-| Area | Reason | Required Action |
+| Area | Current status | Next decision or action |
 |---|---|---|
-| `app/api/` | API挙動への影響が大きい | 変更前に対象routeと既存差分を確認 |
-| `lib/gmail-extract-entities.ts` | Gmail抽出品質に影響 | 関連テストと既存仕様を確認 |
-| `scripts/gmail-*` | DB read/writeや抽出処理に影響 | dry-run/read-only条件を明記 |
-| `prisma/` | schema/migrationが他作業と衝突しやすい | migration順序、DB安全条件、生成結果を確認 |
-| `docs/` | 既存docs追加・整理が進行中 | 入口docsとテーマdocsの重複を確認 |
-| `.env*`, `private/`, `secrets/` | secret事故リスク | 原則として内容を書き写さない |
+| Person owner link HTTP smoke | Runbook and read-only preflight preparation are merged in #84. The real HTTP smoke body has not been executed. | Select approved synthetic/disposable fixtures, run read-only preflight on the approved target, then request explicit approval before any DB write smoke. |
+| Project company/contact role link | Contract (#83), API (#85), and shared safety policy (#86) are merged. UI is not implemented and real DB write smoke has not been run. | Decide whether to build the guarded UI next, then run smoke only under the approved runbook/fixture process. |
+| Staging/production operations | No deploy, staging DB operation, production DB operation, migration, or schema change is part of the latest docs/status work. | Keep these behind explicit owner approval and documented rollback/evidence requirements. |
+| Browser/UI QA | Several flows have code-level tests, but manual browser/UI QA remains separate where status docs call it out. | Run browser QA from a clean latest-main worktree when the user asks for visual or interaction verification. |
+| SearchHistory DB-backed work | PM investigations still treat the stale #55 path as needing a latest-main rebuild, not a direct merge. | Use `docs/status/pm-investigations/2026-06-17/README.md` before planning #55R or DB-backed SearchHistory work. |
+| Dirty workspace cleanup | Many old worktrees and the original dirty workspace exist. | Do not delete, merge, or reuse them without explicit user approval. |
 
-## 次に見るべき入口
+## Next Work Candidates
 
-- `docs/README.md`
-- `docs/shared/README.md`
-- `docs/shared/quality/two-pass-task-test-policy-v0.1.md`
-- 作業テーマに該当する `docs/themes/*/README.md`
+1. Execute the Person owner link HTTP smoke flow only after fixture selection, read-only preflight, and explicit approval.
+2. Build the guarded Project company/contact role link UI on top of the merged API.
+3. Replan DB-backed SearchHistory from latest `origin/main`, using the PM investigation docs as the starting point.
+4. Run browser/UI QA for restored console flows and new link flows from a clean worktree.
+5. Prepare a separate cleanup ledger for old worktrees and the dirty original workspace if the user asks.
 
-## 引き継ぎログ
+## Navigation
 
-### 2026-06-13 JST / PM setup chat
-
-- Scope: 複数チャットでの進捗確認・事故防止・連携ルールをPM/PdM観点で整備。
-- Done: `PROGRESS.md` と `docs/shared/operations/chat-progress-coordination-v0.1.md` を追加。
-- Changed: docs入口に参照を追加済み。
-- Validation: ドキュメントのみ。リンク・表記を再読込で確認済み。
-- Remaining: 各チャットへ運用開始文を送る場合は、本チャット最終回答の文面を使う。
-- Risk / Need coordination: 既存の未コミット変更が多い可能性があるため、今後のチャットは担当範囲を明示してから編集する。
-
-### 2026-06-13 JST / Codex GitHub sync chat
-
-- Scope: 他チャットがGitHubから読めるよう、進捗共有docsをリモートブランチへ配置。
-- Done: `codex/progress-coordination` ブランチを作成し、`PROGRESS.md` とoperations docを追加。
-- Changed: `PROGRESS.md`, `docs/shared/operations/chat-progress-coordination-v0.1.md`, `docs/shared/README.md`。
-- Validation: GitHub connectorで `main` 上の欠落を確認。ローカルgit/npm検証はsandbox制約により未実行。
-- Remaining: PRをmergeして `main` に反映する。merge後、各チャットは作業開始時に `PROGRESS.md` を読む。
-- Risk / Need coordination: ローカル未コミット差分はこの環境では未確認。実装作業前には通常環境で `git status` を確認する。
-
-### 2026-06-15 JST / Codex recovery/main alignment
-
-- Scope: dirty tree に直接 merge せず、`origin/main` から clean worktree/branch を作って復旧作業を開始。
-- Done: dirty tree backup 作成、clean worktree 作成、未実装 UI 導線撤去、未分類メール除外キーワード修正、`tsconfig.tsbuildinfo` hygiene、復旧レポート追加。
-- Changed: `.gitignore`, `app/page.jsx`, `components/Header.jsx`, `components/ProjectDetailPane.jsx`, `components/ProjectTable.jsx`, `components/SearchToolbar.jsx`, `data/mockProjects.js`, `tsconfig.json`, `docs/README.md`, `docs/status/recovery-main-alignment-report-2026-06-15.md`, `PROGRESS.md`。
-- Validation: `npm.cmd ci --ignore-scripts`, Prisma validate/generate, `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run build`, `git diff --check`, 未実装 UI 残骸検索 pass。
-- Remaining: SearchHistory は DB-backed 実装として別 PR、dependency security upgrade、Browser visual QA、docs status matrix。
-- Risk / Need coordination: DB write/migration は今回未実行。Browser 操作用 tool はこのスレッドで公開されなかったため visual QA は未実施。
-
-### 2026-06-15 JST / Codex docs/status recheck
-
-- Scope: docs入口とテーマ別フォルダを再整理し、怪しい箇所を再テストする。
-- Done: `docs/status/` を追加し、復旧レポートを移動。市場分析docsを `docs/themes/market-analysis/` へ移動。docs入口とテーマ入口を更新。現状機能ステータス表を追加。
-- Changed: `docs/README.md`, `docs/themes/README.md`, `docs/status/`, `docs/themes/market-analysis/`, `PROGRESS.md`。
-- Validation: 参照切れ検索 pass、未実装UI残骸検索 pass、`git diff --check` pass(CRLF警告のみ)、`npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、Prisma validate pass、`npm.cmd audit --audit-level=high` fail(8 vulnerabilities)。
-- Remaining: SearchHistory DB-backed実装、dependency security upgrade、Browser visual QA。
-- Risk / Need coordination: フォルダ移動のみ。コード配置、DB、migration、実データ更新は行わない。
-
-### 2026-06-15 JST / Codex dependency security audit
-
-- Scope: `npm.cmd audit --audit-level=high` の8件を調査し、改善可能な依存更新を別branch/別PRで進める。
-- Done: 専用worktree/branchを作成。audit内容、metadata、Node互換性を確認。`next`/`tsx`更新、Hono/esbuild/PostCSS overrides、Next 16 dynamic route型対応、fresh typecheck対応を完了。
-- Changed: `package.json`, `package-lock.json`, `next-env.d.ts`, `tsconfig.json`, dynamic `[id]` route handlers, `docs/status/dependency-security-audit-2026-06-15.md`, `docs/status/README.md`, `docs/status/current-feature-status-2026-06-15.md`, `PROGRESS.md`。
-- Validation: `npm.cmd audit --audit-level=high` pass(0 vulnerabilities)、Prisma validate/generate pass、fresh `.next`なし `npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、local start smoke 200。
-- Remaining: Vercel/PR checks確認、Browser visual QAは別枠。
-- Risk / Need coordination: Next major updateを含むため、復旧PR #53とは別PRにする。
-
-### 2026-06-20 JST / Codex person owner link UI
-
-- Scope: latest `origin/main` から clean worktree/branch `codex/person-owner-link-ui-20260620` を作成し、Person detail から既存 Company/CompanyContact へ安全にリンクする guarded UI flow を追加する。
-- Done: dashboard payload に owner link 用 timestamp/owner IDs/review status/write flag を追加。候補リスト下に確認必須の link panel を追加。UI gating helper と test/docs を追加。
-- Changed: `app/page.jsx`, `app/api/dashboard-data/route.ts`, `components/PersonDetailPane.jsx`, `app/globals.css`, `lib/person-owner-link-ui.ts`, `lib/company-contact-candidates.ts`, `scripts/person-owner-link-ui.test.ts`, related contract tests/docs。
-- Validation: `git diff --check` pass(CRLF warningのみ)、`npm.cmd run test:person-owner-link-ui` pass、`npm.cmd run test:person-owner-link-api` pass、`npm.cmd run test:person-owner-link-api-route` pass、`npm.cmd run test:person-owner-link-api-contract` pass、`npm.cmd run typecheck` pass、`npm.cmd test` pass、`npm.cmd run build` pass、`npm.cmd audit --audit-level=high` pass(0 vulnerabilities)、`npx.cmd prisma validate` pass、`npx.cmd prisma generate` pass。
-- Dependency note: `npm ci` postinstall は `DATABASE_URL` 未設定で停止したため、依存導入は `npm ci --ignore-scripts`。Prisma/Next 検証は dummy `DATABASE_URL` 付きで実行。
-- Remaining: Draft PR 作成後、親PMの review agent に引き継ぐ。
-- Risk / Need coordination: 実DB write smoke、migration、deploy、production/staging DB 操作は行わない。
-
-## 引き継ぎテンプレート
-
-```md
-### YYYY-MM-DD HH:mm JST / <chat name or task>
-
-- Scope:
-- Done:
-- Changed:
-- Validation:
-- Remaining:
-- Risk / Need coordination:
-```
-
-### 2026-06-20 JST / Codex person owner link HTTP smoke preparation
-
-- Scope: Started from clean `origin/main` at `b0d4cc1e547a6f37f3e2571e71a2d4df3ab5c2ad` on branch `codex/person-owner-link-http-smoke-plan-20260620`; prepare safe HTTP route smoke runbook and read-only preflight only.
-- Done: Added HTTP route smoke runbook, target DB classification rules, one-fixture limit, staging approval/rollback requirements, AuditLog retention policy, secret handling rules, and read-only preflight helper.
-- Changed: `docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md`, `docs/status/person-owner-link-http-smoke-plan-2026-06-20.md`, `docs/status/README.md`, `scripts/person-owner-link-http-smoke-preflight.ts`, `package.json`, `PROGRESS.md`.
-- Validation: `npm.cmd run person-owner-link:http-smoke:preflight -- --classify-only` safely failed with `DATABASE_URL` unset and passed in dummy local classify-only mode with no DB connection; `git diff --check` pass (CRLF warnings only); `npx.cmd prisma generate` pass; `npm.cmd run typecheck` pass; `npm.cmd test` pass; `npm.cmd run build` pass; `npm.cmd audit --audit-level=high` pass (0 vulnerabilities); `npx.cmd prisma validate` pass; final `npx.cmd prisma generate` pass.
-- Remaining: Real HTTP route smoke body is not executed. Select approved fixtures, run read-only preflight on the approved target, then request explicit approval before any DB write smoke.
-- Risk / Need coordination: No production/staging operation, deploy, migration, schema change, auth bypass, cookie injection, token display, or DB write belongs to this PR.
+- Status index: `docs/status/README.md`
+- 2026-06-20 progress log: `docs/status/progress-log-2026-06-20.md`
+- Coordination policy: `docs/shared/operations/chat-progress-coordination-v0.1.md`
+- Quality policy: `docs/shared/quality/two-pass-task-test-policy-v0.1.md`

@@ -1,25 +1,40 @@
 # Status Docs
 
-このフォルダは、現在の実装状態、復旧レポート、再テスト結果、次のSprint Backlogを見る入口です。
+This folder holds dated status material. Keep the live project snapshot in `../../PROGRESS.md`; use this folder for logs, runbooks, investigations, and focused reports that should remain historical.
 
-## Files
+## Categories
 
-| File | Purpose |
-|---|---|
-| `link-safety-policy-2026-06-20.md` | Person/Project company contact link safety conditions centralized for easier future changes; no DB/migration/deploy |
-| `claude-review-pr62-65-followup-2026-06-20.md` | Claude Code PR #62〜#65レビュー指摘の安全対応範囲、未検証項目、検証ログ |
-| `current-feature-status-2026-06-15.md` | 機能ごとの実装済み/設計のみ/未実装/要再テストの現状表 |
-| `dependency-security-audit-2026-06-15.md` | npm audit結果、依存更新タスク、検証結果 |
-| `person-owner-link-http-smoke-plan-2026-06-20.md` | Person owner link HTTP route smoke の事前整備、未実行の本体smoke、preflight/runbook方針 |
-| `recovery-main-alignment-report-2026-06-15.md` | clean worktree復旧、未実装UI撤去、検証結果、残課題 |
-| `search-history-db-backed-2026-06-15.md` | #56のサンプル検索履歴安全状態を、最新main起点のDB-backed SearchHistoryへ置き換える小PRの台帳 |
-| `ui-change-ledger-2026-06-15.md` | #53/#54/#55 の追加/削除/非表示/導線/API/package/rollback台帳 |
-| `ui-regression-restore-2026-06-15.md` | ユーザー確認済みbaseline snapshot（PR #49 merge直後commit `71b9a09b`）以降で消えたUI導線の復旧履歴、原因範囲、テスト計画 |
-| `ui-restore-plan-2026-06-15.md` | 勝手に消えた/変わったUIをどのPRで戻すか、承認後に非表示/削除するかの計画 |
+| Category | Where | Purpose |
+|---|---|---|
+| Current snapshot | [`../../PROGRESS.md`](../../PROGRESS.md) | Current base commit, open items, workspace safety, and next work candidates. |
+| Dated progress logs | [`progress-log-2026-06-20.md`](./progress-log-2026-06-20.md) | PR-by-PR or day-by-day historical notes that would become stale if kept in the snapshot. |
+| Status reports | Files directly under `docs/status/` | Focused implementation, validation, safety, or recovery reports. |
+| Runbooks | Status docs or linked operation docs with step-by-step safety gates | Smoke, preflight, rollback, and evidence procedures. |
+| Investigations | [`pm-investigations/`](./pm-investigations/) | PM/PdM research, backlog shaping, stale-branch decisions, and approval gates. |
+
+## Index
+
+| File | Category | Purpose |
+|---|---|---|
+| [`progress-log-2026-06-20.md`](./progress-log-2026-06-20.md) | Dated log | Historical summary of PR #82 through #86, merge commits, recorded validation, and intentionally unexecuted smoke/QA work. |
+| [`link-safety-policy-2026-06-20.md`](./link-safety-policy-2026-06-20.md) | Status report | Shared Person/Project company contact link safety conditions; no DB/migration/deploy. |
+| [`person-owner-link-http-smoke-plan-2026-06-20.md`](./person-owner-link-http-smoke-plan-2026-06-20.md) | Runbook/status report | Person owner link HTTP route smoke preparation, preflight policy, and remaining unexecuted real smoke. |
+| [`claude-review-pr62-65-followup-2026-06-20.md`](./claude-review-pr62-65-followup-2026-06-20.md) | Status report | Claude Code PR #62 through #65 review follow-up scope, validation gaps, and validation log. |
+| [`market-analysis-controls-2026-06-17.md`](./market-analysis-controls-2026-06-17.md) | Status report | Market analysis UI/read-only API controls, validation limits, and residual risk. |
+| [`react-duplicate-key-hardening-2026-06-17.md`](./react-duplicate-key-hardening-2026-06-17.md) | Status report | UI-only React duplicate-key hardening scope, safety notes, and blocked local validation. |
+| [`current-feature-status-2026-06-15.md`](./current-feature-status-2026-06-15.md) | Status report | Feature-by-feature implemented/design-only/unimplemented/retest matrix. |
+| [`dependency-security-audit-2026-06-15.md`](./dependency-security-audit-2026-06-15.md) | Status report | npm audit findings, dependency update task, and validation results. |
+| [`recovery-main-alignment-report-2026-06-15.md`](./recovery-main-alignment-report-2026-06-15.md) | Status report | Clean-worktree recovery, removed unimplemented UI leftovers, validation results, and remaining tasks. |
+| [`search-history-db-backed-2026-06-15.md`](./search-history-db-backed-2026-06-15.md) | Status report | Ledger for replacing stale sample SearchHistory with latest-main DB-backed work. |
+| [`ui-change-ledger-2026-06-15.md`](./ui-change-ledger-2026-06-15.md) | Status report | Ledger for PR #53/#54/#55 UI, API, package, and rollback changes. |
+| [`ui-regression-restore-2026-06-15.md`](./ui-regression-restore-2026-06-15.md) | Status report | Baseline UI regression restoration history, cause range, and test plan. |
+| [`ui-restore-plan-2026-06-15.md`](./ui-restore-plan-2026-06-15.md) | Status report | Plan for restoring, hiding, or deleting changed UI after approval. |
+| [`pm-investigations/2026-06-17/README.md`](./pm-investigations/2026-06-17/README.md) | Investigation index | PM investigations for SearchHistory, Market/Search/Gmail recheck, duplicate key warning, browser QA, and worktree cleanup planning. |
 
 ## Rules
 
-- DB write、migration、実データ更新、worktree削除はここに手順とrollback方針を書いてから実行する。
-- UIに出す機能は、実装・認可・テストが揃っているかをこのstatus docsで確認する。
-- 既存画面に出ていた導線を消す場合は、過去チャット・docs・追加開発ブランチを確認し、削除理由と代替導線をstatus docsへ残す。
-- 設計のみ、no-write placeholder、implementedの区分を画面導線ごとに明記し、task test と group test を残す。
+- Current facts and next choices go in `../../PROGRESS.md`.
+- Historical observations, completed PR details, and time-sensitive PR states go in dated logs or focused status docs with `Observed at` style wording.
+- DB write, migration, real data updates, staging/production operations, and worktree deletion require documented safety gates and rollback/evidence notes before execution.
+- UI-facing features should distinguish implemented behavior, design-only placeholders, and unverified flows.
+- Do not store secrets, cookies, tokens, full connection strings, passwords, or raw personal data in status docs.
