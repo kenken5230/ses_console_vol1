@@ -133,3 +133,12 @@
 - Remaining:
 - Risk / Need coordination:
 ```
+
+### 2026-06-20 JST / Codex person owner link HTTP smoke preparation
+
+- Scope: Started from clean `origin/main` at `b0d4cc1e547a6f37f3e2571e71a2d4df3ab5c2ad` on branch `codex/person-owner-link-http-smoke-plan-20260620`; prepare safe HTTP route smoke runbook and read-only preflight only.
+- Done: Added HTTP route smoke runbook, target DB classification rules, one-fixture limit, staging approval/rollback requirements, AuditLog retention policy, secret handling rules, and read-only preflight helper.
+- Changed: `docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md`, `docs/status/person-owner-link-http-smoke-plan-2026-06-20.md`, `docs/status/README.md`, `scripts/person-owner-link-http-smoke-preflight.ts`, `package.json`, `PROGRESS.md`.
+- Validation: `npm.cmd run person-owner-link:http-smoke:preflight -- --classify-only` safely failed with `DATABASE_URL` unset and passed in dummy local classify-only mode with no DB connection; `git diff --check` pass (CRLF warnings only); `npx.cmd prisma generate` pass; `npm.cmd run typecheck` pass; `npm.cmd test` pass; `npm.cmd run build` pass; `npm.cmd audit --audit-level=high` pass (0 vulnerabilities); `npx.cmd prisma validate` pass; final `npx.cmd prisma generate` pass.
+- Remaining: Real HTTP route smoke body is not executed. Select approved fixtures, run read-only preflight on the approved target, then request explicit approval before any DB write smoke.
+- Risk / Need coordination: No production/staging operation, deploy, migration, schema change, auth bypass, cookie injection, token display, or DB write belongs to this PR.

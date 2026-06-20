@@ -31,6 +31,7 @@
     "notion:import:dry-run": "tsx scripts/notion-import-dry-run.ts",
     "match:dry-run": "tsx scripts/match-dry-run.ts",
     "source:inventory": "tsx scripts/source-inventory.ts",
+    "person-owner-link:http-smoke:preflight": "tsx scripts/person-owner-link-http-smoke-preflight.ts",
     "test:gmail-extraction-quality": "tsx scripts/gmail-extraction-quality.test.ts",
     "test:csv-import-dry-run": "tsx scripts/csv-import-dry-run.test.ts",
     "test:import-source-tracking": "tsx scripts/import-source-tracking.test.ts",

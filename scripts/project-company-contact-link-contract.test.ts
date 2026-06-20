@@ -68,10 +68,14 @@ const roleDerivationTable = [
 const allowedTouchedFiles = new Set([
   docsPath,
   scriptPath,
+  "docs/status/README.md",
+  "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
+  "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
   "scripts/company-contact-write-contract.test.ts",
   "scripts/person-owner-link-api-contract.test.ts",
+  "scripts/person-owner-link-http-smoke-preflight.ts",
   packagePath,
   progressPath
 ]);

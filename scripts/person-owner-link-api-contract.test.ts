@@ -56,6 +56,63 @@ function touchedFilesFromGit() {
   return [...files];
 }
 
+function outputText(value: unknown) {
+  if (Buffer.isBuffer(value)) return value.toString("utf8");
+  return typeof value === "string" ? value : "";
+}
+
+function runPreflightClassifyOnly(databaseUrl: string) {
+  const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+  const env = {
+    ...process.env,
+    AUTH_SECRET: "",
+    COMPANY_CONTACT_LINK_WRITE_ENABLED: "false",
+    COMPANY_CONTACT_LINK_WRITE_TARGET: "",
+    DATABASE_URL: databaseUrl,
+    NODE_ENV: undefined,
+    VERCEL_ENV: undefined,
+  } as unknown as NodeJS.ProcessEnv;
+
+  try {
+    const stdout = execSync(
+      `${npxCommand} tsx scripts/person-owner-link-http-smoke-preflight.ts --classify-only`,
+      { cwd: rootDir, encoding: "utf8", env },
+    );
+    return { status: 0, stdout, stderr: "" };
+  } catch (error) {
+    const execError = error as { status?: number; stdout?: unknown; stderr?: unknown };
+    return {
+      status: execError.status ?? 1,
+      stdout: outputText(execError.stdout),
+      stderr: outputText(execError.stderr),
+    };
+  }
+}
+
+function assertPreflightBlocksProductionLike(label: string, databaseUrl: string) {
+  const result = runPreflightClassifyOnly(databaseUrl);
+  assert.notEqual(result.status, 0, `${label} must stop safely before DB connection`);
+  assert(result.stdout.includes("classification: production"), `${label} must classify as production`);
+  assert(
+    result.stderr.includes("Refusing production-like target before DB connection"),
+    `${label} must refuse production-like targets before DB connection`,
+  );
+  assert(
+    result.stderr.includes("No DB write or HTTP smoke request was attempted."),
+    `${label} must report that no DB write or HTTP smoke request was attempted`,
+  );
+}
+
+function assertPreflightAllowsClassifyOnly(label: string, databaseUrl: string, classification: string) {
+  const result = runPreflightClassifyOnly(databaseUrl);
+  assert.equal(result.status, 0, `${label} classify-only must not fail`);
+  assert(result.stdout.includes(`classification: ${classification}`), `${label} must classify as ${classification}`);
+  assert(
+    result.stdout.includes("Classify-only mode: no DB connection or fixture query was attempted."),
+    `${label} must stay in classify-only mode without DB connection`,
+  );
+}
+
 const allowedTouchedFiles = new Set([
   "app/globals.css",
   "app/api/dashboard-data/route.ts",
@@ -64,7 +121,10 @@ const allowedTouchedFiles = new Set([
   "app/page.jsx",
   "components/PersonDetailPane.jsx",
   "docs/themes/ses-sales-console/operations/",
+  "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
   "docs/themes/ses-sales-console/operations/person-owner-link-db-smoke-preflight-2026-06-20.md",
+  "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
+  "docs/status/README.md",
   "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-link-contract-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
@@ -83,6 +143,7 @@ const allowedTouchedFiles = new Set([
   "scripts/company-contact-write-contract.test.ts",
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
+  "scripts/person-owner-link-http-smoke-preflight.ts",
   "scripts/project-company-contact-link-contract.test.ts",
   "package.json",
   "PROGRESS.md"
@@ -183,6 +244,20 @@ assert(packageSource.includes("test:person-owner-link-api-route"), "package.json
 assert(packageSource.includes("npm run test:person-owner-link-api-contract"), "npm test must include the person owner link API contract test");
 assert(packageSource.includes("npm run test:person-owner-link-api"), "npm test must include the person owner link API implementation test");
 assert(packageSource.includes("npm run test:person-owner-link-api-route"), "npm test must include the person owner link API route test");
+
+for (const [label, databaseUrl] of [
+  ["prod_main DB name", "postgres://safe:safe@localhost:5432/prod_main"],
+  ["prod1 DB name", "postgres://safe:safe@localhost:5432/prod1"],
+  ["primary_dev DB name", "postgres://safe:safe@localhost:5432/primary_dev"],
+]) {
+  assertPreflightBlocksProductionLike(label, databaseUrl);
+}
+
+assertPreflightAllowsClassifyOnly(
+  "product catalog DB name",
+  "postgres://safe:safe@localhost:5432/product_catalog_dev",
+  "local",
+);
 
 assert(!/export\s+(?:async\s+)?function\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons must not be introduced");
 assert(!/\bexport\s+const\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons must not be introduced");
