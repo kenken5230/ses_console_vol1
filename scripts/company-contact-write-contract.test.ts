@@ -87,6 +87,8 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/operations/project-company-contact-role-link-smoke-runbook-2026-06-20.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
   "docs/status/link-safety-policy-2026-06-20.md",
+  "docs/status/pm-handoff-2026-06-21.md",
+  "docs/status/project-company-contact-role-link-ready-checklist-2026-06-21.md",
   "docs/status/README.md",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
@@ -144,7 +146,9 @@ const personPaneSource = readProjectFile("components/PersonDetailPane.jsx");
 const projectPaneSource = readProjectFile("components/ProjectDetailPane.jsx");
 
 for (const requiredText of [
-  "DB write routeはまだ未実装",
+  "Person owner existing link API は実装済み",
+  "Project の既存 Company/CompanyContact role link narrow route/UI は実装済み",
+  "generic Company/Contact create/update route/UI は未実装",
   "候補表示は自動反映しない",
   "ADMIN/MANAGER",
   "SALESは要検討",

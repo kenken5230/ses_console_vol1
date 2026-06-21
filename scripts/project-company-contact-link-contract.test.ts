@@ -72,6 +72,8 @@ const allowedTouchedFiles = new Set([
   "app/api/projects/[id]/",
   docsPath,
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/company-contact-write-contract-2026-06-20.md",
+  "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md",
   operationsPath,
   scriptPath,
   "lib/person-owner-company-contact-link.ts",
@@ -88,6 +90,8 @@ const allowedTouchedFiles = new Set([
   "docs/status/README.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
   "docs/status/link-safety-policy-2026-06-20.md",
+  "docs/status/pm-handoff-2026-06-21.md",
+  "docs/status/project-company-contact-role-link-ready-checklist-2026-06-21.md",
   "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
   "scripts/person-company-contact-candidate-ui.test.ts",
   "scripts/project-company-contact-candidate-ui.test.ts",
@@ -180,7 +184,7 @@ for (const requiredText of [
   "Unknown `reasonCode` is rejected.",
   "`roleOrder` and `isPrimary` payload fields are rejected.",
   "The role decision table covers every allowed `ProjectCompanyRoleType` value.",
-  "Smoke testing and real DB writes require a separate approval and a separate PR"
+  "Smoke testing and real DB writes require separate approval/evidence and a separate execution record"
 ]) {
   assert(docsSource.includes(requiredText), `${docsPath} must include: ${requiredText}`);
 }
@@ -195,7 +199,7 @@ for (const requiredText of [
   "ADMIN",
   "MANAGER",
   "AuditLog",
-  "No migration, schema change, deploy, staging operation, production operation, or UI change was performed"
+  "No schema change, migration, deploy, staging operation, production operation, or real DB write smoke was performed"
 ]) {
   assert(operationsSource.includes(requiredText), `${operationsPath} must include: ${requiredText}`);
 }

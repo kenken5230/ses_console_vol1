@@ -57,6 +57,8 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/operations/project-company-contact-role-link-smoke-runbook-2026-06-20.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
   "docs/status/link-safety-policy-2026-06-20.md",
+  "docs/status/pm-handoff-2026-06-21.md",
+  "docs/status/project-company-contact-role-link-ready-checklist-2026-06-21.md",
   "docs/status/README.md",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
