@@ -116,13 +116,20 @@ function assertPreflightAllowsClassifyOnly(label: string, databaseUrl: string, c
 const allowedTouchedFiles = new Set([
   "app/globals.css",
   "app/api/dashboard-data/route.ts",
+  "app/api/mail-notifications/[id]/body/",
+  "app/api/mail-notifications/[id]/body/route.ts",
   "app/api/persons/[id]/",
+  "app/api/persons/[id]/company-contact-candidates/",
+  "app/api/persons/[id]/company-contact-candidates/route.ts",
   "app/api/persons/[id]/owner-company-contact/route.ts",
+  "app/api/projects/[id]/company-contact-candidates/",
+  "app/api/projects/[id]/company-contact-candidates/route.ts",
   "app/api/projects/[id]/company-contact-role/route.ts",
   "app/api/projects/[id]/",
   "app/page.jsx",
   "components/PersonDetailPane.jsx",
   "components/ProjectDetailPane.jsx",
+  "components/UnclassifiedMailDetailPane.jsx",
   "docs/themes/ses-sales-console/operations/",
   "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
   "docs/themes/ses-sales-console/operations/person-owner-link-db-smoke-preflight-2026-06-20.md",
@@ -148,6 +155,7 @@ const allowedTouchedFiles = new Set([
   "lib/project-company-contact-role-link-route.ts",
   "lib/project-company-contact-role-link-ui.ts",
   "lib/person-owner-link-ui.ts",
+  "lib/company-contact-candidate-loader.ts",
   "scripts/project-company-contact-link-api-route.test.ts",
   "scripts/project-company-contact-link-api.test.ts",
   "scripts/project-company-contact-link-ui.test.ts",
@@ -181,7 +189,7 @@ const smokePreflightDocsPath = "docs/themes/ses-sales-console/operations/person-
 const smokePreflightDocsSource = readProjectFile(smokePreflightDocsPath);
 const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
-const dashboardSource = readProjectFile("app/api/dashboard-data/route.ts");
+const candidateLoaderSource = readProjectFile("lib/company-contact-candidate-loader.ts");
 const ownerLinkRoutePath = "app/api/persons/[id]/owner-company-contact/route.ts";
 const ownerLinkRouteHandlerPath = "lib/person-owner-company-contact-link-route.ts";
 const ownerLinkHelperPath = "lib/person-owner-company-contact-link.ts";
@@ -334,7 +342,7 @@ for (const forbiddenRouteDir of ["app/api/companies", "app/api/company-contacts"
 }
 
 assert(
-  /prisma\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(dashboardSource),
+  /db\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(candidateLoaderSource),
   "candidate company DB read must be bounded and stable before write API implementation"
 );
 

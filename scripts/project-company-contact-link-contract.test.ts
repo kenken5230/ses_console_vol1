@@ -104,7 +104,16 @@ const allowedTouchedFiles = new Set([
   "scripts/person-owner-link-ui.test.ts",
   "app/globals.css",
   "app/page.jsx",
+  "app/api/mail-notifications/[id]/body/",
+  "app/api/mail-notifications/[id]/body/route.ts",
+  "app/api/persons/[id]/company-contact-candidates/",
+  "app/api/persons/[id]/company-contact-candidates/route.ts",
+  "app/api/projects/[id]/company-contact-candidates/",
+  "app/api/projects/[id]/company-contact-candidates/route.ts",
+  "components/PersonDetailPane.jsx",
   "components/ProjectDetailPane.jsx",
+  "components/UnclassifiedMailDetailPane.jsx",
+  "lib/company-contact-candidate-loader.ts",
   packagePath,
   progressPath
 ]);

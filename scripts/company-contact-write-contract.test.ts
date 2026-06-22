@@ -74,13 +74,20 @@ function sectionBetween(source: string, startNeedle: string, endNeedle: string) 
 const allowedTouchedFiles = new Set([
   "app/globals.css",
   "app/api/dashboard-data/route.ts",
+  "app/api/mail-notifications/[id]/body/",
+  "app/api/mail-notifications/[id]/body/route.ts",
   "app/api/persons/[id]/",
+  "app/api/persons/[id]/company-contact-candidates/",
+  "app/api/persons/[id]/company-contact-candidates/route.ts",
   "app/api/persons/[id]/owner-company-contact/route.ts",
   "app/api/projects/[id]/company-contact-role/route.ts",
   "app/api/projects/[id]/",
+  "app/api/projects/[id]/company-contact-candidates/",
+  "app/api/projects/[id]/company-contact-candidates/route.ts",
   "app/page.jsx",
   "components/PersonDetailPane.jsx",
   "components/ProjectDetailPane.jsx",
+  "components/UnclassifiedMailDetailPane.jsx",
   "docs/themes/ses-sales-console/operations/",
   "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
   "docs/themes/ses-sales-console/operations/person-owner-link-db-smoke-preflight-2026-06-20.md",
@@ -98,6 +105,7 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
   "lib/company-contact-candidates.ts",
+  "lib/company-contact-candidate-loader.ts",
   "lib/link-safety-policy.ts",
   "lib/person-owner-company-contact-link.ts",
   "lib/person-owner-company-contact-link-route.ts",
@@ -142,6 +150,7 @@ const projectCandidateDocsSource = readProjectFile(
 const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
 const dashboardSource = readProjectFile("app/api/dashboard-data/route.ts");
+const candidateLoaderSource = readProjectFile("lib/company-contact-candidate-loader.ts");
 const personPaneSource = readProjectFile("components/PersonDetailPane.jsx");
 const projectPaneSource = readProjectFile("components/ProjectDetailPane.jsx");
 
@@ -179,20 +188,25 @@ assert(!/\bexport\s+const\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons
 assertRouteTreeAbsentOrReadOnly("app/api/companies");
 assertRouteTreeAbsentOrReadOnly("app/api/company-contacts");
 assertRouteTreeAbsentOrReadOnly("app/api/company-contact-candidates");
+assertRouteTreeAbsentOrReadOnly("app/api/mail-notifications/[id]/body");
+assertRouteTreeAbsentOrReadOnly("app/api/persons/[id]/company-contact-candidates");
+assertRouteTreeAbsentOrReadOnly("app/api/projects/[id]/company-contact-candidates");
 
 for (const pattern of [
   /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/,
   /prisma\.(company|companyContact|project|projectCompanyRole|person)\.(create|createMany|update|upsert|delete|deleteMany)\b/,
   /prisma\.\$transaction\b/
 ]) {
-  assert(!pattern.test(dashboardSource), `dashboard candidate display route must remain read-only: ${pattern}`);
+  for (const source of [dashboardSource, candidateLoaderSource]) {
+    assert(!pattern.test(source), `candidate display code must remain read-only: ${pattern}`);
+  }
 }
 assert(
-  /const\s+COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE\s*=\s*\d+/.test(dashboardSource),
-  "dashboard candidate company read must define a bounded take constant"
+  /const\s+COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE\s*=\s*\d+/.test(candidateLoaderSource),
+  "candidate company read must define a bounded take constant"
 );
 assert(
-  /prisma\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\],[\s\S]*contacts:\s*\{\s*orderBy:\s*\[\s*\{\s*name:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(dashboardSource),
+  /db\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\],[\s\S]*contacts:\s*\{\s*orderBy:\s*\[\s*\{\s*name:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(candidateLoaderSource),
   "candidate company/contact DB read must use take and stable orderBy"
 );
 
@@ -217,7 +231,6 @@ for (const forbiddenUiPattern of [
   /onClick\s*=/i,
   /mailto:/i,
   /tel:/i,
-  /\bfetch\s*\(/i,
   /method:\s*["'](POST|PATCH|PUT|DELETE)["']/i
 ]) {
   for (const candidateUiSource of candidateUiSources) {

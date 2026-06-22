@@ -8,18 +8,13 @@ import {
   type SafeDashboardCompanyContact,
   type SafeDashboardProjectCompanyRole
 } from "../../../lib/dashboard-company-readonly";
-import {
-  findCompanyContactCandidates,
-  type CompanyContactCandidate,
-  type CompanyContactCandidateSource
-} from "../../../lib/company-contact-candidates";
+import { type CompanyContactCandidate } from "../../../lib/company-contact-candidates";
 import { isCompanyContactLinkWriterRole } from "../../../lib/link-safety-policy";
 import { mergePersonFormInitialValues } from "../../../lib/person-form-contract";
 import { projectCompanyContactRoleLinkGuard } from "../../../lib/project-company-contact-role-link";
 
 export const dynamic = "force-dynamic";
 const EMPTY_VALUE = "-";
-const COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE = 1000;
 
 type DetailItem = {
   label: string;
@@ -29,6 +24,7 @@ type DetailItem = {
   items?: string[][];
   companyContacts?: DetailCompanyContact[];
   companyContactCandidates?: CompanyContactCandidate[];
+  mailDbId?: string | null;
   emphasis?: boolean;
 };
 
@@ -291,12 +287,12 @@ function makeMailItem(mail: any): DetailItem {
     mail.externalMessageId ? `Gmail messageId: ${mail.externalMessageId}` : "Gmail messageId: -",
     mail.externalThreadId ? `threadId: ${mail.externalThreadId}` : "threadId: -"
   ].filter(Boolean);
-  const body = mailBodyText(mail);
 
   return {
     label: "元メール",
     type: "mail",
-    value: [...headerLines, body].join("\n\n")
+    value: headerLines.join("\n"),
+    mailDbId: mail.id || null
   };
 }
 
@@ -474,83 +470,7 @@ function makeOwnerCompanyContactItem(
   ]);
 }
 
-function buildCompanyContactCandidateSources(companies: any[]): CompanyContactCandidateSource[] {
-  return companies.flatMap((company) => {
-    const safeCompany = {
-      id: company.id,
-      name: company.name,
-      tradeStatus: company.tradeStatus,
-      mainEmailDomain: company.mainEmailDomain,
-      tdbScore: company.tdbScore
-    };
-    const contacts = company.contacts || [];
-    if (!contacts.length) return [{ company: safeCompany, contact: null }];
-
-    return contacts.map((contact: any) => ({
-      company: safeCompany,
-      contact
-    }));
-  });
-}
-
-function firstCandidateText(...values: unknown[]) {
-  for (const value of values) {
-    if (typeof value !== "string") continue;
-    const text = value.trim();
-    if (text) return text;
-  }
-  return "";
-}
-
-function personCompanyContactCandidateInput(person: any, normalizedExtraction: any) {
-  return {
-    companyName: firstCandidateText(
-      normalizedExtraction.ownerCompanyName,
-      person.ownerCompany?.name,
-      person.sourceMail?.fromName
-    ),
-    email: firstCandidateText(person.sourceMail?.fromEmail, person.ownerContact?.email),
-    contactEmail: firstCandidateText(
-      normalizedExtraction.contactEmail,
-      person.ownerContact?.email,
-      person.sourceMail?.fromEmail
-    ),
-    contactName: firstCandidateText(
-      normalizedExtraction.contactName,
-      person.ownerContact?.name,
-      person.sourceMail?.fromName
-    )
-  };
-}
-
-function projectCompanyContactCandidateInput(
-  project: any,
-  normalizedExtraction: any,
-  upperCompanyRole: any,
-  primaryContactRole: any
-) {
-  return {
-    companyName: firstCandidateText(
-      normalizedExtraction.upperCompanyName,
-      upperCompanyRole?.company?.name,
-      primaryContactRole?.company?.name,
-      project.sourceMail?.fromName
-    ),
-    email: firstCandidateText(project.sourceMail?.fromEmail, primaryContactRole?.companyContact?.email),
-    contactEmail: firstCandidateText(
-      normalizedExtraction.contactEmail,
-      primaryContactRole?.companyContact?.email,
-      project.sourceMail?.fromEmail
-    ),
-    contactName: firstCandidateText(
-      normalizedExtraction.contactName,
-      primaryContactRole?.companyContact?.name,
-      project.sourceMail?.fromName
-    )
-  };
-}
-
-function mapProject(project: any, companyContactCandidateSources: readonly CompanyContactCandidateSource[]) {
+function mapProject(project: any) {
   const condition = project.condition;
   const skills = project.skills.map((skill: any) => skill.skillName);
   const requiredSkills = project.skills.filter((skill: any) => skill.skillType === "REQUIRED").map((skill: any) => skill.skillName);
@@ -584,12 +504,7 @@ function mapProject(project: any, companyContactCandidateSources: readonly Compa
   const coreTime = formatTimeRange(condition?.coreTimeStart, condition?.coreTimeEnd);
   const commerceNote = condition?.notes?.startsWith("商流: ") ? condition.notes.replace(/^商流:\s*/, "") : "";
   const needsReview = hasNeedsReviewExtraction(project.sourceMail, "PROJECT", project.id);
-  const normalizedExtraction = latestNormalizedExtraction(project.sourceMail, "PROJECT", project.id);
-  const companyContactCandidates = findCompanyContactCandidates(
-    projectCompanyContactCandidateInput(project, normalizedExtraction, upperCompanyRole, primaryContactRole),
-    companyContactCandidateSources,
-    { maxCandidates: 5 }
-  );
+  const companyContactCandidates: CompanyContactCandidate[] = [];
   const projectFormValues = {
     title: project.title || "",
     upperCompanyName: company === EMPTY_VALUE ? "" : company,
@@ -765,7 +680,28 @@ function mapProject(project: any, companyContactCandidateSources: readonly Compa
   };
 }
 
-function mapPerson(person: any, companyContactCandidateSources: readonly CompanyContactCandidateSource[]) {
+function compactProject(project: any) {
+  const mapped = mapProject(project);
+  const { detail, formValues, ...summary } = mapped;
+  return {
+    ...summary,
+    detailLoaded: false,
+    formValuesLoaded: false,
+    searchText: [
+      summary.id,
+      summary.title,
+      summary.company,
+      summary.unitPrice,
+      summary.locations?.join(" "),
+      summary.tags?.join(" "),
+      summary.status,
+      summary.createdByName,
+      summary.ageConditionText
+    ].filter(Boolean).join(" ").toLowerCase()
+  };
+}
+
+function mapPerson(person: any) {
   const skillNames = person.skills.map((skill: any) => skill.skillName);
   const skillsText = skillNames.join(" / ") || "未入力";
   const createdAt = formatDate(person.createdAt);
@@ -784,11 +720,7 @@ function mapPerson(person: any, companyContactCandidateSources: readonly Company
   const nameConfidence = typeof normalizedExtraction.nameConfidence === "string" ? normalizedExtraction.nameConfidence : "";
   const roleHeadline = typeof normalizedExtraction.roleHeadline === "string" ? normalizedExtraction.roleHeadline : "";
   const careerOrRole = person.careerSummary || roleHeadline || EMPTY_VALUE;
-  const companyContactCandidates = findCompanyContactCandidates(
-    personCompanyContactCandidateInput(person, normalizedExtraction),
-    companyContactCandidateSources,
-    { maxCandidates: 5 }
-  );
+  const companyContactCandidates: CompanyContactCandidate[] = [];
   const detailGroups: DetailGroup[] = [
     {
       title: "会社/担当者 (read-only)",
@@ -921,6 +853,30 @@ function mapPerson(person: any, companyContactCandidateSources: readonly Company
   };
 }
 
+function compactPerson(person: any) {
+  const mapped = mapPerson(person);
+  const { detail, formValues, ...summary } = mapped;
+  return {
+    ...summary,
+    detailLoaded: false,
+    formValuesLoaded: false,
+    searchText: [
+      summary.id,
+      summary.name,
+      summary.company,
+      summary.status,
+      summary.unitPrice,
+      summary.availableFrom,
+      summary.preferredLocation,
+      summary.remotePreference,
+      summary.nationality,
+      summary.skills,
+      summary.createdAt,
+      summary.createdByName
+    ].filter(Boolean).join(" ").toLowerCase()
+  };
+}
+
 function mapUnclassifiedMail(mail: any, companies: any[]) {
   const matchedCompany = inferSenderCompany(mail, companies);
   const senderCompany = matchedCompany?.name || mail.fromName || domainFromEmail(mail.fromEmail) || EMPTY_VALUE;
@@ -929,7 +885,7 @@ function mapUnclassifiedMail(mail: any, companies: any[]) {
     mail.needsReview ||
     mail.category === "NEEDS_REVIEW" ||
     mail.extractionResults.some((result: any) => result.reviewStatus === "NEEDS_REVIEW");
-  const bodyText = mailBodyText(mail);
+  const bodyText = "";
 
   return {
     id: mail.externalMessageId?.slice(0, 12) || mail.id.slice(0, 8),
@@ -974,7 +930,144 @@ export async function GET(request: Request) {
     const personOwnerLinkWriteAllowed = isCompanyContactLinkWriterRole(currentUser.role);
     const projectCompanyContactRoleLinkWriteAllowed =
       isCompanyContactLinkWriterRole(currentUser.role) && projectCompanyContactRoleLinkGuard().allowed;
-    const [projects, persons, unclassifiedMails, companies, companyContactCandidateCompanies] = await Promise.all([
+    const requestUrl = new URL(request.url);
+    const detailType = requestUrl.searchParams.get("detail");
+    const detailId = requestUrl.searchParams.get("id");
+
+    if (detailType === "project" && detailId) {
+      const project = await prisma.project.findFirst({
+        where: {
+          id: detailId,
+          status: { not: "ARCHIVED" }
+        },
+        include: {
+          condition: true,
+          companyRoles: {
+            include: {
+              company: {
+                select: {
+                  id: true,
+                  name: true,
+                  tradeStatus: true,
+                  mainEmailDomain: true,
+                  tdbScore: true
+                }
+              },
+              companyContact: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  department: true,
+                  position: true,
+                  isActive: true
+                }
+              }
+            },
+            orderBy: { roleOrder: "asc" }
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          sourceMail: {
+            select: {
+              id: true,
+              externalMessageId: true,
+              externalThreadId: true,
+              subject: true,
+              fromName: true,
+              fromEmail: true,
+              messageDate: true,
+              receivedAt: true,
+              extractionResults: {
+                orderBy: { createdAt: "desc" },
+                select: {
+                  targetType: true,
+                  targetId: true,
+                  extractionType: true,
+                  reviewStatus: true,
+                  createdAt: true
+                }
+              }
+            }
+          },
+          skills: true,
+          tags: true
+        }
+      });
+      if (!project) return NextResponse.json({ message: "Not found" }, { status: 404 });
+      return NextResponse.json({ project: mapProject(project) });
+    }
+
+    if (detailType === "person" && detailId) {
+      const person = await prisma.person.findFirst({
+        where: {
+          id: detailId,
+          status: { not: "ARCHIVED" }
+        },
+        include: {
+          ownerCompany: {
+            select: {
+              id: true,
+              name: true,
+              tradeStatus: true,
+              mainEmailDomain: true,
+              tdbScore: true
+            }
+          },
+          ownerContact: {
+            select: {
+              id: true,
+              companyId: true,
+              name: true,
+              email: true,
+              phone: true,
+              department: true,
+              position: true,
+              isActive: true
+            }
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          sourceMail: {
+            select: {
+              id: true,
+              externalMessageId: true,
+              externalThreadId: true,
+              subject: true,
+              fromName: true,
+              fromEmail: true,
+              messageDate: true,
+              receivedAt: true,
+              extractionResults: {
+                orderBy: { createdAt: "desc" },
+                select: {
+                  targetType: true,
+                  targetId: true,
+                  extractionType: true,
+                  reviewStatus: true,
+                  createdAt: true,
+                  normalizedResult: true
+                }
+              }
+            }
+          },
+          skills: true
+        }
+      });
+      if (!person) return NextResponse.json({ message: "Not found" }, { status: 404 });
+      return NextResponse.json({ person: mapPerson(person) });
+    }
+
+    const [projects, persons, unclassifiedMails, companies] = await Promise.all([
     prisma.project.findMany({
       where: {
         status: { not: "ARCHIVED" }
@@ -1007,16 +1100,18 @@ export async function GET(request: Request) {
           },
           orderBy: { roleOrder: "asc" }
         },
-        createdBy: true,
+        createdBy: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         sourceMail: {
           select: {
             id: true,
             externalMessageId: true,
             externalThreadId: true,
             subject: true,
-            bodyText: true,
-            bodyHtml: true,
-            normalizedBody: true,
             fromName: true,
             fromEmail: true,
             messageDate: true,
@@ -1028,8 +1123,7 @@ export async function GET(request: Request) {
                 targetId: true,
                 extractionType: true,
                 reviewStatus: true,
-                createdAt: true,
-                normalizedResult: true
+                createdAt: true
               }
             }
           }
@@ -1065,16 +1159,18 @@ export async function GET(request: Request) {
             isActive: true
           }
         },
-        createdBy: true,
+        createdBy: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         sourceMail: {
           select: {
             id: true,
             externalMessageId: true,
             externalThreadId: true,
             subject: true,
-            bodyText: true,
-            bodyHtml: true,
-            normalizedBody: true,
             fromName: true,
             fromEmail: true,
             messageDate: true,
@@ -1112,9 +1208,6 @@ export async function GET(request: Request) {
         fromEmail: true,
         fromName: true,
         subject: true,
-        bodyText: true,
-        bodyHtml: true,
-        normalizedBody: true,
         category: true,
         isExcluded: true,
         excludeReason: true,
@@ -1138,47 +1231,15 @@ export async function GET(request: Request) {
         mainEmailDomain: true,
         tradeStatus: true
       }
-    }),
-    prisma.company.findMany({
-      take: COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,
-      orderBy: [
-        { normalizedName: "asc" },
-        { id: "asc" }
-      ],
-      select: {
-        id: true,
-        name: true,
-        tradeStatus: true,
-        mainEmailDomain: true,
-        tdbScore: true,
-        contacts: {
-          orderBy: [
-            { name: "asc" },
-            { id: "asc" }
-          ],
-          select: {
-            id: true,
-            companyId: true,
-            name: true,
-            email: true,
-            phone: true,
-            department: true,
-            position: true,
-            isActive: true
-          }
-        }
-      }
     })
   ]);
-
-    const companyContactCandidateSources = buildCompanyContactCandidateSources(companyContactCandidateCompanies);
 
     return NextResponse.json({
       currentUser,
       personOwnerLinkWriteAllowed,
       projectCompanyContactRoleLinkWriteAllowed,
-      projects: projects.map((project) => mapProject(project, companyContactCandidateSources)),
-      persons: persons.map((person) => mapPerson(person, companyContactCandidateSources)),
+      projects: projects.map((project) => compactProject(project)),
+      persons: persons.map((person) => compactPerson(person)),
       unclassifiedMails: unclassifiedMails.map((mail) => mapUnclassifiedMail(mail, companies))
     });
   } catch (error) {

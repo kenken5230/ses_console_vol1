@@ -93,6 +93,49 @@ function CompanyContactCandidateList({ candidates = [] }) {
   );
 }
 
+function LazyMailBody({ header = "", mailDbId }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [body, setBody] = useState("");
+  const [status, setStatus] = useState("idle");
+
+  useEffect(() => {
+    setIsOpen(false);
+    setBody("");
+    setStatus("idle");
+  }, [mailDbId]);
+
+  const handleToggle = async (event) => {
+    const nextOpen = event.currentTarget.open;
+    setIsOpen(nextOpen);
+    if (!nextOpen || !mailDbId || status === "loaded" || status === "loading") return;
+
+    setStatus("loading");
+    try {
+      const response = await fetch(`/api/mail-notifications/${encodeURIComponent(mailDbId)}/body`, { cache: "no-store" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setBody(result?.message || "Failed to load mail body");
+        setStatus("error");
+        return;
+      }
+      setBody(result?.bodyText || "-");
+      setStatus("loaded");
+    } catch (error) {
+      setBody(error instanceof Error ? error.message : "Failed to load mail body");
+      setStatus("error");
+    }
+  };
+
+  const text = [header, isOpen ? (status === "loading" ? "Loading..." : body) : ""].filter(Boolean).join("\n\n");
+
+  return (
+    <details className="mail-body-box" onToggle={handleToggle}>
+      <summary>元メール本文を表示</summary>
+      <p className={`detail-block ${isEmpty(text) ? "muted-value" : ""}`}>{text || "-"}</p>
+    </details>
+  );
+}
+
 function DetailItemValue({
   currentUserRole,
   item,
@@ -116,12 +159,7 @@ function DetailItemValue({
   }
 
   if (item.type === "mail") {
-    return (
-      <details className="mail-body-box">
-        <summary>元メール本文を表示</summary>
-        <p className={`detail-block ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</p>
-      </details>
-    );
+    return <LazyMailBody header={item.value} mailDbId={item.mailDbId} />;
   }
 
   if (item.type === "companyContacts") {
@@ -162,20 +200,82 @@ function DetailItemValue({
   if (item.type === "companyContactCandidates") {
     const candidates = item.companyContactCandidates || [];
     return (
-      <>
-        <CompanyContactCandidateList candidates={candidates} />
-        <PersonOwnerLinkPanel
-          candidates={candidates}
-          currentUserRole={currentUserRole}
-          onOwnerLinkLinked={onOwnerLinkLinked}
-          person={person}
-          personOwnerLinkWriteAllowed={personOwnerLinkWriteAllowed}
-        />
-      </>
+      <PersonCompanyContactCandidateSection
+        currentUserRole={currentUserRole}
+        initialCandidates={candidates}
+        onOwnerLinkLinked={onOwnerLinkLinked}
+        person={person}
+        personOwnerLinkWriteAllowed={personOwnerLinkWriteAllowed}
+      />
     );
   }
 
   return <strong className={`${item.emphasis ? "important-value" : ""} ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</strong>;
+}
+
+function PersonCompanyContactCandidateSection({
+  currentUserRole,
+  initialCandidates = [],
+  onOwnerLinkLinked,
+  person,
+  personOwnerLinkWriteAllowed
+}) {
+  const [candidates, setCandidates] = useState(initialCandidates);
+  const [status, setStatus] = useState(initialCandidates.length ? "loaded" : "idle");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+    const personId = person?.dbId;
+    setCandidates(initialCandidates);
+    setNotice("");
+    if (!personId) {
+      setStatus(initialCandidates.length ? "loaded" : "idle");
+      return undefined;
+    }
+
+    setStatus("loading");
+    async function loadCandidates() {
+      try {
+        const response = await fetch(`/api/persons/${encodeURIComponent(personId)}/company-contact-candidates`, {
+          cache: "no-store"
+        });
+        const result = await response.json().catch(() => ({}));
+        if (ignore) return;
+        if (!response.ok) {
+          setNotice(result?.message || "Failed to load candidates");
+          setStatus("error");
+          return;
+        }
+        setCandidates(Array.isArray(result?.candidates) ? result.candidates : []);
+        setStatus("loaded");
+      } catch (error) {
+        if (ignore) return;
+        setNotice(error instanceof Error ? error.message : "Failed to load candidates");
+        setStatus("error");
+      }
+    }
+
+    loadCandidates();
+    return () => {
+      ignore = true;
+    };
+  }, [initialCandidates, person?.dbId]);
+
+  return (
+    <>
+      {status === "loading" ? <p className="readonly-candidate-empty">Loading candidates...</p> : null}
+      {notice ? <p className="person-owner-link-notice" role="status">{notice}</p> : null}
+      <CompanyContactCandidateList candidates={candidates} />
+      <PersonOwnerLinkPanel
+        candidates={candidates}
+        currentUserRole={currentUserRole}
+        onOwnerLinkLinked={onOwnerLinkLinked}
+        person={person}
+        personOwnerLinkWriteAllowed={personOwnerLinkWriteAllowed}
+      />
+    </>
+  );
 }
 
 function candidateTitle(candidate) {
