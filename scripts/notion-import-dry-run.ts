@@ -10,6 +10,16 @@ const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
 const MAX_SAFE_LABEL_LENGTH = 64;
 const LOW_COVERAGE_THRESHOLD = 0.35;
+const NOTION_DRY_RUN_FORBIDDEN_APPLY_OPTIONS = new Set([
+  "apply",
+  "commit",
+  "confirm",
+  "db-write",
+  "execute",
+  "no-dry-run",
+  "run-apply",
+  "write",
+]);
 
 const REVIEW_REASONS = {
   autoTypeAmbiguous: "NOTION_AUTO_TYPE_AMBIGUOUS",
@@ -910,15 +920,23 @@ function parseArgValue(argv: string[], name: string): string | null {
   return value && !value.startsWith("--") ? value : null;
 }
 
+function parseOptionName(arg: string): string | null {
+  if (!arg.startsWith("--")) return null;
+  return arg.slice(2).split("=")[0];
+}
+
 export function parseNotionImportDryRunArgs(argv = process.argv): NotionImportDryRunArgs {
-  if (argv.some((arg) => arg === "--apply" || arg.startsWith("--apply="))) {
-    throw new Error("notion:import:dry-run is read-only and rejects --apply; DB writes are unsupported.");
+  const forbiddenApplyOption = argv.slice(2)
+    .map(parseOptionName)
+    .find((name): name is string => Boolean(name) && NOTION_DRY_RUN_FORBIDDEN_APPLY_OPTIONS.has(name));
+  if (forbiddenApplyOption) {
+    throw new Error(`notion:import:dry-run is read-only and rejects --${forbiddenApplyOption}; DB writes are unsupported.`);
   }
 
   const allowed = new Set(["file", "type", "limit"]);
   for (const arg of argv.slice(2)) {
-    if (!arg.startsWith("--")) continue;
-    const name = arg.slice(2).split("=")[0];
+    const name = parseOptionName(arg);
+    if (!name) continue;
     if (!allowed.has(name)) throw new Error(`Unknown option --${name}.`);
   }
 
@@ -965,8 +983,11 @@ export function assertNoSensitiveNotionOutput(text: string): void {
   const forbiddenPatterns = [
     /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
     /\b(?:postgres(?:ql)?|mysql|sqlserver):\/\//i,
-    /\b(?:DATABASE_URL|DIRECT_URL|SMTP_PASSWORD|GMAIL_REFRESH_TOKEN|API[_-]?KEY|TOKEN|PASSWORD)\s*[:=]\s*["']?[^"',\s}]+/i,
+    /\b(?:DATABASE_URL|DIRECT_URL|SMTP_PASSWORD|GMAIL_REFRESH_TOKEN|API[_-]?KEY|CLIENT[_-]?SECRET|TOKEN|PASSWORD|SECRET)\s*[:=]\s*["']?[^"',\s}]+/i,
     /\bBearer\s+[A-Za-z0-9._-]+/i,
+    /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]{8,}\b/i,
+    /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/i,
+    /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/i,
     /-----BEGIN [A-Z ]+KEY-----/,
     /"raw(?:Row|Value|Values|Text)?"\s*:/i,
     /"body(?:Text|Html|Raw|Normalized)?"\s*:/i,
