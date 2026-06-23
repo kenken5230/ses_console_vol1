@@ -44,13 +44,21 @@ function touchedFilesFromGit() {
 const allowedTouchedFiles = new Set([
   "app/globals.css",
   "app/api/dashboard-data/route.ts",
+  "app/api/mail-notifications/[id]/",
+  "app/api/mail-notifications/[id]/body/",
+  "app/api/mail-notifications/[id]/body/route.ts",
   "app/api/persons/[id]/",
   "app/api/persons/[id]/owner-company-contact/route.ts",
+  "app/api/persons/[id]/company-contact-candidates/",
+  "app/api/persons/[id]/company-contact-candidates/route.ts",
   "app/api/projects/[id]/company-contact-role/route.ts",
   "app/api/projects/[id]/",
+  "app/api/projects/[id]/company-contact-candidates/",
+  "app/api/projects/[id]/company-contact-candidates/route.ts",
   "app/page.jsx",
   "components/PersonDetailPane.jsx",
   "components/ProjectDetailPane.jsx",
+  "components/UnclassifiedMailDetailPane.jsx",
   "app/globals.css",
   "docs/themes/ses-sales-console/operations/",
   "docs/themes/ses-sales-console/operations/person-owner-link-http-route-smoke-runbook-2026-06-20.md",
@@ -58,6 +66,10 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/operations/project-company-contact-role-link-smoke-runbook-2026-06-20.md",
   "docs/status/person-owner-link-http-smoke-plan-2026-06-20.md",
   "docs/status/link-safety-policy-2026-06-20.md",
+  "docs/status/pm-handoff-2026-06-21.md",
+  "docs/status/project-company-contact-role-link-ready-checklist-2026-06-21.md",
+  "docs/status/project-company-contact-link-pm-handoff-2026-06-22.md",
+  "docs/status/uiux-improvement-investigation-2026-06-22.md",
   "docs/status/README.md",
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/project-company-contact-candidate-ui-2026-06-20.md",
@@ -67,14 +79,18 @@ const allowedTouchedFiles = new Set([
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md",
   "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md",
   "lib/company-contact-candidates.ts",
+  "lib/company-contact-candidate-loader.ts",
   "lib/link-safety-policy.ts",
   "lib/person-owner-company-contact-link.ts",
   "lib/person-owner-company-contact-link-route.ts",
   "lib/project-company-contact-role-link.ts",
+  "lib/project-company-contact-role-link-contract.ts",
   "lib/project-company-contact-role-link-route.ts",
+  "lib/project-company-contact-role-link-ui.ts",
   "lib/person-owner-link-ui.ts",
   "scripts/project-company-contact-link-api-route.test.ts",
   "scripts/project-company-contact-link-api.test.ts",
+  "scripts/project-company-contact-link-ui.test.ts",
   "scripts/link-safety-policy.test.ts",
   "scripts/person-owner-link-api-route.test.ts",
   "scripts/person-owner-link-api.test.ts",
@@ -104,14 +120,12 @@ const docsSource = readProjectFile(
   "docs/themes/ses-sales-console/requirements/person-company-contact-candidate-ui-2026-06-20.md"
 );
 
-assert(dashboardSource.includes("findCompanyContactCandidates"), "dashboard person detail must use the shared candidate helper");
+assert(!dashboardSource.includes("findCompanyContactCandidates("), "dashboard initial load must not compute all person candidates synchronously");
 assert(dashboardSource.includes('type: "companyContactCandidates"'), "dashboard detail must expose candidate display items");
 assert(dashboardSource.includes("会社/担当者候補（表示のみ）"), "dashboard detail must carry the explicit read-only candidate label");
-assert(dashboardSource.includes("persons.map((person) => mapPerson(person, companyContactCandidateSources))"));
-assert(
-  /prisma\.company\.findMany\(\{\s*take:\s*COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE,\s*orderBy:\s*\[\s*\{\s*normalizedName:\s*"asc"\s*\},\s*\{\s*id:\s*"asc"\s*\}\s*\]/.test(dashboardSource),
-  "candidate company DB read must use a bounded stable query"
-);
+assert(dashboardSource.includes("persons.map((person) => compactPerson(person))"));
+assert(dashboardSource.includes('detailType === "person"'), "dashboard must lazy-load one person detail on demand");
+assert(!dashboardSource.includes("COMPANY_CONTACT_CANDIDATE_COMPANY_TAKE"), "dashboard initial load must not read candidate companies");
 
 const dashboardWritePatterns = [
   /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/,
@@ -126,10 +140,24 @@ assert(!/export\s+async\s+function\s+PATCH\b/.test(personsApiSource), "PATCH /ap
 assert(!existsSync(path.join(rootDir, "app/api/companies")), "company write/API routes must not be introduced");
 assert(!existsSync(path.join(rootDir, "app/api/company-contacts")), "company contact write/API routes must not be introduced");
 
+const personCandidateApiSource = readProjectFile("app/api/persons/[id]/company-contact-candidates/route.ts");
+const mailBodyApiSource = readProjectFile("app/api/mail-notifications/[id]/body/route.ts");
+assert(personCandidateApiSource.includes("export async function GET"), "person candidates must lazy-load through read-only GET");
+assert(!/export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/.test(personCandidateApiSource), "person candidate route must stay read-only");
+assert(personCandidateApiSource.includes('status: { not: "ARCHIVED" }'), "person candidate route must reject archived persons");
+assert(personPaneSource.includes("/company-contact-candidates"), "PersonDetailPane must lazy-load candidates for the selected person");
+
+assert(mailBodyApiSource.includes("export async function GET"), "mail body route must stay read-only GET");
+assert(!/export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/.test(mailBodyApiSource), "mail body route must not add write handlers");
+assert(mailBodyApiSource.includes("canReadMailBodyFromDashboard"), "mail body route must gate dashboard-visible mail bodies");
+assert(mailBodyApiSource.includes("sourceProjects") && mailBodyApiSource.includes("sourcePersons"), "mail body route must inspect project/person source links");
+assert(mailBodyApiSource.includes("UNCLASSIFIED_BODY_CATEGORIES"), "mail body route must allow only dashboard unclassified categories");
+assert(mailBodyApiSource.includes("hasAnySourceEntity"), "mail body route must reject archived-only source links instead of treating them as unclassified");
+
 const candidateUiSource = sectionBetween(
   personPaneSource,
   "function CompanyContactCandidateList",
-  "function DetailItemValue"
+  "function LazyMailBody"
 );
 assert(candidateUiSource.includes("会社/担当者候補（表示のみ）"), "candidate UI must show the explicit read-only label");
 assert(candidateUiSource.includes("DBには保存されません"), "candidate UI must state that DB is not updated");

@@ -1722,6 +1722,18 @@ input[type="radio"] {
   width: 18px;
 }
 
+.person-owner-link-check select {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #263241;
+  font-size: 14px;
+  font-weight: 900;
+  min-height: 36px;
+  min-width: 180px;
+  padding: 7px 9px;
+}
+
 .person-owner-link-check span {
   font-size: 14px;
   font-weight: 900;

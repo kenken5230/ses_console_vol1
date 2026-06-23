@@ -29,6 +29,20 @@ async function fetchDashboardData() {
   return response.json();
 }
 
+async function fetchProjectDetail(projectId) {
+  const response = await fetch(`/api/dashboard-data?detail=project&id=${encodeURIComponent(projectId)}`, { cache: "no-store" });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result?.message || "Failed to load project detail");
+  return result.project;
+}
+
+async function fetchPersonDetail(personId) {
+  const response = await fetch(`/api/dashboard-data?detail=person&id=${encodeURIComponent(personId)}`, { cache: "no-store" });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result?.message || "Failed to load person detail");
+  return result.person;
+}
+
 function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -87,6 +101,8 @@ function getProjectDate(project, label) {
 }
 
 function collectProjectText(project) {
+  if (project.searchText) return project.searchText;
+
   const detailFields = project.detail?.fields || [];
   const detailText = detailFields
     .flatMap((field) => [field.value, field.lines, field.tags, field.items])
@@ -110,6 +126,8 @@ function collectProjectText(project) {
 }
 
 function collectPersonText(person) {
+  if (person.searchText) return person.searchText;
+
   const detailFields = person.detail?.fields || [];
   const detailText = detailFields
     .flatMap((field) => [field.value, field.lines, field.tags, field.items])
@@ -228,6 +246,7 @@ export default function Home() {
   const [authStatus, setAuthStatus] = useState("checking");
   const [currentUser, setCurrentUser] = useState(null);
   const [personOwnerLinkWriteAllowed, setPersonOwnerLinkWriteAllowed] = useState(false);
+  const [projectCompanyContactRoleLinkWriteAllowed, setProjectCompanyContactRoleLinkWriteAllowed] = useState(false);
   const [activeTab, setActiveTab] = useState("案件");
   const [search, setSearch] = useState("");
   const [checkedFilters, setCheckedFilters] = useState(defaultQuickFilters);
@@ -263,6 +282,7 @@ export default function Home() {
           if (ignore) return;
           setCurrentUser(null);
           setPersonOwnerLinkWriteAllowed(false);
+          setProjectCompanyContactRoleLinkWriteAllowed(false);
           setAuthStatus("unauthenticated");
           setProjects([]);
           setPersons([]);
@@ -278,12 +298,14 @@ export default function Home() {
         if (ignore) return;
         if (nextData.currentUser) setCurrentUser(nextData.currentUser);
         setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
+        setProjectCompanyContactRoleLinkWriteAllowed(nextData.projectCompanyContactRoleLinkWriteAllowed === true);
         setProjects(nextData.projects || []);
         setPersons(nextData.persons || []);
         setUnclassifiedMails(nextData.unclassifiedMails || []);
       } catch (error) {
         if (!ignore) {
           setPersonOwnerLinkWriteAllowed(false);
+          setProjectCompanyContactRoleLinkWriteAllowed(false);
           setAuthStatus("unauthenticated");
           setNotice(error instanceof Error ? error.message : "DBデータの取得に失敗しました");
         }
@@ -316,6 +338,7 @@ export default function Home() {
       const nextData = await fetchDashboardData();
       if (nextData.currentUser) setCurrentUser(nextData.currentUser);
       setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
+      setProjectCompanyContactRoleLinkWriteAllowed(nextData.projectCompanyContactRoleLinkWriteAllowed === true);
       setProjects(nextData.projects || []);
       setPersons(nextData.persons || []);
       setUnclassifiedMails(nextData.unclassifiedMails || []);
@@ -332,18 +355,66 @@ export default function Home() {
     const nextData = await fetchDashboardData();
     if (nextData.currentUser) setCurrentUser(nextData.currentUser);
     setPersonOwnerLinkWriteAllowed(nextData.personOwnerLinkWriteAllowed === true);
+    setProjectCompanyContactRoleLinkWriteAllowed(nextData.projectCompanyContactRoleLinkWriteAllowed === true);
     setProjects(nextData.projects || []);
     setPersons(nextData.persons || []);
     setUnclassifiedMails(nextData.unclassifiedMails || []);
     return nextData;
   };
 
+  const loadSelectedProjectDetail = async (project) => {
+    if (!project?.dbId || (project.detailLoaded && project.formValuesLoaded)) return project;
+    const detailProject = await fetchProjectDetail(project.dbId);
+    const mergedProject = { ...project, ...detailProject, detailLoaded: true, formValuesLoaded: true };
+    setSelectedProject((current) => (current?.dbId === project.dbId ? { ...current, ...mergedProject } : current));
+    setProjects((current) => current.map((item) => (item.dbId === project.dbId ? { ...item, ...mergedProject } : item)));
+    return mergedProject;
+  };
+
+  const loadSelectedPersonDetail = async (person) => {
+    if (!person?.dbId || person.detailLoaded) return person;
+    const detailPerson = await fetchPersonDetail(person.dbId);
+    const mergedPerson = { ...person, ...detailPerson, detailLoaded: true, formValuesLoaded: true };
+    setSelectedPerson((current) => (current?.dbId === person.dbId ? { ...current, ...mergedPerson } : current));
+    setPersons((current) => current.map((item) => (item.dbId === person.dbId ? { ...item, ...mergedPerson } : item)));
+    return mergedPerson;
+  };
+
+  const handleSelectProject = async (project) => {
+    setSelectedProject(project);
+    setMenuProjectId(null);
+    try {
+      await loadSelectedProjectDetail(project);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to load project detail");
+    }
+  };
+
+  const handleSelectPerson = async (person) => {
+    setSelectedPerson(person);
+    try {
+      await loadSelectedPersonDetail(person);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to load person detail");
+    }
+  };
+
   const handlePersonOwnerLinkLinked = async (personDbId) => {
     const nextData = await reloadDashboardData();
     const nextSelectedPerson = nextData.persons?.find((person) => person.dbId === personDbId) || null;
     setSelectedPerson(nextSelectedPerson);
+    if (nextSelectedPerson) await loadSelectedPersonDetail(nextSelectedPerson);
     setNotice("既存会社・既存担当者へのリンクを保存し、最新データを再取得しました");
     return nextSelectedPerson;
+  };
+
+  const handleProjectCompanyContactRoleLinked = async (projectDbId) => {
+    const nextData = await reloadDashboardData();
+    const nextSelectedProject = nextData.projects?.find((project) => project.dbId === projectDbId || project.id === projectDbId) || null;
+    setSelectedProject(nextSelectedProject);
+    if (nextSelectedProject) await loadSelectedProjectDetail(nextSelectedProject);
+    setNotice("案件の既存会社・既存担当者リンクを保存し、最新データを再取得しました");
+    return nextSelectedProject;
   };
 
   const handleAuthenticated = async (user) => {
@@ -364,6 +435,7 @@ export default function Home() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     setCurrentUser(null);
     setPersonOwnerLinkWriteAllowed(false);
+    setProjectCompanyContactRoleLinkWriteAllowed(false);
     setAuthStatus("unauthenticated");
     setProjects([]);
     setPersons([]);
@@ -383,6 +455,7 @@ export default function Home() {
       const nextData = await reloadDashboardData();
       const nextSelectedProject = keepSelected && projectId ? nextData.projects?.find((project) => project.dbId === projectId || project.id === projectId) : null;
       setSelectedProject(nextSelectedProject || null);
+      if (nextSelectedProject) await loadSelectedProjectDetail(nextSelectedProject);
       setNotice(message);
       setCurrentPage(1);
     } catch (error) {
@@ -761,7 +834,8 @@ export default function Home() {
 
     if (action === "edit") {
       closeMenus();
-      setSelectedProject(project);
+      const detailedProject = await loadSelectedProjectDetail(project);
+      setSelectedProject(detailedProject);
       setActiveModal("editProject");
       return;
     }
@@ -989,10 +1063,7 @@ export default function Home() {
                 onCopyUrl={handleCopyUrl}
                 onDetailAction={handleDetailAction}
                 onMenuToggle={(id) => setMenuProjectId(menuProjectId === id ? null : id)}
-                onSelectProject={(project) => {
-                  setSelectedProject(project);
-                  setMenuProjectId(null);
-                }}
+                onSelectProject={handleSelectProject}
                 projects={displayProjects}
                 selectedProjectId={selectedProject?.id}
               />
@@ -1001,9 +1072,7 @@ export default function Home() {
           ) : isPersonTab ? (
             <>
               <PersonTable
-                onSelectPerson={(person) => {
-                  setSelectedPerson(person);
-                }}
+                onSelectPerson={handleSelectPerson}
                 persons={displayPersons}
                 selectedPersonId={selectedPerson?.id}
               />
@@ -1029,11 +1098,14 @@ export default function Home() {
         {isProjectTab ? (
           <ProjectDetailPane
             canEdit={canEditEntities}
+            currentUserRole={currentUser?.role}
             onAddProposal={handleAddProposal}
             onClose={() => setSelectedProject(null)}
+            onCompanyContactRoleLinked={handleProjectCompanyContactRoleLinked}
             onCopyUrl={handleCopyUrl}
             onDetailAction={handleDetailAction}
             project={selectedProject}
+            projectCompanyContactRoleLinkWriteAllowed={projectCompanyContactRoleLinkWriteAllowed}
           />
         ) : null}
         {isPersonTab ? (

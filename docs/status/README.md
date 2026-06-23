@@ -17,6 +17,7 @@ This folder holds dated status material. Keep the live project snapshot in `../.
 | File | Category | Purpose |
 |---|---|---|
 | [`progress-log-2026-06-20.md`](./progress-log-2026-06-20.md) | Dated log | Historical summary of PR #82 through #87, merge commits, recorded validation where available, and intentionally unexecuted smoke/QA work. |
+| [`project-company-contact-role-link-ready-checklist-2026-06-21.md`](./project-company-contact-role-link-ready-checklist-2026-06-21.md) | Historical runbook/status report | PR #89 Ready checklist as of 2026-06-21; later Ready, DB smoke, Browser QA, and merge-gate state is tracked in the PR body and `pr89-current-gates-2026-06-23.md`. |
 | [`link-safety-policy-2026-06-20.md`](./link-safety-policy-2026-06-20.md) | Status report | Shared Person/Project company contact link safety conditions; no DB/migration/deploy. |
 | [`person-owner-link-http-smoke-plan-2026-06-20.md`](./person-owner-link-http-smoke-plan-2026-06-20.md) | Runbook/status report | Person owner link HTTP route smoke preparation, preflight policy, and remaining unexecuted real smoke. |
 | [`claude-review-pr62-65-followup-2026-06-20.md`](./claude-review-pr62-65-followup-2026-06-20.md) | Status report | Claude Code PR #62 through #65 review follow-up scope, validation gaps, and validation log. |

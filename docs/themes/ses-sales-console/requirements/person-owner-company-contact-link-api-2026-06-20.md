@@ -4,7 +4,7 @@
 
 This implementation adds `PATCH /api/persons/[id]/owner-company-contact` for linking a Person to an existing Company and an existing CompanyContact only.
 
-It does not create companies, create contacts, update existing links, add migrations, deploy anything, or run real DB write smoke tests. The guarded Person detail UI flow now calls this API only after explicit confirmation; Project/generic company/contact write UI remains unimplemented.
+It does not create companies, create contacts, update existing links, add migrations, deploy anything, or run real DB write smoke tests. The guarded Person detail UI flow now calls this API only after explicit confirmation. Generic Company/Contact create/update UI remains unimplemented; a separate guarded Project detail UI for existing company/contact role links is implemented and uses `PATCH /api/projects/[id]/company-contact-role` only after explicit confirmation.
 
 ## Guard
 

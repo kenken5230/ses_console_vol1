@@ -6,7 +6,7 @@ This contract fixes the write boundary for linking an existing `Company` and an 
 
 Implemented in this PR: guarded helper, narrow route, and mock/pure/route tests for `PATCH /api/projects/[id]/company-contact-role`.
 
-This PR does not implement a UI flow, Prisma schema change, migration, deploy, staging/production operation, or real DB write smoke. The real DB write smoke was not executed.
+This PR implements the guarded Project detail UI flow for existing company/contact role linking. It does not implement a Prisma schema change, migration, deploy, staging/production operation, or real DB write smoke. The real DB write smoke was not executed.
 
 ## Endpoint Proposal
 
@@ -110,7 +110,7 @@ Unknown `reasonCode` values return `400` and must not reach write logic.
 - `roleOrder` and `isPrimary` must be derived from the role decision table and must not be accepted from the payload.
 - Unknown `reasonCode` values are rejected before any create, upsert, update, delete, or AuditLog write.
 - Existing same `projectId + role` returns `409`; the route must not overwrite an existing role.
-- Filling in only `companyContactId` for an existing role is out of scope and requires a separate PR and separate approval.
+- Filling in only `companyContactId` for an existing role is out of scope and requires separate approval and evidence. Whether it is handled in a separate PR or explicitly deferred within the current PR is a PM gate decision.
 - The future route must not call the broad `/api/projects` PATCH handler internally.
 
 ## Stale Write Detection
@@ -141,10 +141,12 @@ Success response contains only minimal identifiers:
 
 After success, UI must reload/reselect the project from server data. It must not apply an optimistic write to local project details.
 
+The guarded project detail UI may use this narrow route only after a candidate is shown, an operator opens the confirmation panel, selects a bounded `role` and bounded `reasonCode`, and checks the confirmation checkbox. The UI payload must be built from the contract fields above and must not include raw mail body, notes, names, emails, phone text, or arbitrary free text.
+
 ## Out Of Scope
 
 - Changing `app/api/projects/route.ts`.
-- UI changes.
+- Further UI changes beyond the guarded project detail link panel.
 - Prisma schema changes or migrations.
 - Creating companies or contacts.
 - Updating existing `ProjectCompanyRole` rows.
@@ -152,13 +154,15 @@ After success, UI must reload/reselect the project from server data. It must not
 - Real DB write smoke.
 - Deployment.
 
-Smoke testing and real DB writes require a separate approval and a separate PR.
+Smoke testing and real DB writes require separate approval/evidence and a separate execution record. The PM gate may explicitly defer real DB smoke and/or Browser QA before Ready, but Ready must not imply those checks were completed unless evidence is recorded.
 
 ## Implementation Status
 
 - Route implemented: `app/api/projects/[id]/company-contact-role/route.ts`.
 - Helper implemented: `lib/project-company-contact-role-link.ts`.
 - Route handler implemented: `lib/project-company-contact-role-link-route.ts`.
+- Guarded UI helper implemented: `lib/project-company-contact-role-link-ui.ts`.
+- Project detail UI implemented: `components/ProjectDetailPane.jsx` calls only `PATCH /api/projects/[id]/company-contact-role` and reloads/reselects after success.
 - Tests implemented: `scripts/project-company-contact-link-api.test.ts`, `scripts/project-company-contact-link-api-route.test.ts`, and this contract test.
 - Guard behavior implemented: `PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_ENABLED=true` plus `PROJECT_COMPANY_CONTACT_ROLE_LINK_WRITE_TARGET=local|test|staging`; `production`, `NODE_ENV=production`, and `VERCEL_ENV=production` are refused before JSON parsing.
 - DB smoke status: real DB write smoke was not executed.

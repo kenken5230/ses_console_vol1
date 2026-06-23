@@ -8,51 +8,27 @@ import {
   LINK_NON_PRODUCTION_WRITE_TARGETS,
   LINK_SENSITIVE_VALUE_PATTERNS,
 } from "./link-safety-policy";
+import {
+  buildProjectCompanyContactRoleConfirmationToken,
+  PROJECT_COMPANY_CONTACT_ROLE_DERIVATION,
+  PROJECT_COMPANY_CONTACT_ROLE_LINK_INTENT,
+  PROJECT_COMPANY_CONTACT_ROLE_REASON_CODES,
+  PROJECT_COMPANY_CONTACT_ROLE_VALUES,
+  type ProjectCompanyContactRoleReasonCode,
+  type ProjectCompanyContactRoleValue,
+} from "./project-company-contact-role-link-contract";
 
-export const PROJECT_COMPANY_CONTACT_ROLE_LINK_INTENT = "LINK_EXISTING_PROJECT_COMPANY_CONTACT_ROLE";
+export {
+  buildProjectCompanyContactRoleConfirmationToken,
+  PROJECT_COMPANY_CONTACT_ROLE_DERIVATION,
+  PROJECT_COMPANY_CONTACT_ROLE_LINK_INTENT,
+  PROJECT_COMPANY_CONTACT_ROLE_REASON_CODES,
+  PROJECT_COMPANY_CONTACT_ROLE_VALUES,
+  type ProjectCompanyContactRoleReasonCode,
+  type ProjectCompanyContactRoleValue,
+} from "./project-company-contact-role-link-contract";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export const PROJECT_COMPANY_CONTACT_ROLE_VALUES = [
-  "UPPER_COMPANY",
-  "END_USER",
-  "PRIME_CONTRACTOR",
-  "SECONDARY_CONTRACTOR",
-  "TERTIARY_CONTRACTOR",
-  "ACCOUNT_MANAGER_COMPANY",
-  "PROPOSAL_TARGET",
-  "OTHER",
-] as const;
-
-export type ProjectCompanyContactRoleValue = (typeof PROJECT_COMPANY_CONTACT_ROLE_VALUES)[number];
-export type ProjectCompanyContactRoleReasonCode =
-  | "candidate_verified"
-  | "manual_admin_review"
-  | "sales_ops_cleanup"
-  | "stale_candidate_recheck"
-  | "duplicate_role_cleanup";
-
-export const PROJECT_COMPANY_CONTACT_ROLE_REASON_CODES: ProjectCompanyContactRoleReasonCode[] = [
-  "candidate_verified",
-  "manual_admin_review",
-  "sales_ops_cleanup",
-  "stale_candidate_recheck",
-  "duplicate_role_cleanup",
-];
-
-export const PROJECT_COMPANY_CONTACT_ROLE_DERIVATION: Record<
-  ProjectCompanyContactRoleValue,
-  { roleOrder: number; isPrimary: boolean }
-> = {
-  UPPER_COMPANY: { roleOrder: 1, isPrimary: true },
-  END_USER: { roleOrder: 2, isPrimary: false },
-  PRIME_CONTRACTOR: { roleOrder: 3, isPrimary: false },
-  SECONDARY_CONTRACTOR: { roleOrder: 4, isPrimary: false },
-  TERTIARY_CONTRACTOR: { roleOrder: 5, isPrimary: false },
-  ACCOUNT_MANAGER_COMPANY: { roleOrder: 80, isPrimary: false },
-  PROPOSAL_TARGET: { roleOrder: 90, isPrimary: false },
-  OTHER: { roleOrder: 99, isPrimary: false },
-};
 
 const ALLOWED_BODY_KEYS = new Set([
   "companyId",
@@ -288,15 +264,6 @@ function assertExpectedProjectState(
       "STALE_PROJECT_UPDATED_AT",
     );
   }
-}
-
-export function buildProjectCompanyContactRoleConfirmationToken(
-  routeProjectId: string,
-  role: ProjectCompanyContactRoleValue,
-  companyId: string,
-  contactId: string,
-) {
-  return `project-company-contact-role-link:${routeProjectId}:${role}:${companyId}:${contactId}`;
 }
 
 export function projectCompanyContactRoleLinkGuard(

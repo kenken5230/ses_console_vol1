@@ -7,10 +7,44 @@ function isEmpty(value) {
 
 export default function UnclassifiedMailDetailPane({ canEdit = true, isMoving, mail, onClose, onMoveToPerson, onMoveToProject }) {
   const [bodyOpen, setBodyOpen] = useState(true);
+  const [body, setBody] = useState("");
+  const [bodyStatus, setBodyStatus] = useState("idle");
 
   useEffect(() => {
     setBodyOpen(true);
+    setBody("");
+    setBodyStatus("idle");
   }, [mail?.id]);
+
+  useEffect(() => {
+    if (!mail?.dbId || !bodyOpen || bodyStatus === "loaded" || bodyStatus === "loading") return undefined;
+
+    let ignore = false;
+    setBodyStatus("loading");
+    async function loadBody() {
+      try {
+        const response = await fetch(`/api/mail-notifications/${encodeURIComponent(mail.dbId)}/body`, { cache: "no-store" });
+        const result = await response.json().catch(() => ({}));
+        if (ignore) return;
+        if (!response.ok) {
+          setBody(result?.message || "Failed to load mail body");
+          setBodyStatus("error");
+          return;
+        }
+        setBody(result?.bodyText || "-");
+        setBodyStatus("loaded");
+      } catch (error) {
+        if (ignore) return;
+        setBody(error instanceof Error ? error.message : "Failed to load mail body");
+        setBodyStatus("error");
+      }
+    }
+
+    loadBody();
+    return () => {
+      ignore = true;
+    };
+  }, [bodyOpen, bodyStatus, mail?.dbId]);
 
   useEffect(() => {
     if (!mail) return undefined;
@@ -26,7 +60,7 @@ export default function UnclassifiedMailDetailPane({ canEdit = true, isMoving, m
   if (!mail) return null;
 
   const fields = mail.detail?.fields || [];
-  const body = fields.find((field) => field.label === "メール本文")?.value || mail.bodyText || "-";
+  const visibleBody = bodyStatus === "loading" ? "Loading..." : body || "-";
 
   return (
     <div className="detail-drawer-backdrop" onClick={isMoving ? undefined : onClose}>
@@ -105,7 +139,7 @@ export default function UnclassifiedMailDetailPane({ canEdit = true, isMoving, m
                 <div className="detail-item detail-item-wide">
                   <details className="mail-body-box" open={bodyOpen} onToggle={(event) => setBodyOpen(event.currentTarget.open)}>
                     <summary>元メール本文を表示</summary>
-                    <p className={`detail-block ${isEmpty(body) ? "muted-value" : ""}`}>{body || "-"}</p>
+                    <p className={`detail-block ${isEmpty(visibleBody) ? "muted-value" : ""}`}>{visibleBody}</p>
                   </details>
                 </div>
               </div>
