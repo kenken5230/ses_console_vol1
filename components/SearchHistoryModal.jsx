@@ -158,8 +158,8 @@ export default function SearchHistoryModal({ onApply, onClose }) {
         <div className="history-safety-note">
           <p>{targetLabel}の検索履歴をDBから取得します。表示されるのはログイン中ユーザー自身の履歴のみです。</p>
           <div className="history-chips" aria-label="保存対象の現在条件">
-            {currentSummary.map((chip) => (
-              <span className="condition-chip" key={chip}>
+            {currentSummary.map((chip, index) => (
+              <span className="condition-chip" key={`current-${index}-${chip}`}>
                 {chip}
               </span>
             ))}
@@ -177,8 +177,8 @@ export default function SearchHistoryModal({ onApply, onClose }) {
             <article className="history-item" key={history.id}>
               <div>
                 <div className="history-chips">
-                  {buildChips(history).map((chip) => (
-                    <span className="condition-chip" key={chip}>
+                  {buildChips(history).map((chip, index) => (
+                    <span className="condition-chip" key={`${history.id}-chip-${index}-${chip}`}>
                       {chip}
                     </span>
                   ))}

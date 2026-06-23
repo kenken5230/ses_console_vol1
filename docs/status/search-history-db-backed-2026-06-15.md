@@ -1,5 +1,7 @@
 # SearchHistory DB-backed Implementation 2026-06-15
 
+Current note as of 2026-06-23: this file is historical implementation ledger material. DB-backed SearchHistory has since merged through #57, and saved condition application was restored in #91. Use `docs/status/search-history-current-status-2026-06-23.md` for current planning and remaining gates.
+
 ## Purpose
 
 Replace the #56 safety-state `サンプル検索履歴` UI with a DB-backed SearchHistory implementation on top of latest `main` commit `db0c60b6f0ae3c80bdac9b1dcced2e56794784be`.
