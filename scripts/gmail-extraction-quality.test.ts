@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { inferGmailCompanyCandidate } from "./gmail-company-candidate";
 import { classifyMailExtractionQuality, extractFromMail, extractPersonFromMail, extractProjectFromMail, type MailExtractionSource } from "./gmail-extraction";
 import { assertNoSensitiveOutput, buildAnonymizedIssueRow } from "./gmail-extraction-quality-report";
+
+const rootDir = process.cwd();
+
+function readProjectFile(filePath: string) {
+  return readFileSync(path.join(rootDir, filePath), "utf8");
+}
 
 function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: string | null; category?: "PROJECT_INTRO" | "PERSON_INTRO" }): MailExtractionSource {
   return {
@@ -126,6 +134,27 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
 }
 
 {
+  const extraction = extractPersonFromMail(mail({
+    subject: "company candidate redaction test",
+    bodyText: "Name: Redaction Fixture\nRate: 70\nSkills: Java",
+  }));
+  const companyCandidate = inferGmailCompanyCandidate({
+    bodyLabelCompany: "Sensitive Partner Systems Inc.",
+    fromEmail: "sender@sensitive-partner.test",
+  });
+  const row = buildAnonymizedIssueRow({
+    id: "mail-with-company-candidate",
+    extraction,
+    companyCandidate,
+  });
+  const output = JSON.stringify(row);
+  assertNoSensitiveOutput(output);
+  assert.equal(row.companyCandidate?.candidatePresent, true);
+  assert.equal(output.includes("Sensitive Partner Systems Inc."), false);
+  assert.equal(output.includes("candidateName"), false);
+}
+
+{
   const candidate = inferGmailCompanyCandidate({
     bodyLabelCompany: "Body Label Systems Inc.",
     fromEmail: "sender@relay.example.invalid",
@@ -186,6 +215,32 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   assert.equal(candidate.candidateName, "Signature Systems LLC");
   assert.equal(candidate.source, "signature_company");
   assert.equal(candidate.confidence, "MEDIUM");
+}
+
+{
+  const auditSource = readProjectFile("scripts/gmail-extraction-quality-audit.ts");
+  const evalSource = readProjectFile("scripts/gmail-extraction-quality-eval.ts");
+  const reportSource = readProjectFile("scripts/gmail-extraction-quality-report.ts");
+  const companyCandidateSource = readProjectFile("scripts/gmail-company-candidate.ts");
+  const prismaWritePattern =
+    /\b(?:prisma|db|tx)\.[A-Za-z0-9_]+\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/;
+
+  assert(auditSource.includes("function assertNoApplyFlag"), "quality-audit must keep an explicit apply flag guard");
+  assert(auditSource.includes('process.argv.includes("--apply")'), "quality-audit must reject --apply before DB reads");
+  assert(auditSource.includes("readOnly: true"), "quality-audit summary must advertise read-only mode");
+  assert(!prismaWritePattern.test(auditSource), "quality-audit must not contain Prisma write calls");
+  assert(!/\bprisma\.\$transaction\s*\(/.test(auditSource), "quality-audit must not open write transactions");
+  assert(auditSource.includes("assertNoSensitiveOutput(serialized)"), "quality-audit must run serialized output through the leak guard");
+  assert(!/candidateName\s*:/.test(auditSource), "quality-audit output source must not print raw company candidate names");
+
+  assert(!/lib\/prisma|@prisma\/client|\bprisma\./.test(evalSource), "quality-eval must stay Prisma-free");
+  assert(!/process\.argv/.test(evalSource), "quality-eval must not grow runtime apply-style flags");
+  assert(evalSource.includes("buildAnonymizedIssueRow"), "quality-eval high-risk samples must use anonymized rows");
+  assert(evalSource.includes("assertNoSensitiveOutput(serialized)"), "quality-eval must run serialized output through the leak guard");
+
+  assert(reportSource.includes("anonymizedCompanyCandidate(params.companyCandidate)"), "quality report rows must anonymize company candidates");
+  assert(companyCandidateSource.includes('Omit<GmailCompanyCandidate, "candidateName">'), "quality report rows must omit raw company candidate names");
+  assert(companyCandidateSource.includes("candidatePresent: Boolean(candidateValue.candidateName)"), "quality report rows may expose only company candidate presence");
 }
 
 console.log("gmail extraction quality tests passed");
