@@ -8,6 +8,7 @@ This folder holds dated status material. Keep the live project snapshot in `../.
 |---|---|---|
 | Current snapshot | [`../../PROGRESS.md`](../../PROGRESS.md) | Current base commit, open items, workspace safety, and next work candidates. |
 | Dated progress logs | [`progress-log-2026-06-20.md`](./progress-log-2026-06-20.md), [`progress-log-2026-06-23.md`](./progress-log-2026-06-23.md) | PR-by-PR or day-by-day historical notes that would become stale if kept in the snapshot. |
+| Current gate summaries | [`post95-progress-and-gate-summary-2026-06-23.md`](./post95-progress-and-gate-summary-2026-06-23.md) | Human-readable post-#95 status, remaining gates, AI-safe next work, and owner-approval items. |
 | Status reports | Files directly under `docs/status/` | Focused implementation, validation, safety, or recovery reports. |
 | Runbooks | Status docs or linked operation docs with step-by-step safety gates | Smoke, preflight, rollback, and evidence procedures. |
 | Investigations | [`pm-investigations/`](./pm-investigations/) | PM/PdM research, backlog shaping, stale-branch decisions, and approval gates. |
@@ -18,6 +19,8 @@ This folder holds dated status material. Keep the live project snapshot in `../.
 |---|---|---|
 | [`progress-log-2026-06-20.md`](./progress-log-2026-06-20.md) | Dated log | Historical summary of PR #82 through #87, merge commits, recorded validation where available, and intentionally unexecuted smoke/QA work. |
 | [`progress-log-2026-06-23.md`](./progress-log-2026-06-23.md) | Dated log | Docs-only post-#89 merge sync with final merge commit, Vercel production deploy result, production read-only limit, non-executed DB/write scope, and remaining work. |
+| [`post95-progress-and-gate-summary-2026-06-23.md`](./post95-progress-and-gate-summary-2026-06-23.md) | Current gate summary | Post-#95 non-technical summary for Ken, theme-by-theme status, remaining gates, AI-safe work, owner-approval work, and 30-90 minute work-pack candidates. |
+| [`worktree-cleanup-inventory-2026-06-23.md`](./worktree-cleanup-inventory-2026-06-23.md) | Cleanup inventory | Known worktree cleanup state and approval gates; no delete commands, no deletion execution, and no other-worktree mutation. |
 | [`project-company-contact-role-link-ready-checklist-2026-06-21.md`](./project-company-contact-role-link-ready-checklist-2026-06-21.md) | Historical runbook/status report | PR #89 Ready checklist as of 2026-06-21; later Ready, DB smoke, Browser QA, and merge-gate state is tracked in the PR body and `pr89-current-gates-2026-06-23.md`; post-merge state is in `progress-log-2026-06-23.md`. |
 | [`link-safety-policy-2026-06-20.md`](./link-safety-policy-2026-06-20.md) | Status report | Shared Person/Project company contact link safety conditions; no DB/migration/deploy. |
 | [`person-owner-link-http-smoke-plan-2026-06-20.md`](./person-owner-link-http-smoke-plan-2026-06-20.md) | Runbook/status report | Person owner link HTTP route smoke preparation, preflight policy, and remaining unexecuted real smoke. |
