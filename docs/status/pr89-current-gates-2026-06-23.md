@@ -4,11 +4,11 @@ Date: 2026-06-23
 
 Scope: PR #89 `Add guarded project company contact link UI`.
 
-This document records the current Draft state, completed evidence, remaining risks, and the next gates. It does not approve merge, close, deploy, migration, or production/staging/shared DB access.
+This document records the completed local DB smoke, Browser QA, Ready gate result, remaining risks, and the next gates. It does not approve close, migration, or production/staging/shared DB write access.
 
 ## Owner Intent
 
-PR #89 remains Draft until the Ready internal gate is complete.
+PR #89 completed the Ready internal gate on 2026-06-23 and is now ready for review.
 
 The separate local/test DB gate was approved and executed on 2026-06-23. Candidate-present Browser QA, route write smoke, result audit, and approved cleanup are complete.
 
@@ -26,8 +26,8 @@ Not included in PR #89:
 
 - Migration or schema change.
 - Production/staging/shared DB access.
-- Deploy.
-- Merge / close.
+- Production/staging/shared DB write.
+- Close.
 
 ## Current PR State
 
@@ -35,10 +35,10 @@ Not included in PR #89:
 | --- | --- |
 | PR | #89 |
 | Branch | `codex/project-company-contact-link-ui-20260620` |
-| State | Draft / open |
-| Current head source | PR body and GitHub PR status are the source of truth at Ready gate. This row intentionally avoids a self-invalidating fixed SHA because evidence-only commits change the head. |
-| Vercel | Confirm current head success in GitHub status before Ready |
-| Mergeability | Confirm mergeable in GitHub PR status before Ready |
+| State | Ready for review / open |
+| Current head source | PR body and GitHub PR status are the source of truth at merge gate. This row intentionally avoids a self-invalidating fixed SHA because evidence-only commits change the head. |
+| Vercel | Confirmed success at Ready gate; reconfirm current head success before merge |
+| Mergeability | Confirmed mergeable at Ready gate; reconfirm mergeable before merge |
 | Files | 31 changed files |
 | Deleted files | None |
 | Package / lockfile | `package.json` test script wiring only; no lockfile diff |
@@ -71,8 +71,9 @@ Not included in PR #89:
 | Production/staging/shared DB verification | Not executed / not authorized | This gate was local DB only. |
 | Fixture cleanup | Not performed by design | Synthetic mail/extraction fixture and project `sourceMailId` fixture link are retained as local evidence. |
 | Project `updatedAt` restore | Not performed by design | The route intentionally touches `updatedAt`; the approved plan kept that evidence. |
-| Ready for review | Pending internal Ready gate | DB smoke and candidate-present Browser QA are complete, but Ready remains a PR-state gate. |
-| Merge / close / deploy | Blocked | Separate approval required after Ready consideration. |
+| Ready for review | Complete | Parent PM, audit, PMO, and technical lead all passed the Ready gate; PR #89 was marked ready for review. |
+| Merge / production deploy | Approved gate in progress | User approved main merge on 2026-06-23 with the understanding that merge triggers production deploy; merge still requires the merge-gate checks in this document. |
+| Close | Blocked | Manual close remains out of scope; GitHub may close the PR automatically if it is merged. |
 
 ## Changed Files
 
@@ -84,6 +85,7 @@ None expected.
 
 ## Next Steps
 
-1. Complete the Ready internal gate across parent PM, audit, PMO, and technical lead.
-2. If all roles PASS, mark #89 Ready for review only.
-3. Keep merge / close / deploy as separate gates.
+1. Complete the merge-gate read-only security review across parent PM, audit, PMO, and technical lead.
+2. If all roles PASS and current-head checks remain green, merge #89 to main using repository default merge behavior.
+3. After merge, confirm production deployment success and perform read-only production smoke checks only.
+4. Do not run production/staging/shared DB write smoke, manual close, or unrelated PR/branch operations.
