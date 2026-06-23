@@ -22,6 +22,7 @@ This change does not alter persistence behavior.
 - No project/person/company/contact update rule change.
 - No automatic replacement of `ProjectExtraction.upperCompanyName`.
 - No automatic replacement of `PersonExtraction.ownerCompanyName`.
+- No connection from advisory candidates to any apply-time DB write.
 
 Existing DB writes still use the original extraction fields in `lib/gmail-extract-entities.ts`.
 
@@ -57,3 +58,11 @@ Quality reports and fixture evaluation must not print candidate names, full bodi
 Allowed report fields are source, confidence, score, reason codes, generic-domain flag, and whether a candidate is present.
 
 The interactive preview command may show the advisory candidate name because it already displays extraction preview fields for operator review and performs no DB writes.
+
+## Apply Boundary
+
+The current company candidate is advisory/read-only. It is useful for review, fixtures, and operator-facing preview, but it is not an apply source and is not wired to persistence.
+
+Before any future apply PR may use this candidate, PM/audit/PMO/TL reviewers should confirm the policy choices in `../operations/gmail-company-apply-gate-runbook-v0.1.md`. The implementation should not ask end users to make fine-grained technical choices such as source priority, confidence thresholds, or fallback behavior.
+
+Dashboard list/detail APIs should not inline the advisory candidate by default. Keep the candidate behind a lazy GET boundary so the UI fetches it only for explicit review intent, preserves list API payload size, and keeps audit-sensitive candidate evaluation separate from ordinary dashboard reads.
