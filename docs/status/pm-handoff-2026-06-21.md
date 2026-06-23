@@ -1,5 +1,7 @@
 # PM Handoff 2026-06-21
 
+> Historical snapshot: this file records PR #89 as it existed on 2026-06-21. It intentionally preserves then-current `Draft`, `Blocked`, and `Not run` wording. For current PR #89 state, use the PR body and `docs/status/pr89-current-gates-2026-06-23.md`.
+
 This handoff records the parent-PM state for PR #89 and the current sub-agent workflow.
 
 ## Current PR

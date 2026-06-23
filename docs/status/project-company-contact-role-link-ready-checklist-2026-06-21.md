@@ -4,6 +4,8 @@ Date: 2026-06-21
 
 Scope: PR #89 `Add guarded project company contact link UI`.
 
+> Historical snapshot: this checklist records the Ready gate state as of 2026-06-21. It intentionally preserves then-current `Not run` and `Blocked` rows. The later Ready, local DB smoke, Browser QA, and merge-gate state are tracked in the PR body and `docs/status/pr89-current-gates-2026-06-23.md`.
+
 This checklist is a docs-only readiness record. It does not approve DB access, DB write smoke, Browser QA execution, deploy, Ready for review, merge, close, staging use, or cleanup.
 
 ## Status Legend
