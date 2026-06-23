@@ -36,7 +36,7 @@ Not included in PR #89:
 | PR | #89 |
 | Branch | `codex/project-company-contact-link-ui-20260620` |
 | State | Draft / open |
-| Latest checked head | `10c0a6b4cbec26b3012f60b1212cd234cb45476b` |
+| Latest checked head | `b803885f55b4d41363d2e3270f3d71b38ae5575a` |
 | Vercel | Success at current head |
 | Mergeability | Mergeable at latest check |
 | Files | 31 changed files |
