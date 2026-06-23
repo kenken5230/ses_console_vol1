@@ -194,10 +194,30 @@ for (const privateValue of ["private-risk", "private company note", "private con
 }
 
 const helperSource = readProjectFile("lib/company-contact-candidates.ts");
+const loaderSource = readProjectFile("lib/company-contact-candidate-loader.ts");
+const projectCandidateRouteSource = readProjectFile("app/api/projects/[id]/company-contact-candidates/route.ts");
+const personCandidateRouteSource = readProjectFile("app/api/persons/[id]/company-contact-candidates/route.ts");
 const packageSource = readProjectFile("package.json");
 const personsApiSource = readProjectFile("app/api/persons/route.ts");
+const candidatePersistencePattern =
+  /\b(?:prisma|db|tx)\.[A-Za-z0-9_]+\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(|\b(?:prisma|db|tx)\.\$transaction\s*\(/;
 
 assert(!/@prisma\/client|lib\/prisma|from\s+["'][^"']*prisma|prisma\.|\bfetch\s*\(/i.test(helperSource), "candidate helper must stay DB/fetch/Prisma free");
+assert(!candidatePersistencePattern.test(loaderSource), "candidate loader must stay read-only and never persist candidates");
+assert(loaderSource.includes("findCompanyContactCandidates(input, sources"), "candidate loader must return preview candidates from the read-only helper");
+assert(loaderSource.includes("maxCandidates: 5"), "candidate loader must keep preview output bounded");
+assert(loaderSource.includes("maxRecordsToInspect"), "candidate loader must keep candidate scans bounded");
+for (const sensitiveField of ["notes", "contactPolicy", "corporateNumber", "bankruptcyRiskScore"]) {
+  assert(!loaderSource.includes(sensitiveField), `candidate loader must not select ${sensitiveField}`);
+}
+for (const routeSource of [projectCandidateRouteSource, personCandidateRouteSource]) {
+  assert(/export\s+async\s+function\s+GET\b/.test(routeSource), "candidate route must expose only a GET preview boundary");
+  assert(!/export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/.test(routeSource), "candidate route must not expose apply/write handlers");
+  assert(!candidatePersistencePattern.test(routeSource), "candidate route must not persist candidate output");
+  assert(routeSource.includes("NextResponse.json({ candidates })"), "candidate route must return preview candidates only");
+}
+assert(projectCandidateRouteSource.includes("loadProjectCompanyContactCandidates"), "project candidate route must use the read-only loader");
+assert(personCandidateRouteSource.includes("loadPersonCompanyContactCandidates"), "person candidate route must use the read-only loader");
 assert(packageSource.includes("test:company-contact-candidates"), "package.json must expose the candidate contract test");
 assert(!/export\s+async\s+function\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons must not be introduced");
 assert(!existsSync(path.join(rootDir, "app/api/companies")), "company CRUD API routes must not be introduced");
