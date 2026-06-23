@@ -88,15 +88,46 @@ function looksLikeDisplayLinkOnly(value: string | null): boolean {
   return urlCount > 0 && (displayLinkHint || withoutUrls.length <= 80);
 }
 
+function stripLowInformationBodyText(value: string): string {
+  return value
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/陦ｨ遉ｺ縺輔ｌ縺ｪ縺л陦ｨ遉ｺ縺ｧ縺阪↑縺л縺薙■繧榎繝悶Λ繧ｦ繧ｶ/gi, " ")
+    .replace(/表示されない場合はこちら|表示できない場合はこちら|ブラウザで表示/g, " ")
+    .replace(/表示されない|表示できない|こちら|ブラウザ/g, " ")
+    .replace(/\b(?:view(?: this)? email(?: in your browser)?|view online|open in (?:a )?browser|browser)\b/gi, " ")
+    .replace(/[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\s]+/g, "");
+}
+
+function looksLikeLowInformationBodyText(value: string | null): boolean {
+  const text = normalizeSearchText(value);
+  if (!text) return true;
+  const meaningfulText = stripLowInformationBodyText(text);
+  if (!meaningfulText) return true;
+  if (meaningfulText.length > 80) return false;
+
+  return !/[\p{L}\p{N}]/u.test(meaningfulText);
+}
+
+function firstMeaningfulBodyText(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const normalized = normalizeBodyText(value);
+    if (normalized && !looksLikeLowInformationBodyText(normalized)) return normalized;
+  }
+  return null;
+}
+
 function pickBestBodyText(plainText: string | null, htmlText: string | null): {
   bodyText: string | null;
   bodyTextSource: "text/plain" | "text/html" | "none";
 } {
-  if (!plainText && htmlText) return { bodyText: htmlText, bodyTextSource: "text/html" };
-  if (plainText && htmlText && looksLikeDisplayLinkOnly(plainText) && htmlText.length >= Math.max(200, plainText.length + 100)) {
+  const plainTextIsLowInformation = looksLikeLowInformationBodyText(plainText);
+  const htmlTextIsMeaningful = htmlText && !looksLikeLowInformationBodyText(htmlText);
+
+  if ((!plainText || plainTextIsLowInformation) && htmlTextIsMeaningful) return { bodyText: htmlText, bodyTextSource: "text/html" };
+  if (plainText && htmlTextIsMeaningful && looksLikeDisplayLinkOnly(plainText) && htmlText.length >= Math.max(200, plainText.length + 100)) {
     return { bodyText: htmlText, bodyTextSource: "text/html" };
   }
-  if (plainText) return { bodyText: plainText, bodyTextSource: "text/plain" };
+  if (plainText && !plainTextIsLowInformation) return { bodyText: plainText, bodyTextSource: "text/plain" };
   return { bodyText: null, bodyTextSource: "none" };
 }
 
@@ -122,10 +153,5 @@ export function buildExtractionBodyText(input: {
   subject?: string | null;
 }): string | null {
   const bestBody = pickBestBodyText(normalizeBodyText(input.bodyText), htmlToText(input.bodyHtml));
-  return (
-    bestBody.bodyText ??
-    normalizeBodyText(input.normalizedBody) ??
-    normalizeBodyText(input.snippet) ??
-    normalizeBodyText(input.subject)
-  );
+  return bestBody.bodyText ?? firstMeaningfulBodyText(input.normalizedBody, input.snippet, input.subject);
 }
