@@ -28,7 +28,7 @@ Scope: docs-only status sync after PR #92 through #95. This report does not chan
 | AI運用ルール | #92で正式化済み。秘密ファイル、DB実体、外部影響操作、主workspace dirtyへの配慮が文章化された。 | 新しい作業はこのルール前提で開始する。docs-onlyでも秘密値や接続URLは残さない。 |
 | Gmail会社補完 | read-only候補検出は存在する。#93でapply gate、#95で境界テストが入った。 | previewとapplyを分けたまま、将来apply PRを設計する。DB writeは承認まで不可。 |
 | Person owner link | API/route smokeの準備は進んでいるが、実HTTP write smokeは未実行。#94でpreflightが硬くなった。 | synthetic/disposable fixtureを選び、read-only preflight evidenceを作ってから、write smoke承認を取る。 |
-| SearchHistory | #91で保存済み検索履歴のfilter復元は直った。古いDB-backed #55はそのまま入れず、latest mainから#55Rとして再設計する扱い。 | 実DB保存、DB write smoke、own-user isolationを確認する計画から再開する。 |
+| SearchHistory | DB-backed SearchHistoryは#57でmerge済み。#91で保存済み検索履歴のfilter/sort/page-size復元もmerge済み。 | 残りは通常ログインでのBrowser QAと、必要な場合のlocal/test DB write smoke / own-user isolation確認。古い#55/#55R計画はhistorical/reference-only。 |
 | worktree cleanup | 主workspaceはdirty。古いworktreeも残っている。削除・merge・reuseは未実行。 | まず削除しない台帳を作る。削除候補ごとにdirty、未push、関連PR、秘密/DB実体の可能性を確認して承認を取る。 |
 
 ## 残ゲート
@@ -47,7 +47,7 @@ Scope: docs-only status sync after PR #92 through #95. This report does not chan
 - DBへ接続しないコード・テスト観点の調査。
 - 秘密値を読まない範囲のファイル一覧・差分確認。
 - 削除しない前提のworktree cleanup台帳作成。
-- Gmail company applyやSearchHistory #55Rの実装前設計。
+- Gmail company applyの実装前設計。SearchHistoryは再実装ではなく、現DB-backed実装のQA/残ゲート整理。
 - Person owner linkの承認依頼用チェックリスト作成。
 
 ## けんさん確認が必要なもの
@@ -65,7 +65,7 @@ Scope: docs-only status sync after PR #92 through #95. This report does not chan
 |---|---:|---|---|
 | Person owner link preflight evidence pack | 45-75分 | 書き込みなしで、必要なfixture条件、接続先分類項目、確認文面、証跡テンプレートを作る。DB接続を実行する直前で止める。 | DB接続前に要確認 |
 | Gmail company apply design pack | 60-90分 | #93/#95を前提に、preview UI、apply endpoint、audit reason、rollback、generic/LOW/fallback扱いを設計する。 | 設計だけならAI可。write方針は要確認 |
-| SearchHistory #55R rebuild plan | 45-90分 | latest mainからDB-backed SearchHistoryを作り直すため、API/UI/test/DB write smokeの範囲を分ける。 | 実装前計画はAI可。DB write smokeは要確認 |
+| SearchHistory current-status sync and QA plan | 45-90分 | #57/#91後の現DB-backed実装を確認し、古い#55R記述をhistorical扱いへ更新し、Browser QA/DB smoke残ゲートを分ける。 | docs同期とno-DB検証はAI可。DB write smokeは要確認 |
 | Worktree cleanup ledger | 30-60分 | 削除せず、既知worktreeと主workspace dirtyの扱いを台帳化し、削除不可条件と承認単位を明確にする。 | 台帳作成はAI可。削除は要確認 |
 | Post-#95 QA gate map | 30-60分 | #92-#95後のテスト、Browser QA、production read-only確認、未実行理由を表にまとめる。 | AI可 |
 
