@@ -222,6 +222,8 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   const evalSource = readProjectFile("scripts/gmail-extraction-quality-eval.ts");
   const reportSource = readProjectFile("scripts/gmail-extraction-quality-report.ts");
   const companyCandidateSource = readProjectFile("scripts/gmail-company-candidate.ts");
+  const extractEntitiesSource = readProjectFile("lib/gmail-extract-entities.ts");
+  const dashboardDataSource = readProjectFile("app/api/dashboard-data/route.ts");
   const prismaWritePattern =
     /\b(?:prisma|db|tx)\.[A-Za-z0-9_]+\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/;
 
@@ -241,6 +243,9 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   assert(reportSource.includes("anonymizedCompanyCandidate(params.companyCandidate)"), "quality report rows must anonymize company candidates");
   assert(companyCandidateSource.includes('Omit<GmailCompanyCandidate, "candidateName">'), "quality report rows must omit raw company candidate names");
   assert(companyCandidateSource.includes("candidatePresent: Boolean(candidateValue.candidateName)"), "quality report rows may expose only company candidate presence");
+
+  assert(!/gmail-company-candidate|GmailCompanyCandidate|inferGmailCompanyCandidate/.test(extractEntitiesSource), "entity apply helpers must not consume advisory company candidates");
+  assert(!/companyCandidate|inferGmailCompanyCandidate/.test(dashboardDataSource), "dashboard data API must not inline advisory company candidates by default");
 }
 
 console.log("gmail extraction quality tests passed");
