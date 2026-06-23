@@ -89,6 +89,10 @@ Do not include names, email addresses, notes, raw mail body, raw CSV values, fre
 
 ## Pre-Write Verification
 
+The read-only preflight helper is process-only env by design. Do not depend on `.env` or `.env.*` being loaded implicitly; provide `DATABASE_URL`, runtime env, and route guard env through the current process environment. Record only sanitized values.
+
+For `local` or `test`, run `--classify-only` before fixture checks and confirm the script stops before DB connection when classification is `production` or `unknown`. `COMPANY_CONTACT_LINK_WRITE_TARGET` is route guard evidence only; it must not upgrade a local/test DB classification to staging.
+
 Record the following before any separately approved write:
 
 1. Person row:

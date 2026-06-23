@@ -44,6 +44,15 @@ Production-like signals include host, DB name, branch, schema, or runtime values
 
 ## Read-Only Preflight
 
+The helper uses process-only environment values. It must not rely on `.env` or `.env.*` auto-loading; pass the required values from the current shell or command environment and record only sanitized evidence.
+
+Before fixture validation on `local` or `test`, run classify-only first and confirm:
+
+- Classification is `local` or `test`.
+- Production-like and `unknown` targets are refused before any DB connection.
+- `COMPANY_CONTACT_LINK_WRITE_TARGET` is treated only as a route guard target, not as DB classification evidence.
+- The output contains no full connection string, password, token, cookie, or secret value.
+
 Use the helper before asking for HTTP smoke approval:
 
 ```powershell
