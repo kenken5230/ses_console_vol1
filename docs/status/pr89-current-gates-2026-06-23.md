@@ -36,9 +36,9 @@ Not included in PR #89:
 | PR | #89 |
 | Branch | `codex/project-company-contact-link-ui-20260620` |
 | State | Draft / open |
-| Latest checked head | `b803885f55b4d41363d2e3270f3d71b38ae5575a` |
-| Vercel | Success at current head |
-| Mergeability | Mergeable at latest check |
+| Current head source | PR body and GitHub PR status are the source of truth at Ready gate. This row intentionally avoids a self-invalidating fixed SHA because evidence-only commits change the head. |
+| Vercel | Confirm current head success in GitHub status before Ready |
+| Mergeability | Confirm mergeable in GitHub PR status before Ready |
 | Files | 31 changed files |
 | Deleted files | None |
 | Package / lockfile | `package.json` test script wiring only; no lockfile diff |
