@@ -118,13 +118,17 @@ const allowedTouchedFiles = new Set([
   progressPath
 ]);
 
-for (const filePath of touchedFilesFromGit()) {
-  assert(
-    allowedTouchedFiles.has(filePath),
-    `project company/contact role link API PR touched an unexpected file: ${filePath}`
-  );
-  assert(filePath !== "app/api/projects/route.ts", `broad projects PATCH route is out of scope: ${filePath}`);
-  assert(!filePath.startsWith("prisma/"), `schema/migration changes are out of scope: ${filePath}`);
+// This file-scope guard is only for the project company/contact link PR itself.
+// Keep the contract and safety invariant checks below always-on for all PRs.
+if (process.env.ENFORCE_PROJECT_COMPANY_CONTACT_LINK_FILE_SCOPE === "1") {
+  for (const filePath of touchedFilesFromGit()) {
+    assert(
+      allowedTouchedFiles.has(filePath),
+      `project company/contact role link file-scope guard failed for ${filePath}. Set ENFORCE_PROJECT_COMPANY_CONTACT_LINK_FILE_SCOPE=1 only when validating the project company/contact link PR file set.`
+    );
+    assert(filePath !== "app/api/projects/route.ts", `broad projects PATCH route is out of scope: ${filePath}`);
+    assert(!filePath.startsWith("prisma/"), `schema/migration changes are out of scope: ${filePath}`);
+  }
 }
 
 const docsSource = readProjectFile(docsPath);

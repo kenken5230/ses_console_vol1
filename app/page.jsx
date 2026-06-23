@@ -16,11 +16,60 @@ import SearchHistoryModal from "../components/SearchHistoryModal";
 import SearchToolbar from "../components/SearchToolbar";
 import UnclassifiedMailDetailPane from "../components/UnclassifiedMailDetailPane";
 import UnclassifiedMailTable from "../components/UnclassifiedMailTable";
-import { filterFormRows, focusOptions, personFilterFormRows, quickFilters } from "../data/mockProjects";
+import { filterFormRows, focusOptions, pageSizeOptions, personFilterFormRows, personFocusOptions, quickFilters, sortOptions, tabs } from "../data/mockProjects";
 import { textMatchesSearchQuery } from "../lib/search-token-match";
 
 const defaultQuickFilters = Object.fromEntries(quickFilters.map((filter) => [filter.id, Boolean(filter.defaultChecked)]));
 const currentMocUserName = "営業担当A";
+
+const searchHistoryScopeTabs = {
+  PROJECTS: tabs[0],
+  PERSONS: tabs[1],
+  MAILS: tabs[2]
+};
+
+const filterValueKeys = Object.keys(createEmptyFilterValues());
+const listFilterValueKeys = new Set(["remote", "statuses", "workDays"]);
+const validQuickFilterIds = new Set(quickFilters.map((filter) => filter.id));
+const validFocusIds = new Set([...focusOptions, ...personFocusOptions].map((option) => option.id));
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizeSearchHistoryFilterValues(value) {
+  if (!isPlainObject(value)) return null;
+
+  const emptyValues = createEmptyFilterValues();
+  const nextValues = { ...emptyValues };
+  for (const key of filterValueKeys) {
+    const item = value[key];
+    if (listFilterValueKeys.has(key)) {
+      nextValues[key] = Array.isArray(item) ? item.filter((entry) => typeof entry === "string") : emptyValues[key];
+    } else if (key === "unitUndecidedOnly") {
+      nextValues[key] = item === true;
+    } else {
+      nextValues[key] = typeof item === "string" ? item : emptyValues[key];
+    }
+  }
+
+  return nextValues;
+}
+
+function normalizeSearchHistoryCheckedFilters(value) {
+  if (!isPlainObject(value)) return null;
+
+  const nextFilters = { ...defaultQuickFilters };
+  for (const [key, item] of Object.entries(value)) {
+    if (validQuickFilterIds.has(key)) nextFilters[key] = item === true;
+  }
+  return nextFilters;
+}
+
+function normalizeSearchHistorySelectedFocus(value) {
+  if (!Array.isArray(value)) return null;
+  return value.filter((item) => typeof item === "string" && validFocusIds.has(item));
+}
 
 async function fetchDashboardData() {
   const response = await fetch("/api/dashboard-data", { cache: "no-store" });
@@ -940,6 +989,28 @@ export default function Home() {
     setActiveModal(null);
   };
 
+  const applySearchHistory = (history) => {
+    const filters = isPlainObject(history?.filters) ? history.filters : {};
+    const nextFilterValues = normalizeSearchHistoryFilterValues(filters.filterValues);
+    const nextCheckedFilters = normalizeSearchHistoryCheckedFilters(filters.checkedFilters);
+    const nextSelectedFocus = normalizeSearchHistorySelectedFocus(filters.selectedFocus);
+    const nextPageSize = pageSizeOptions.includes(filters.pageSize) ? filters.pageSize : null;
+    const nextTab = searchHistoryScopeTabs[history?.targetScope] || null;
+
+    setSearch(typeof history?.keyword === "string" ? history.keyword : history?.queryText || "");
+    if (nextTab) setActiveTab(nextTab);
+    if (nextFilterValues) setFilterValues(nextFilterValues);
+    if (nextCheckedFilters) setCheckedFilters(nextCheckedFilters);
+    if (nextSelectedFocus) setSelectedFocus(nextSelectedFocus);
+    if (nextPageSize) setPageSize(nextPageSize);
+    if (sortOptions.includes(history?.sortKey)) setSelectedSort(history.sortKey);
+    setSelectedProject(null);
+    setSelectedPerson(null);
+    setSelectedMail(null);
+    setCurrentPage(1);
+    setActiveModal(null);
+  };
+
   if (authStatus === "checking") {
     return (
       <main className="auth-page">
@@ -970,6 +1041,7 @@ export default function Home() {
         displayEnd={displayEnd}
         displayStart={displayStart}
         focusCount={focusCount}
+        filterValues={filterValues}
         focusMenuOpen={focusMenuOpen}
         hasPendingRefresh={hasPendingDataRefresh}
         isSyncing={isSyncingGmail}
@@ -1147,10 +1219,7 @@ export default function Home() {
       ) : null}
       {activeModal === "history" ? (
         <SearchHistoryModal
-          onApply={(history) => {
-            setSearch(history.keyword);
-            setActiveModal(null);
-          }}
+          onApply={applySearchHistory}
           onClose={() => setActiveModal(null)}
         />
       ) : null}

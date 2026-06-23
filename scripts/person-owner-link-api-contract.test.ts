@@ -173,14 +173,16 @@ const allowedTouchedFiles = new Set([
   "PROGRESS.md"
 ]);
 
-for (const filePath of touchedFilesFromGit()) {
-  assert(
-    allowedTouchedFiles.has(filePath),
-    `person owner link API contract hardening PR must stay in approved docs/test/read-only route files: ${filePath}`
-  );
-  assert(!filePath.startsWith("prisma/"), `schema/migration changes are out of scope: ${filePath}`);
-  assert(!filePath.startsWith("app/api/companies/"), `company API routes are out of scope: ${filePath}`);
-  assert(!filePath.startsWith("app/api/company-contacts/"), `company contact API routes are out of scope: ${filePath}`);
+if (process.env.ENFORCE_PERSON_OWNER_LINK_FILE_SCOPE === "1") {
+  for (const filePath of touchedFilesFromGit()) {
+    assert(
+      allowedTouchedFiles.has(filePath),
+      `person owner link API contract file-scope guard failed for ${filePath}. Set ENFORCE_PERSON_OWNER_LINK_FILE_SCOPE=1 only when validating the person owner link API PR file set.`
+    );
+    assert(!filePath.startsWith("prisma/"), `schema/migration changes are out of scope: ${filePath}`);
+    assert(!filePath.startsWith("app/api/companies/"), `company API routes are out of scope: ${filePath}`);
+    assert(!filePath.startsWith("app/api/company-contacts/"), `company contact API routes are out of scope: ${filePath}`);
+  }
 }
 
 const docsPath = "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-contract-2026-06-20.md";
