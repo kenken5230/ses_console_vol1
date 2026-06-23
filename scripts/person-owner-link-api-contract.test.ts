@@ -61,7 +61,7 @@ function outputText(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
-function runPreflightClassifyOnly(databaseUrl: string) {
+function runPreflightClassifyOnly(databaseUrl: string, envOverrides: Partial<NodeJS.ProcessEnv> = {}) {
   const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
   const env = {
     ...process.env,
@@ -71,6 +71,7 @@ function runPreflightClassifyOnly(databaseUrl: string) {
     DATABASE_URL: databaseUrl,
     NODE_ENV: undefined,
     VERCEL_ENV: undefined,
+    ...envOverrides,
   } as unknown as NodeJS.ProcessEnv;
 
   try {
@@ -197,6 +198,7 @@ const ownerLinkRouteHandlerPath = "lib/person-owner-company-contact-link-route.t
 const ownerLinkHelperPath = "lib/person-owner-company-contact-link.ts";
 const ownerLinkDocsPath = "docs/themes/ses-sales-console/requirements/person-owner-company-contact-link-api-2026-06-20.md";
 const linkSafetyPolicySource = readProjectFile("lib/link-safety-policy.ts");
+const smokePreflightScriptSource = readProjectFile("scripts/person-owner-link-http-smoke-preflight.ts");
 
 for (const requiredText of [
   "PATCH /api/persons/[id]/owner-company-contact",
@@ -284,6 +286,40 @@ assertPreflightAllowsClassifyOnly(
   "product catalog DB name",
   "postgres://safe:safe@localhost:5432/product_catalog_dev",
   "local",
+);
+
+const localDbStagingGuardResult = runPreflightClassifyOnly(
+  "postgres://safe:safe@localhost:5432/person_owner_dev",
+  { COMPANY_CONTACT_LINK_WRITE_TARGET: "staging" },
+);
+assert.equal(localDbStagingGuardResult.status, 0, "local DB with staging route guard target must classify without DB connection");
+assert(
+  localDbStagingGuardResult.stdout.includes("classification: local"),
+  "route guard target must not turn a local DB into a staging DB classification",
+);
+assert(
+  localDbStagingGuardResult.stdout.includes("COMPANY_CONTACT_LINK_WRITE_TARGET: staging"),
+  "route guard target may be reported separately as sanitized evidence",
+);
+
+const nonStandardGuardTargetResult = runPreflightClassifyOnly(
+  "postgres://safe:safe@localhost:5432/person_owner_dev",
+  { COMPANY_CONTACT_LINK_WRITE_TARGET: "staging-secret-like-value" },
+);
+assert.equal(nonStandardGuardTargetResult.status, 0, "non-standard route guard target must not break classify-only");
+assert(
+  nonStandardGuardTargetResult.stdout.includes("COMPANY_CONTACT_LINK_WRITE_TARGET: (set: non-standard)"),
+  "non-standard route guard target values must be redacted from evidence",
+);
+assert(
+  !nonStandardGuardTargetResult.stdout.includes("staging-secret-like-value"),
+  "non-standard route guard target raw value must not be printed",
+);
+
+assert(!smokePreflightScriptSource.includes("dotenv/config"), "preflight must not auto-load .env files");
+assert(
+  !/COMPANY_CONTACT_LINK_WRITE_TARGET[,\s]*\]/.test(smokePreflightScriptSource),
+  "route guard target must stay out of DB classification signal inputs",
 );
 
 assert(!/export\s+(?:async\s+)?function\s+PATCH\b/.test(personsApiSource), "PATCH /api/persons must not be introduced");

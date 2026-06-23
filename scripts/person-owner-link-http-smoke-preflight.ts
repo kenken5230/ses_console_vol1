@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 import { Client } from "pg";
 
 import { BLOCKED_COMPANY_LINK_TRADE_STATUSES } from "../lib/link-safety-policy";
@@ -17,6 +15,14 @@ type SmokeCase =
   | "blocked-company";
 
 type TargetClass = "local" | "test" | "staging" | "production" | "unknown";
+
+type ParsedDatabaseTarget = {
+  host: string;
+  port: string;
+  database: string;
+  queryKeys: string[];
+  dbSignalText: string;
+};
 
 type ParsedArgs = {
   caseName: SmokeCase;
@@ -49,6 +55,7 @@ function usage() {
     "  blocked-company",
     "",
     "Safety:",
+    "  Environment is process-only. The script does not load .env files.",
     "  The script never writes. It refuses production-like targets and uses a read-only transaction for fixture checks.",
   ].join("\n");
 }
@@ -127,7 +134,7 @@ function requireUuid(value: string | undefined, flag: string) {
   return value;
 }
 
-function parseDatabaseUrl(rawUrl: string) {
+function parseDatabaseUrl(rawUrl: string): ParsedDatabaseTarget {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -140,7 +147,7 @@ function parseDatabaseUrl(rawUrl: string) {
     port: url.port || "(default)",
     database: decodeURIComponent(url.pathname.replace(/^\//, "")) || "(none)",
     queryKeys: Array.from(url.searchParams.keys()).sort(),
-    signalText: [
+    dbSignalText: [
       url.hostname,
       url.pathname,
       url.searchParams.get("branch"),
@@ -148,7 +155,6 @@ function parseDatabaseUrl(rawUrl: string) {
       url.searchParams.get("options"),
       process.env.NODE_ENV,
       process.env.VERCEL_ENV,
-      process.env.COMPANY_CONTACT_LINK_WRITE_TARGET,
     ].filter(Boolean).join(" ").toLowerCase(),
   };
 }
@@ -162,7 +168,13 @@ function classifyTarget(signalText: string, host: string, database: string): Tar
   return "unknown";
 }
 
-function printTargetSummary(target: ReturnType<typeof parseDatabaseUrl>, classification: TargetClass) {
+function safeRouteGuardTarget(value: string | undefined) {
+  if (!value) return "(unset)";
+  if (["local", "test", "staging", "production"].includes(value)) return value;
+  return "(set: non-standard)";
+}
+
+function printTargetSummary(target: ParsedDatabaseTarget, classification: TargetClass) {
   console.log("Target database:");
   console.log(`  classification: ${classification}`);
   console.log(`  host: ${target.host}`);
@@ -173,7 +185,7 @@ function printTargetSummary(target: ReturnType<typeof parseDatabaseUrl>, classif
   console.log(`  NODE_ENV: ${process.env.NODE_ENV || "(unset)"}`);
   console.log(`  VERCEL_ENV: ${process.env.VERCEL_ENV || "(unset)"}`);
   console.log(`  COMPANY_CONTACT_LINK_WRITE_ENABLED_is_true: ${process.env.COMPANY_CONTACT_LINK_WRITE_ENABLED === "true"}`);
-  console.log(`  COMPANY_CONTACT_LINK_WRITE_TARGET: ${process.env.COMPANY_CONTACT_LINK_WRITE_TARGET || "(unset)"}`);
+  console.log(`  COMPANY_CONTACT_LINK_WRITE_TARGET: ${safeRouteGuardTarget(process.env.COMPANY_CONTACT_LINK_WRITE_TARGET)}`);
   console.log(`  AUTH_SECRET_present: ${Boolean(process.env.AUTH_SECRET)}`);
 }
 
@@ -348,7 +360,7 @@ async function main() {
   }
 
   const target = parseDatabaseUrl(connectionString);
-  const classification = classifyTarget(target.signalText, target.host, target.database);
+  const classification = classifyTarget(target.dbSignalText, target.host, target.database);
   printTargetSummary(target, classification);
   assertTargetAllowedForReadOnlyPreflight(classification, args);
 
