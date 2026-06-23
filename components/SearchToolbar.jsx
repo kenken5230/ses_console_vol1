@@ -26,6 +26,7 @@ export default function SearchToolbar({
   checkedFilters,
   displayEnd = 0,
   displayStart = 0,
+  filterValues = {},
   focusCount = 0,
   focusMenuOpen,
   onConditionRemove,
@@ -77,6 +78,7 @@ export default function SearchToolbar({
       filters: {
         activeConditions,
         checkedFilters,
+        filterValues,
         pageSize,
         selectedFocus
       },

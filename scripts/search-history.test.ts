@@ -292,9 +292,16 @@ function testSourceWiring() {
   assert.match(toolbar, /ses-console:search-history-context/);
   assert.match(toolbar, /sessionStorage\.setItem/);
   assert.match(toolbar, /onOpenHistory/);
+  assert.match(toolbar, /filterValues/);
 
   const data = readSource("data/mockProjects.js");
   assert.doesNotMatch(data, /export const searchHistories/);
+
+  const page = readSource("app/page.jsx");
+  assert.match(page, /normalizeSearchHistoryFilterValues/);
+  assert.match(page, /setFilterValues\s*\(\s*nextFilterValues\s*\)/);
+  assert.match(page, /setCheckedFilters\s*\(\s*nextCheckedFilters\s*\)/);
+  assert.match(page, /setSelectedSort\s*\(\s*history\.sortKey\s*\)/);
 }
 
 async function main() {
