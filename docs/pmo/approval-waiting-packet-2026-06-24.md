@@ -1,7 +1,7 @@
 # Approval Waiting Packet (2026-06-24)
 
-This packet lists the remaining owner-gated work after the #139 docs-only
-status/navigation cleanup merge.
+This packet lists the remaining owner-gated work after the #141 docs-only
+worktree cleanup approval packet merge.
 
 It is intentionally not an execution script. Use it to decide what can be
 approved next.
@@ -10,10 +10,10 @@ approved next.
 
 - Open PRs: none at the time of this packet refresh.
 - Open issues: none at the time of this packet refresh.
-- Snapshot source commit: `ce0c29459ff72fbf99fff1e3f591686b5bee39e7`
-  (`Mark root README draft plan superseded (#139)`).
-- Main Vercel status for #139: success.
-- Recent docs-only sync PRs: #138 and #139 are closed/merged.
+- Snapshot source commit: `0265ae0d39672f353140491ad24ef4864ee635c5`
+  (`Refresh worktree cleanup approval packet (#141)`).
+- Main Vercel status for #141: success.
+- Recent docs-only sync/planning PRs: #138, #139, #140, and #141 are closed/merged.
 
 ## Approval Items
 
