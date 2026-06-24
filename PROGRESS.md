@@ -1,6 +1,6 @@
 ﻿# Project Progress
 
-Updated: 2026-06-24 20:55 JST
+Updated: 2026-06-24 21:05 JST
 
 This file is the current project snapshot. Dated history belongs in `docs/status/progress-log-YYYY-MM-DD.md` or in a focused status/runbook document.
 
@@ -37,8 +37,8 @@ This file is the current project snapshot. Dated history belongs in `docs/status
 | Browser/UI QA | Local candidate-present Browser QA for #89 passed through normal local login. Production read-only QA is confirmed only to the login screen. #132 added a production read-only QA packet for normal-login verification. | Run login-after production read-only screen verification with a normal authorized login; no auth bypass/cookie/token injection. |
 | SearchHistory DB-backed work | DB-backed SearchHistory is already merged through #57; #91 restored saved filter/sort/page-size application; #102 synchronized current status docs plus chip key hardening; #107 added the Browser QA plan; #112 merged the UI context guard. Local/test normal-login SearchHistory save/list/public-response/cleanup QA passed and is recorded on #112. #135 added an optional local/test own-user-isolation DB smoke approval packet. | Remaining optional gates are production login-after read-only UI verification and optional local/test DB smoke with approved fixture users. Do not use auth bypass, cookie injection, token injection, or production/staging/shared DB writes. |
 | Gmail company completion apply/dashboard API | Apply/write and dashboard API expansion remain future work after #93/#95. | Replan against latest `origin/main` before implementation; do not turn advisory candidates into writes without the apply gate. |
-| Dirty workspace cleanup | Sanitized inventory is recorded in `docs/status/worktree-cleanup-inventory-2026-06-23.md`; #104 merged the approval list. A cleanup batch removed 25 safe checkouts. A later single-worktree `git worktree remove` attempt for `__market_analysis_url_sync_v04_worktree` hit Windows/OneDrive `Permission denied` and stopped safely. `git worktree prune --dry-run --verbose` now reports multiple stale metadata entries. #131 added a v2 cleanup approval packet separating stale metadata prune, registered worktree removal, and OneDrive/reparse-point cleanup. | Do not run raw deletion, `--force`, `git worktree prune`, branch deletion, reset, clean, stash, or other-worktree mutation without a new explicit cleanup approval. Remaining dirty worktrees stay on HOLD. |
-| Open PRs | No open PRs or open issues as of 2026-06-24 20:55 JST. #114 was closed as superseded; it was not merged. #138 and #139 are closed/merged docs-only sync PRs. | Start any new product/runtime work from latest `origin/main` in a separate clean branch/worktree. |
+| Dirty workspace cleanup | Sanitized inventory is recorded in `docs/status/worktree-cleanup-inventory-2026-06-23.md`; #104 merged the approval list. A cleanup batch removed 25 safe checkouts. A later single-worktree `git worktree remove` attempt for `__market_analysis_url_sync_v04_worktree` hit Windows/OneDrive `Permission denied` and stopped safely. `git worktree prune --dry-run --verbose` still reports stale metadata entries. #131 added a v2 cleanup approval packet; `docs/pmo/worktree-cleanup-approval-packet-v3-2026-06-24.md` refreshes the evidence after #140 and recommends Batch A-only approval first. | Do not run raw deletion, `--force`, `git worktree prune`, branch deletion, reset, clean, stash, or other-worktree mutation without a new explicit cleanup approval. Remaining dirty worktrees stay on HOLD. |
+| Open PRs | No open PRs or open issues were observed before starting this cleanup packet refresh. #114 was closed as superseded; it was not merged. #138, #139, and #140 are closed/merged docs-only sync PRs. | Start any new product/runtime work from latest `origin/main` in a separate clean branch/worktree. |
 
 ## Next Work Candidates
 
@@ -64,5 +64,6 @@ This file is the current project snapshot. Dated history belongs in `docs/status
 - Post-#139 current state: `docs/status/post139-current-state-2026-06-24.md`
 - Worktree cleanup inventory: `docs/status/worktree-cleanup-inventory-2026-06-23.md`
 - Worktree cleanup approval list: `docs/status/worktree-cleanup-approval-list-2026-06-23.md`
+- Worktree cleanup approval packet v3: `docs/pmo/worktree-cleanup-approval-packet-v3-2026-06-24.md`
 - Coordination policy: `docs/shared/operations/chat-progress-coordination-v0.1.md`
 - Quality policy: `docs/shared/quality/two-pass-task-test-policy-v0.1.md`
