@@ -28,6 +28,12 @@ export type GmailCompanyCandidate = {
   isGenericDomain: boolean;
 };
 
+export type GmailCompanyCandidateApplyDecision = {
+  autoApplyEligible: boolean;
+  applyMode: "existing_company_link" | "advisory_only";
+  reasonCodes: string[];
+};
+
 export type GmailCompanyCandidateInput = {
   fromName?: string | null;
   fromEmail?: string | null;
@@ -288,6 +294,36 @@ export function inferGmailCompanyCandidateForExtraction(input: {
     bodyLabelCompany,
     knownCompanies: input.knownCompanies,
   });
+}
+
+export function decideGmailCompanyCandidateAutoApply(candidateValue: GmailCompanyCandidate): GmailCompanyCandidateApplyDecision {
+  const isExistingCompanyLinkSource =
+    candidateValue.source === "known_main_email_domain" || candidateValue.source === "known_alias";
+  const autoApplyEligible = Boolean(candidateValue.candidateName) &&
+    candidateValue.confidence === "HIGH" &&
+    isExistingCompanyLinkSource &&
+    !candidateValue.isGenericDomain;
+
+  if (autoApplyEligible) {
+    return {
+      autoApplyEligible: true,
+      applyMode: "existing_company_link",
+      reasonCodes: ["EXISTING_COMPANY_LINK_CANDIDATE"],
+    };
+  }
+
+  const reasonCodes = [
+    !candidateValue.candidateName ? "NO_COMPANY_CANDIDATE_NAME" : null,
+    candidateValue.isGenericDomain ? "GENERIC_DOMAIN_ADVISORY_ONLY" : null,
+    candidateValue.confidence !== "HIGH" ? "NON_HIGH_CONFIDENCE_ADVISORY_ONLY" : null,
+    !isExistingCompanyLinkSource ? "NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY" : null,
+  ].filter((reason): reason is string => Boolean(reason));
+
+  return {
+    autoApplyEligible: false,
+    applyMode: "advisory_only",
+    reasonCodes,
+  };
 }
 
 export function anonymizedCompanyCandidate(candidateValue: GmailCompanyCandidate): Omit<GmailCompanyCandidate, "candidateName"> & {
