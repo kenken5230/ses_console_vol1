@@ -47,7 +47,7 @@ No production/staging/shared DB write was performed. No migration or schema chan
 | #117 | Auth source contract test | Hold. Auth/security scope, excluded from broad merge approval. |
 | #118 | Gmail person remediation production guard | Hold. Runtime write-path guard; needs explicit approval. |
 | #121 | Operations handoff runbook | Hold. Ops/auth/env runbook says explicit approval before moving forward. |
-| #122 | This packet | Refreshed docs-only packet. It should not be merged until the user wants this PMO snapshot in main. |
+| #122 | This packet | Refreshed docs-only packet. Mergeable under the docs-only approval gate if checks pass. |
 
 ## Approval needed from user
 
