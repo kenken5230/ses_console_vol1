@@ -170,3 +170,8 @@ Future root/docs indexes should link to the cleanup inventory or approval list, 
 - No `.env` or secret-file access.
 - No Ready, merge, close, deploy, branch deletion, or worktree deletion.
 - No attempt to resolve or reorder open PRs.
+
+> Superseded note (2026-06-24 19:45 JST): this draft has been executed.
+> PR #137 added the root `README.md` and rewrote `docs/README.md`,
+> `docs/themes/README.md`, and `docs/shared/README.md` into readable navigation
+> pages. Keep this file as historical planning context only.
