@@ -1,12 +1,45 @@
 import DropdownMenu from "./DropdownMenu";
 import { focusOptions, pageSizeOptions, personFocusOptions, quickFilters, sortOptions, tabs } from "../data/mockProjects";
 
-const SEARCH_HISTORY_CONTEXT_KEY = "ses-console:search-history-context";
+export const SEARCH_HISTORY_CONTEXT_KEY = "ses-console:search-history-context";
 
-function getSearchHistoryTarget(activeTab) {
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+export function getSearchHistoryTarget(activeTab) {
   if (activeTab === "要員") return { targetLabel: "要員", targetScope: "PERSONS" };
   if (activeTab === "未分類") return { targetLabel: "未分類メール", targetScope: "MAILS" };
   return { targetLabel: "案件", targetScope: "PROJECTS" };
+}
+
+export function buildSearchHistoryContext({
+  activeTab,
+  activeConditions,
+  checkedFilters,
+  filterValues,
+  pageSize,
+  resultCount,
+  search,
+  selectedFocus,
+  selectedSort
+}) {
+  const searchHistoryTarget = getSearchHistoryTarget(activeTab);
+
+  return {
+    ...searchHistoryTarget,
+    activeTab,
+    queryText: typeof search === "string" ? search : "",
+    filters: {
+      activeConditions: Array.isArray(activeConditions) ? activeConditions : [],
+      checkedFilters: isPlainObject(checkedFilters) ? checkedFilters : {},
+      filterValues: isPlainObject(filterValues) ? filterValues : {},
+      pageSize,
+      selectedFocus: Array.isArray(selectedFocus) ? selectedFocus : []
+    },
+    sortKey: typeof selectedSort === "string" ? selectedSort : null,
+    resultCount: Number.isInteger(resultCount) ? resultCount : 0
+  };
 }
 
 function saveSearchHistoryContext(context) {
@@ -68,23 +101,18 @@ export default function SearchToolbar({
       : isPersonTab
       ? "キーワード検索で検索可能な項目：要員名、所属会社、状態、希望単価、稼働開始、スキル"
       : "キーワード検索で検索可能な項目：作業内容、上位担当者、スキル、上位金額、作業場所";
-  const searchHistoryTarget = getSearchHistoryTarget(activeTab);
-
   const handleOpenHistory = () => {
-    saveSearchHistoryContext({
-      ...searchHistoryTarget,
+    saveSearchHistoryContext(buildSearchHistoryContext({
       activeTab,
-      queryText: search || "",
-      filters: {
-        activeConditions,
-        checkedFilters,
-        filterValues,
-        pageSize,
-        selectedFocus
-      },
-      sortKey: selectedSort,
+      activeConditions,
+      checkedFilters,
+      filterValues,
+      pageSize,
+      search,
+      selectedFocus,
+      selectedSort,
       resultCount
-    });
+    }));
     onOpenHistory?.();
   };
 

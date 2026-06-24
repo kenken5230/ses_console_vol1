@@ -2,11 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const SEARCH_HISTORY_CONTEXT_KEY = "ses-console:search-history-context";
+export const SEARCH_HISTORY_CONTEXT_KEY = "ses-console:search-history-context";
+
+const searchHistoryTargetsByScope = {
+  PROJECTS: { targetLabel: "案件", targetScope: "PROJECTS" },
+  PERSONS: { targetLabel: "要員", targetScope: "PERSONS" },
+  MAILS: { targetLabel: "未分類メール", targetScope: "MAILS" }
+};
 
 const defaultContext = {
-  targetLabel: "案件",
-  targetScope: "PROJECTS",
+  ...searchHistoryTargetsByScope.PROJECTS,
   queryText: "",
   filters: {},
   sortKey: "おすすめ順",
@@ -17,26 +22,36 @@ function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function readCurrentContext() {
-  if (typeof window === "undefined") return defaultContext;
+export function normalizeSearchHistoryContext(value) {
+  if (!isPlainObject(value)) return defaultContext;
 
+  const target = searchHistoryTargetsByScope[value.targetScope] || searchHistoryTargetsByScope.PROJECTS;
+
+  return {
+    ...defaultContext,
+    ...target,
+    activeTab: typeof value.activeTab === "string" ? value.activeTab : undefined,
+    filters: isPlainObject(value.filters) ? value.filters : {},
+    queryText: typeof value.queryText === "string" ? value.queryText : "",
+    sortKey: typeof value.sortKey === "string" ? value.sortKey : "おすすめ順",
+    resultCount: Number.isInteger(value.resultCount) ? value.resultCount : 0
+  };
+}
+
+export function readSearchHistoryContextFromStorage(storage) {
   try {
-    const raw = window.sessionStorage.getItem(SEARCH_HISTORY_CONTEXT_KEY);
+    const raw = storage?.getItem(SEARCH_HISTORY_CONTEXT_KEY);
     if (!raw) return defaultContext;
     const parsed = JSON.parse(raw);
-    if (!isPlainObject(parsed)) return defaultContext;
-
-    return {
-      ...defaultContext,
-      ...parsed,
-      filters: isPlainObject(parsed.filters) ? parsed.filters : {},
-      queryText: typeof parsed.queryText === "string" ? parsed.queryText : "",
-      sortKey: typeof parsed.sortKey === "string" ? parsed.sortKey : "おすすめ順",
-      resultCount: Number.isInteger(parsed.resultCount) ? parsed.resultCount : 0
-    };
+    return normalizeSearchHistoryContext(parsed);
   } catch {
     return defaultContext;
   }
+}
+
+function readCurrentContext() {
+  if (typeof window === "undefined") return defaultContext;
+  return readSearchHistoryContextFromStorage(window.sessionStorage);
 }
 
 function formatDateTime(value) {
