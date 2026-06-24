@@ -13,6 +13,7 @@ export type GmailCompanyCandidateSource =
 export type GmailCompanyCandidateConfidence = "HIGH" | "MEDIUM" | "LOW" | "NONE";
 
 export type KnownCompanyIdentity = {
+  id?: string | null;
   name: string;
   normalizedName?: string | null;
   mainEmailDomain?: string | null;
@@ -20,6 +21,7 @@ export type KnownCompanyIdentity = {
 };
 
 export type GmailCompanyCandidate = {
+  existingCompanyId: string | null;
   candidateName: string | null;
   source: GmailCompanyCandidateSource;
   confidence: GmailCompanyCandidateConfidence;
@@ -122,8 +124,10 @@ function candidate(
   confidenceScore: number,
   reasonCodes: string[],
   isGenericDomain = false,
+  existingCompanyId: string | null = null,
 ): GmailCompanyCandidate {
   return {
+    existingCompanyId: clean(existingCompanyId),
     candidateName: cleanCompanyName(candidateName),
     source,
     confidence,
@@ -157,7 +161,7 @@ function knownCompanyFromDomain(
   });
 
   return match
-    ? candidate(match.name, "known_main_email_domain", "HIGH", 0.92, ["KNOWN_COMPANY_MAIN_EMAIL_DOMAIN_MATCH"])
+    ? candidate(match.name, "known_main_email_domain", "HIGH", 0.92, ["KNOWN_COMPANY_MAIN_EMAIL_DOMAIN_MATCH"], false, match.id ?? null)
     : null;
 }
 
@@ -181,7 +185,7 @@ function knownCompanyFromText(
     .sort((left, right) => right.matchedLength - left.matchedLength);
 
   return matches[0]
-    ? candidate(matches[0].company.name, "known_alias", "HIGH", 0.88, ["KNOWN_COMPANY_ALIAS_MATCH"])
+    ? candidate(matches[0].company.name, "known_alias", "HIGH", 0.88, ["KNOWN_COMPANY_ALIAS_MATCH"], false, matches[0].company.id ?? null)
     : null;
 }
 
@@ -300,6 +304,7 @@ export function decideGmailCompanyCandidateAutoApply(candidateValue: GmailCompan
   const isExistingCompanyLinkSource =
     candidateValue.source === "known_main_email_domain" || candidateValue.source === "known_alias";
   const autoApplyEligible = Boolean(candidateValue.candidateName) &&
+    Boolean(candidateValue.existingCompanyId) &&
     candidateValue.confidence === "HIGH" &&
     isExistingCompanyLinkSource &&
     !candidateValue.isGenericDomain;
@@ -314,6 +319,7 @@ export function decideGmailCompanyCandidateAutoApply(candidateValue: GmailCompan
 
   const reasonCodes = [
     !candidateValue.candidateName ? "NO_COMPANY_CANDIDATE_NAME" : null,
+    !candidateValue.existingCompanyId ? "MISSING_EXISTING_COMPANY_ID_ADVISORY_ONLY" : null,
     candidateValue.isGenericDomain ? "GENERIC_DOMAIN_ADVISORY_ONLY" : null,
     candidateValue.confidence !== "HIGH" ? "NON_HIGH_CONFIDENCE_ADVISORY_ONLY" : null,
     !isExistingCompanyLinkSource ? "NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY" : null,
@@ -326,8 +332,9 @@ export function decideGmailCompanyCandidateAutoApply(candidateValue: GmailCompan
   };
 }
 
-export function anonymizedCompanyCandidate(candidateValue: GmailCompanyCandidate): Omit<GmailCompanyCandidate, "candidateName"> & {
+export function anonymizedCompanyCandidate(candidateValue: GmailCompanyCandidate): Omit<GmailCompanyCandidate, "candidateName" | "existingCompanyId"> & {
   candidatePresent: boolean;
+  existingCompanyLinkPresent: boolean;
 } {
   return {
     source: candidateValue.source,
@@ -336,5 +343,6 @@ export function anonymizedCompanyCandidate(candidateValue: GmailCompanyCandidate
     reasonCodes: candidateValue.reasonCodes,
     isGenericDomain: candidateValue.isGenericDomain,
     candidatePresent: Boolean(candidateValue.candidateName),
+    existingCompanyLinkPresent: Boolean(candidateValue.existingCompanyId),
   };
 }
