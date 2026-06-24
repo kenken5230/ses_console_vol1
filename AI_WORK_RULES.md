@@ -1854,11 +1854,27 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\codex-notify.ps1 -St
 
 ## 文字コードルール
 
-日本語MarkdownはUTF-8 BOM付きで保存することを推奨します。
+日本語Markdownは原則UTF-8 BOM付きで保存してください。例外が必要な場合は理由を残してください。
 
 文字化けが起きた場合は、作業や内容修正を進める前に、UTF-8として再読み込みできているか確認してください。
 
-相手側の環境がUTF-8 BOM付きでも読めない場合は、Shift_JIS/CP932版を別ファイルとして作成し、元のUTF-8版を上書きしないでください。
+PowerShellで日本語Markdownを表示確認する場合は、`Get-Content -Encoding UTF8` を使ってください。
+
+厳密な破損確認は、`.NET` のUTF-8読み込みで行ってください。
+
+`cmd type`、PowerShellのANSI/Default読み、CP932/Shift_JIS扱いの表示結果で文字化けしても、ファイル破損と判断しないでください。
+
+UTF-8としてエラーなくデコードできるかは、以下のように確認してください。
+
+```powershell
+$bytes = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath "対象.md"))
+$utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+$utf8.GetString($bytes) | Out-Null
+```
+
+UTF-8としてエラーなくデコードでき、本文の日本語が正常表示される場合は、CP932/ANSI表示側の問題として扱ってください。
+
+相手側の環境がUTF-8 BOM付きでも読めない場合でも、元のUTF-8版をCP932/Shift_JISへ変換して上書きしないでください。必要な場合は、CP932版を別ファイルとして作成し、元のUTF-8版を正とします。
 
 ---
 
@@ -1925,5 +1941,5 @@ DB作業は、作業サブが未設定ブロッカーと設定案を確認し、
 
 作業前後には可能な範囲で git status、git diff、テスト、lint、型チェック、ビルドを行い、完了時に変更内容、検証結果、残リスクを簡潔に報告してください。
 
-日本語MarkdownはUTF-8 BOM付き推奨です。文字化けした場合は、作業前にUTF-8として再読み込みできているか確認してください。
+日本語Markdownは原則UTF-8 BOM付きです。文字化けした場合は、作業前にUTF-8として再読み込みでき、本文の日本語が正常表示されるか確認してください。PowerShellの表示確認は `Get-Content -Encoding UTF8`、厳密な破損確認は `.NET` のUTF-8読み込みを使い、`cmd type`、ANSI/Default読み、CP932/Shift_JIS扱いの表示結果だけでファイル破損と判断しないでください。UTF-8 BOM付きでも読めない相手には、元ファイルを上書きせず、必要に応じてShift_JIS/CP932版を別ファイルとして作成してください。
 ```
