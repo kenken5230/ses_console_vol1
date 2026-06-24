@@ -62,13 +62,17 @@ function outputText(value: unknown) {
 }
 
 function runPreflightClassifyOnly(databaseUrl: string, envOverrides: Partial<NodeJS.ProcessEnv> = {}) {
+  return runPreflight(["--classify-only"], { DATABASE_URL: databaseUrl, ...envOverrides });
+}
+
+function runPreflight(args: string[], envOverrides: Partial<NodeJS.ProcessEnv> = {}) {
   const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
   const env = {
     ...process.env,
     AUTH_SECRET: "",
     COMPANY_CONTACT_LINK_WRITE_ENABLED: "false",
     COMPANY_CONTACT_LINK_WRITE_TARGET: "",
-    DATABASE_URL: databaseUrl,
+    DATABASE_URL: "",
     NODE_ENV: undefined,
     VERCEL_ENV: undefined,
     ...envOverrides,
@@ -76,7 +80,7 @@ function runPreflightClassifyOnly(databaseUrl: string, envOverrides: Partial<Nod
 
   try {
     const stdout = execSync(
-      `${npxCommand} tsx scripts/person-owner-link-http-smoke-preflight.ts --classify-only`,
+      `${npxCommand} tsx scripts/person-owner-link-http-smoke-preflight.ts ${args.join(" ")}`,
       { cwd: rootDir, encoding: "utf8", env },
     );
     return { status: 0, stdout, stderr: "" };
@@ -90,6 +94,23 @@ function runPreflightClassifyOnly(databaseUrl: string, envOverrides: Partial<Nod
   }
 }
 
+function assertPreflightStopsBeforeDb(label: string, args: string[], envOverrides: Partial<NodeJS.ProcessEnv>, expectedMessage: string) {
+  const result = runPreflight(args, envOverrides);
+  assert.notEqual(result.status, 0, `${label} must stop safely before DB connection`);
+  assert(
+    result.stderr.includes(expectedMessage),
+    `${label} must report the safe-stop reason before DB connection`,
+  );
+  assert(
+    result.stderr.includes("No DB write or HTTP smoke request was attempted."),
+    `${label} must report that no DB write or HTTP smoke request was attempted`,
+  );
+  assert(
+    !result.stdout.includes("Fixture read-only result:"),
+    `${label} must not print DB fixture query results`,
+  );
+}
+
 function assertPreflightBlocksProductionLike(label: string, databaseUrl: string) {
   const result = runPreflightClassifyOnly(databaseUrl);
   assert.notEqual(result.status, 0, `${label} must stop safely before DB connection`);
@@ -101,6 +122,52 @@ function assertPreflightBlocksProductionLike(label: string, databaseUrl: string)
   assert(
     result.stderr.includes("No DB write or HTTP smoke request was attempted."),
     `${label} must report that no DB write or HTTP smoke request was attempted`,
+  );
+}
+
+function assertPreflightBlocksClassifiedTarget(label: string, databaseUrl: string, classification: string, expectedMessage: string) {
+  const result = runPreflightClassifyOnly(databaseUrl);
+  assert.notEqual(result.status, 0, `${label} must stop safely before DB connection`);
+  assert(result.stdout.includes(`classification: ${classification}`), `${label} must classify as ${classification}`);
+  assert(
+    result.stderr.includes(expectedMessage),
+    `${label} must refuse the target before DB connection`,
+  );
+  assert(
+    result.stderr.includes("No DB write or HTTP smoke request was attempted."),
+    `${label} must report that no DB write or HTTP smoke request was attempted`,
+  );
+}
+
+function assertPreflightBlocksFixtureTarget(
+  label: string,
+  databaseUrl: string,
+  classification: string,
+  expectedMessage: string,
+  args: string[] = [],
+) {
+  const result = runPreflight([
+    "--person-id",
+    "10000000-0000-4000-8000-000000000001",
+    "--company-id",
+    "20000000-0000-4000-8000-000000000001",
+    "--contact-id",
+    "21000000-0000-4000-8000-000000000001",
+    ...args,
+  ], { DATABASE_URL: databaseUrl });
+  assert.notEqual(result.status, 0, `${label} must stop safely before DB connection`);
+  assert(result.stdout.includes(`classification: ${classification}`), `${label} must classify as ${classification}`);
+  assert(
+    result.stderr.includes(expectedMessage),
+    `${label} must refuse the target before DB fixture query`,
+  );
+  assert(
+    result.stderr.includes("No DB write or HTTP smoke request was attempted."),
+    `${label} must report that no DB write or HTTP smoke request was attempted`,
+  );
+  assert(
+    !result.stdout.includes("Fixture read-only result:"),
+    `${label} must not print DB fixture query results`,
   );
 }
 
@@ -282,6 +349,66 @@ for (const [label, databaseUrl] of [
   assertPreflightBlocksProductionLike(label, databaseUrl);
 }
 
+assertPreflightStopsBeforeDb(
+  "missing DATABASE_URL with fixture IDs",
+  [
+    "--case",
+    "success",
+    "--person-id",
+    "11111111-1111-4111-8111-111111111111",
+    "--company-id",
+    "22222222-2222-4222-8222-222222222222",
+    "--contact-id",
+    "33333333-3333-4333-8333-333333333333",
+  ],
+  { DATABASE_URL: "" },
+  "DATABASE_URL is not set",
+);
+
+assertPreflightStopsBeforeDb(
+  "missing fixture IDs with local DATABASE_URL",
+  ["--case", "success"],
+  { DATABASE_URL: "postgres://safe:safe@localhost:5432/person_owner_dev" },
+  "Fixture preflight requires --person-id, --company-id, and --contact-id",
+);
+
+assertPreflightBlocksClassifiedTarget(
+  "unknown remote DB target",
+  "postgres://safe:safe@db.example.invalid:5432/person_owner",
+  "unknown",
+  "Refusing unknown DB target; classify it as local/test/staging before preflight",
+);
+
+assertPreflightBlocksClassifiedTarget(
+  "staging DB target without confirmation",
+  "postgres://safe:safe@localhost:5432/person_owner_stage",
+  "staging",
+  "Refusing staging read-only preflight without --confirm-staging-read-only",
+);
+
+assertPreflightBlocksClassifiedTarget(
+  "shared DB name",
+  "postgres://safe:safe@localhost:5432/shared_dev",
+  "shared",
+  "Refusing shared-like target before DB connection",
+);
+
+assertPreflightBlocksFixtureTarget(
+  "common staging DB name with staging confirmation",
+  "postgres://safe:safe@localhost:5432/common_stage",
+  "shared",
+  "Refusing shared-like target before DB connection",
+  ["--confirm-staging-read-only"],
+);
+
+assertPreflightBlocksFixtureTarget(
+  "shared staging DB name with staging confirmation",
+  "postgres://safe:safe@localhost:5432/shared_stage",
+  "shared",
+  "Refusing shared-like target before DB connection",
+  ["--confirm-staging-read-only"],
+);
+
 assertPreflightAllowsClassifyOnly(
   "product catalog DB name",
   "postgres://safe:safe@localhost:5432/product_catalog_dev",
@@ -317,6 +444,10 @@ assert(
 );
 
 assert(!smokePreflightScriptSource.includes("dotenv/config"), "preflight must not auto-load .env files");
+assert(
+  smokePreflightScriptSource.includes('"shared"') && smokePreflightScriptSource.includes("Refusing shared-like target before DB connection"),
+  "preflight must classify and refuse shared-like DB targets before DB connection",
+);
 assert(
   !/COMPANY_CONTACT_LINK_WRITE_TARGET[,\s]*\]/.test(smokePreflightScriptSource),
   "route guard target must stay out of DB classification signal inputs",
