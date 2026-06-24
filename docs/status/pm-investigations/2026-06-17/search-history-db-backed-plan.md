@@ -1,46 +1,47 @@
-# Search History DB-backed Plan
+# SearchHistory DB-backed Plan
 
-## 結論
+## Historical Context
 
-#55 は stale として扱います。stale は「古い main を基準に作られていて、latest main とそのまま合わせると衝突や前提ずれが出やすい状態」です。
+This document was originally created when PR #55 was stale and the team needed a clean #55R plan.
+At that time, the safe direction was to rebuild DB-backed SearchHistory from latest main instead of merging the old #55 branch directly.
 
-latest main commit `db0c60b6f0ae3c80bdac9b1dcced2e56794784be` から #55R を作り直し、検索履歴を DB-backed（DBに保存・取得する方式）として再設計・再検証します。
+That historical decision is still correct for #55 itself: do not revive or directly merge #55.
 
-## #55 の扱い
+## Current Status After Later PRs
 
-- #55 の既存差分は参考資料として見る。
-- そのまま rebase / merge する前提にしない。
-- #55R は latest main から新しい branch として作る。
-- UI復旧済みの main 状態を壊さないことを優先する。
+SearchHistory is no longer just a rebuild plan:
 
-## 必須方針
+- PR #57 merged the DB-backed SearchHistory API, service, UI, and tests.
+- PR #91 restored saved search condition application for filters, checked filters, focus selections, page size, sort key, and tab/scope.
+- The current main implementation uses the existing Prisma `SearchHistory` model and does not require a schema change or migration.
+- `npm.cmd run test:search-history` passes on the current main worktree during the 2026-06-23 status sync.
 
-| 項目 | 方針 |
-|---|---|
-| DB write smoke | なし。DBに最低限書き込んで確認する smoke test は未実施扱い |
-| migration | なし。DB構造を変える migration は追加しない前提で確認 |
-| public response userId | public API response に `userId` を出さない |
-| own-user isolation | 自分の検索履歴だけ取得・保存できることを必須条件にする |
+## Current Safety Requirements
 
-## #55R で確認すること
+Keep these requirements for any future SearchHistory work:
 
-1. `GET /api/search-histories` はログイン中ユーザーの履歴だけ返す。
-2. `POST /api/search-histories` はログイン中ユーザーに紐づけて保存する。
-3. response には内部識別子としての `userId` を出さない。
-4. 他ユーザーの履歴を query や body で指定できない。
-5. UI は保存・適用・空状態・エラー状態を区別して表示する。
-6. 既存の sample-only SearchHistory 表示と混ざらないようにする。
+1. `GET /api/search-histories` must return only the logged-in user's own histories.
+2. `POST /api/search-histories` must ignore spoofed client `userId`.
+3. Public responses must not include row `userId`.
+4. User-identifying keys inside `filters` must be sanitized.
+5. Query text, sort key, filters payload, list limit, and result count must stay bounded.
+6. UI must clearly distinguish loading, empty, error, unauthenticated, save, and apply states.
+7. Browser QA must use normal login only. Do not use cookie injection, token injection, auth proxy, or auth bypass.
+8. Real DB write smoke and real own-user isolation checks require explicit local/test DB target, fixture IDs, rollback/cleanup plan, and approval.
 
-## テスト方針
+## Current Remaining Gates
 
-- まず unit / script test で own-user isolation を確認する。
-- DB write smoke は承認があるまで行わない。
-- Browser QA は通常ログインのみで行う。cookie、token、auth proxy は使わない。
-- public response の JSON に `userId` が含まれないことを確認する。
+| Gate | Status | Notes |
+|---|---|---|
+| Static/unit test | DONE | `npm.cmd run test:search-history` passes. |
+| Browser QA | READY | Requires normal local login session; no auth bypass. |
+| Real DB write smoke | WAITING_APPROVAL | Requires local/test DB target and fixture approval. |
+| Real own-user isolation evidence | WAITING_APPROVAL | Requires real DB fixture setup or approved existing test records. |
+| Production/staging/shared DB write | BLOCKED | Not allowed without explicit owner approval. |
 
-## 未実施操作
+## Do Not Do
 
-- DB write は行っていない。
-- migration は作っていない。
-- schema は触っていない。
-- #55 の close / merge / Ready for review は行っていない。
+- Do not merge or revive the old #55 branch.
+- Do not treat this historical plan as proof that SearchHistory is still unimplemented.
+- Do not perform production/staging/shared DB writes.
+- Do not add a migration unless a later explicit design requires it.
