@@ -122,16 +122,15 @@ function assertJsonResponseIsSanitized(filePath: string, callSource: string) {
 function assertRouteSourceContract(filePath: string, source: string) {
   for (const callSource of findCalls(source, "NextResponse.json")) {
     assertJsonResponseIsSanitized(filePath, callSource);
+    if (/\buser\s*:(?!\s*null\b)/.test(callSource)) {
+      assert(callSource.includes("publicAuthUser("), `${filePath} user responses must be produced through publicAuthUser`);
+    }
   }
 
   assert(!/user\s*:\s*user\s*[,}]/.test(source), `${filePath} must not return a raw user object`);
   assert(!/NextResponse\.json\s*\(\s*\{\s*user\s*\}/.test(source), `${filePath} must not return shorthand raw user`);
   assert(!/publicAuthUser\s*\([^)]*passwordHash/.test(source), `${filePath} must not pass passwordHash to publicAuthUser`);
   assert(!/console\.error\s*\([^)]*\.stack/.test(source), `${filePath} must not log stack traces from auth routes`);
-
-  if (/NextResponse\.json\s*\([^)]*\buser\b/s.test(source)) {
-    assert(source.includes("publicAuthUser("), `${filePath} user responses must be produced through publicAuthUser`);
-  }
 }
 
 const authPath = "lib/auth.ts";
