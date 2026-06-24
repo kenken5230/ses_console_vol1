@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { aggregatePriceBandMarket } from "../../lib/market-analysis/aggregate";
-import { buildMarketAnalysisResponse, parseMarketAnalysisQuery } from "../../lib/market-analysis/api-adapter";
+import {
+  MARKET_ANALYSIS_DEFAULT_LIMIT,
+  MARKET_ANALYSIS_MAX_LIMIT,
+  buildCreatedAtWhere,
+  buildMarketAnalysisResponse,
+  parseMarketAnalysisQuery,
+} from "../../lib/market-analysis/api-adapter";
 import { toPriceBand } from "../../lib/market-analysis/normalize";
 import { normalizeMarketAnalysisLimitInput, visibleMarketRankingRows } from "../../lib/market-analysis/ui-controls";
 
@@ -24,6 +31,18 @@ assert.equal(limitedQuery.toMonth, "2026-06");
 const blankLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit="), fixedNow);
 assert.equal(blankLimitQuery.limit, undefined);
 
+const invalidLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit=not-a-number"), fixedNow);
+assert.equal(invalidLimitQuery.limit, MARKET_ANALYSIS_DEFAULT_LIMIT);
+
+const decimalLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit=12.9"), fixedNow);
+assert.equal(decimalLimitQuery.limit, 12);
+
+const underMinLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit=0"), fixedNow);
+assert.equal(underMinLimitQuery.limit, MARKET_ANALYSIS_DEFAULT_LIMIT);
+
+const overMaxLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit=1001"), fixedNow);
+assert.equal(overMaxLimitQuery.limit, MARKET_ANALYSIS_MAX_LIMIT);
+
 assert.equal(normalizeMarketAnalysisLimitInput(""), "");
 assert.equal(normalizeMarketAnalysisLimitInput("0"), "1");
 assert.equal(normalizeMarketAnalysisLimitInput("1"), "1");
@@ -32,8 +51,29 @@ assert.equal(normalizeMarketAnalysisLimitInput("1001"), "1000");
 assert.equal(normalizeMarketAnalysisLimitInput("12.9"), "12");
 assert.equal(normalizeMarketAnalysisLimitInput("not-a-number", "100"), "100");
 
-const overMaxLimitQuery = parseMarketAnalysisQuery(new URLSearchParams("limit=1001"), fixedNow);
-assert.equal(overMaxLimitQuery.limit, 1000);
+const explicitMonthQuery = parseMarketAnalysisQuery(new URLSearchParams("fromMonth=2026-02&toMonth=2026-04"), fixedNow);
+assert.equal(explicitMonthQuery.fromMonth, "2026-02");
+assert.equal(explicitMonthQuery.toMonth, "2026-04");
+
+const reversedMonthQuery = parseMarketAnalysisQuery(new URLSearchParams("fromMonth=2026-09&toMonth=2026-07"), fixedNow);
+assert.equal(reversedMonthQuery.fromMonth, "2026-07");
+assert.equal(reversedMonthQuery.toMonth, "2026-09");
+
+const invalidMonthQuery = parseMarketAnalysisQuery(new URLSearchParams("fromMonth=2026-13&toMonth=2026-00"), fixedNow);
+assert.equal(invalidMonthQuery.fromMonth, "2026-04");
+assert.equal(invalidMonthQuery.toMonth, "2026-06");
+
+const fromOnlyWhere = buildCreatedAtWhere({ fromMonth: "2026-02" });
+assert.equal(fromOnlyWhere?.gte?.toISOString(), "2026-02-01T00:00:00.000Z");
+assert.equal("lt" in (fromOnlyWhere ?? {}), false);
+
+const toOnlyWhere = buildCreatedAtWhere({ toMonth: "2026-04" });
+assert.equal("gte" in (toOnlyWhere ?? {}), false);
+assert.equal(toOnlyWhere?.lt?.toISOString(), "2026-05-01T00:00:00.000Z");
+
+const closedRangeWhere = buildCreatedAtWhere({ fromMonth: "2026-02", toMonth: "2026-04" });
+assert.equal(closedRangeWhere?.gte?.toISOString(), "2026-02-01T00:00:00.000Z");
+assert.equal(closedRangeWhere?.lt?.toISOString(), "2026-05-01T00:00:00.000Z");
 
 const legacyUnder50PriceBands = ["under_30", "30_35", "35_40", "40_45", "45_50"];
 const legacyOver80PriceBands = [
@@ -157,6 +197,9 @@ const allPriceBandRows = Array.from({ length: 21 }, (_, index) => ({ priceBand: 
 assert.equal(visibleMarketRankingRows(allPriceBandRows).length, 20);
 assert.equal(visibleMarketRankingRows(allPriceBandRows, null).length, 21);
 assert.equal(visibleMarketRankingRows(allPriceBandRows, null).at(-1)?.priceBand, "unknown");
+assert.equal(visibleMarketRankingRows(allPriceBandRows, 2.9).length, 2);
+assert.equal(visibleMarketRankingRows(allPriceBandRows, 0).length, 0);
+assert.equal(visibleMarketRankingRows(allPriceBandRows, Number.NaN).length, 0);
 
 const response = buildMarketAnalysisResponse([], [], {
   cumulativeFocusProjectCount: 7,
@@ -170,5 +213,31 @@ assert.equal(response.summary.focusProjectCount, 7);
 assert.equal(response.summary.sampleProjectCount, 0);
 assert.equal(response.summary.cumulativeFromMonth, "2026-01");
 assert.equal(response.summary.limit, null);
+
+const routeSource = readFileSync("app/api/market-analysis/route.ts", "utf8");
+assert.match(routeSource, /parseMarketAnalysisQuery\(new URL\(request\.url\)\.searchParams\)/);
+assert.match(routeSource, /buildCreatedAtWhere\(query\)/);
+assert.match(routeSource, /\.\.\.\(query\.limit \? \{ take: query\.limit \} : \{\}\)/);
+assert.match(routeSource, /orderBy: \{ createdAt: "desc" as const \}/);
+assert.match(routeSource, /createdAt: cumulativeCreatedAtWhere/);
+
+const pageSource = readFileSync("app/market-analysis/page.jsx", "utf8");
+assert.match(pageSource, /const DEFAULT_LIMIT = "100"/);
+assert.match(pageSource, /normalizeMarketAnalysisLimitInput\(value, DEFAULT_LIMIT\)/);
+assert.match(pageSource, /if \(limit\.trim\(\)\) params\.set\("limit", limit\.trim\(\)\)/);
+assert.match(pageSource, /appendOptionalParam\(params, "fromMonth", filters\.fromMonth\)/);
+assert.match(pageSource, /appendOptionalParam\(params, "toMonth", filters\.toMonth\)/);
+assert.match(pageSource, /appendOptionalParam\(params, "priceBand", filters\.priceBand\)/);
+assert.match(pageSource, /rowLimit=\{null\}/);
+
+const filterBarSource = readFileSync("components/market-analysis/MarketFilterBar.jsx", "utf8");
+assert.match(filterBarSource, /min="1"/);
+assert.match(filterBarSource, /max="1000"/);
+assert.match(filterBarSource, /onChange=\{\(event\) => onLimitChange\(normalizeMarketAnalysisLimitInput\(event\.target\.value\)\)\}/);
+assert.match(filterBarSource, /PRICE_BAND_LEGACY_LABELS/);
+
+const rankingTableSource = readFileSync("components/market-analysis/MarketRankingTable.jsx", "utf8");
+assert.match(rankingTableSource, /rowLimit = MARKET_ANALYSIS_VISIBLE_RANKING_LIMIT/);
+assert.match(rankingTableSource, /visibleMarketRankingRows\(rows, rowLimit\)/);
 
 console.log("market-analysis controls tests passed");
