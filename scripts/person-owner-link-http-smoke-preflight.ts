@@ -14,7 +14,7 @@ type SmokeCase =
   | "inactive-contact"
   | "blocked-company";
 
-type TargetClass = "local" | "test" | "staging" | "production" | "unknown";
+type TargetClass = "local" | "test" | "staging" | "production" | "shared" | "unknown";
 
 type ParsedDatabaseTarget = {
   host: string;
@@ -162,10 +162,16 @@ function parseDatabaseUrl(rawUrl: string): ParsedDatabaseTarget {
 function classifyTarget(signalText: string, host: string, database: string): TargetClass {
   const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
   if (PRODUCTION_LIKE_SIGNAL_PATTERN.test(signalText)) return "production";
-  if (/\b(staging|stage|uat|preview)\b/.test(signalText)) return "staging";
-  if (/\b(test|testing|ci|spec|smoke|fixture)\b/.test(signalText)) return "test";
+  if (hasTargetMarker(signalText, ["shared", "common"])) return "shared";
+  if (hasTargetMarker(signalText, ["staging", "stage", "uat", "preview"])) return "staging";
+  if (hasTargetMarker(signalText, ["test", "testing", "ci", "spec", "smoke", "fixture"])) return "test";
   if (localHosts.has(host.toLowerCase()) || database.toLowerCase().endsWith("_dev")) return "local";
   return "unknown";
+}
+
+function hasTargetMarker(signalText: string, markers: string[]) {
+  const escaped = markers.map((marker) => marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  return new RegExp(`(?:^|[^a-z0-9])(?:${escaped})(?:$|[^a-z0-9])`).test(signalText);
 }
 
 function safeRouteGuardTarget(value: string | undefined) {
@@ -192,6 +198,9 @@ function printTargetSummary(target: ParsedDatabaseTarget, classification: Target
 function assertTargetAllowedForReadOnlyPreflight(classification: TargetClass, args: ParsedArgs) {
   if (classification === "production") {
     throw new Error("Refusing production-like target before DB connection");
+  }
+  if (classification === "shared") {
+    throw new Error("Refusing shared-like target before DB connection");
   }
   if (classification === "unknown") {
     throw new Error("Refusing unknown DB target; classify it as local/test/staging before preflight");

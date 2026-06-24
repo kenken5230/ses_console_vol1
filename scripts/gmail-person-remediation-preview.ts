@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import { assertNotProductionMutation } from "../lib/production-guard";
 import { analyzePersonNameCandidate, personDisplayName } from "./gmail-extraction";
 
 const maxRemediationLimit = 50;
@@ -94,6 +95,10 @@ type BatchRunResult = {
   rows: OutputRow[];
   failedRows: OutputRow[];
 };
+
+function assertGmailPersonRemediationWriteAllowed(mode: Extract<RunMode, "apply" | "batch-apply">): void {
+  assertNotProductionMutation(`gmail:extract:person-remediation:${mode}`);
+}
 
 function parseArgs(argv = process.argv.slice(2)): Args {
   let rawLimit: string | undefined;
@@ -499,9 +504,13 @@ function candidateRow(
   };
 }
 
-async function applyCandidate(candidate: RemediationCandidate): Promise<"updated" | "skipped"> {
+async function applyCandidate(
+  candidate: RemediationCandidate,
+  mode: Extract<RunMode, "apply" | "batch-apply">,
+): Promise<"updated" | "skipped"> {
   const person = candidate.person;
   if (!person.sourceMail) return "skipped";
+  assertGmailPersonRemediationWriteAllowed(mode);
   const db = await getPrisma();
 
   return db.$transaction(async (tx) => {
@@ -604,7 +613,7 @@ async function runSingle(args: Args): Promise<void> {
     }
 
     try {
-      const result = await applyCandidate(candidate);
+      const result = await applyCandidate(candidate, "apply");
       if (result === "updated") {
         updated += 1;
         rows.push(candidateRow(candidate, mode, "updated"));
@@ -710,7 +719,8 @@ async function runBatchScan(
       }
 
       try {
-        const result = await applyCandidate(candidate);
+        const writeMode = options.mode === "batch-apply" ? "batch-apply" : "apply";
+        const result = await applyCandidate(candidate, writeMode);
         if (result === "updated") {
           updatedTotal += 1;
           chunkSummary.updated += 1;
