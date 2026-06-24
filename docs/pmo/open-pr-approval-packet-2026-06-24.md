@@ -1,5 +1,11 @@
 # Open PR approval packet 2026-06-24
 
+> Superseded note (2026-06-24 16:55 JST): this packet is historical.
+> The PRs listed here were later processed through approved gates, #114 was closed as superseded,
+> and the current state is tracked in `../../PROGRESS.md` and
+> `../status/post112-current-state-2026-06-24.md`.
+> Do not use this packet as the current open-PR or cleanup execution source.
+
 This packet is the current PMO summary after the approved merge batch, #116 restart work,
 worktree cleanup execution, SearchHistory local DB QA, and CSV apply preflight.
 
