@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
+import { assertNotProductionMutation } from "../lib/production-guard";
+
 type CsvImportType = "project" | "person" | "auto";
 type ResolvedCsvImportType = "project" | "person";
 type DetectedCsvType = ResolvedCsvImportType | "review";
@@ -1754,6 +1756,7 @@ export async function runCsvSourceApply(argv = process.argv): Promise<CsvSourceA
     fileBytes: fileStats.size,
     sourcePreview: true,
   });
+  assertNotProductionMutation("csv:import:apply");
   const { prisma } = await import("../lib/prisma");
   return applyCsvSourcePreviewReport({
     report,
