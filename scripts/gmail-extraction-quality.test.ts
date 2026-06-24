@@ -150,8 +150,10 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   const output = JSON.stringify(row);
   assertNoSensitiveOutput(output);
   assert.equal(row.companyCandidate?.candidatePresent, true);
+  assert.equal(row.companyCandidate?.existingCompanyLinkPresent, false);
   assert.equal(output.includes("Sensitive Partner Systems Inc."), false);
   assert.equal(output.includes("candidateName"), false);
+  assert.equal(output.includes("existingCompanyId"), false);
 }
 
 {
@@ -179,9 +181,10 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   const candidate = inferGmailCompanyCandidate({
     fromName: "Fixture Sender",
     fromEmail: "sender@engineering.domain-match.example.invalid",
-    knownCompanies: [{ name: "Known Domain Company", mainEmailDomain: "domain-match.example.invalid" }],
+    knownCompanies: [{ id: "company-domain-existing", name: "Known Domain Company", mainEmailDomain: "domain-match.example.invalid" }],
   });
   assert.equal(candidate.candidateName, "Known Domain Company");
+  assert.equal(candidate.existingCompanyId, "company-domain-existing");
   assert.equal(candidate.source, "known_main_email_domain");
   assert.equal(candidate.confidence, "HIGH");
 }
@@ -190,9 +193,10 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   const candidate = inferGmailCompanyCandidate({
     fromName: "Alias Labs recruiting",
     fromEmail: "sender@gmail.com",
-    knownCompanies: [{ name: "Known Alias Company", aliases: ["Alias Labs"] }],
+    knownCompanies: [{ id: "company-alias-existing", name: "Known Alias Company", aliases: ["Alias Labs"] }],
   });
   assert.equal(candidate.candidateName, "Known Alias Company");
+  assert.equal(candidate.existingCompanyId, "company-alias-existing");
   assert.equal(candidate.source, "known_alias");
 }
 
@@ -220,7 +224,7 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
 {
   const existingDomainCandidate = inferGmailCompanyCandidate({
     fromEmail: "sender@engineering.domain-match.example.invalid",
-    knownCompanies: [{ name: "Known Domain Company", mainEmailDomain: "domain-match.example.invalid" }],
+    knownCompanies: [{ id: "company-domain-existing", name: "Known Domain Company", mainEmailDomain: "domain-match.example.invalid" }],
   });
   assert.deepEqual(decideGmailCompanyCandidateAutoApply(existingDomainCandidate), {
     autoApplyEligible: true,
@@ -231,8 +235,10 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   const existingAliasCandidate = inferGmailCompanyCandidate({
     fromName: "Alias Labs recruiting",
     fromEmail: "sender@gmail.com",
-    knownCompanies: [{ name: "Known Alias Company", aliases: ["Alias Labs"] }],
+    knownCompanies: [{ id: "company-alias-existing", name: "Known Alias Company", aliases: ["Alias Labs"] }],
   });
+  assert.equal(existingAliasCandidate.source, "known_alias");
+  assert.equal(existingAliasCandidate.isGenericDomain, false, "known_alias is existing-company evidence, not generic-domain-derived evidence");
   assert.deepEqual(decideGmailCompanyCandidateAutoApply(existingAliasCandidate), {
     autoApplyEligible: true,
     applyMode: "existing_company_link",
@@ -247,6 +253,47 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   assert.equal(bodyLabelDecision.autoApplyEligible, false, "body label candidates must not create new Companies automatically");
   assert.equal(bodyLabelDecision.applyMode, "advisory_only");
   assert.ok(bodyLabelDecision.reasonCodes.includes("NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY"));
+
+  const knownDomainWithoutIdCandidate = inferGmailCompanyCandidate({
+    fromEmail: "sender@engineering.domain-match.example.invalid",
+    knownCompanies: [{ name: "Known Domain Company", mainEmailDomain: "domain-match.example.invalid" }],
+  });
+  const knownDomainWithoutIdDecision = decideGmailCompanyCandidateAutoApply(knownDomainWithoutIdCandidate);
+  assert.equal(knownDomainWithoutIdCandidate.source, "known_main_email_domain");
+  assert.equal(knownDomainWithoutIdCandidate.confidence, "HIGH");
+  assert.equal(knownDomainWithoutIdCandidate.existingCompanyId, null);
+  assert.equal(knownDomainWithoutIdDecision.autoApplyEligible, false, "known domain matches without an existing company id are advisory-only");
+  assert.ok(knownDomainWithoutIdDecision.reasonCodes.includes("MISSING_EXISTING_COMPANY_ID_ADVISORY_ONLY"));
+
+  const knownAliasWithoutIdCandidate = inferGmailCompanyCandidate({
+    fromName: "Alias Labs recruiting",
+    fromEmail: "sender@gmail.com",
+    knownCompanies: [{ name: "Known Alias Company", aliases: ["Alias Labs"] }],
+  });
+  const knownAliasWithoutIdDecision = decideGmailCompanyCandidateAutoApply(knownAliasWithoutIdCandidate);
+  assert.equal(knownAliasWithoutIdCandidate.source, "known_alias");
+  assert.equal(knownAliasWithoutIdCandidate.confidence, "HIGH");
+  assert.equal(knownAliasWithoutIdCandidate.existingCompanyId, null);
+  assert.equal(knownAliasWithoutIdDecision.autoApplyEligible, false, "known alias matches without an existing company id are advisory-only");
+  assert.ok(knownAliasWithoutIdDecision.reasonCodes.includes("MISSING_EXISTING_COMPANY_ID_ADVISORY_ONLY"));
+
+  const genericDerivedCandidateWithStrongFields = {
+    existingCompanyId: "company-generic-derived",
+    candidateName: "Generic Derived Company",
+    source: "generic_domain" as const,
+    confidence: "HIGH" as const,
+    confidenceScore: 0.99,
+    reasonCodes: ["GENERIC_EMAIL_DOMAIN_WEAK"],
+    isGenericDomain: true,
+  };
+  const genericDerivedDecision = decideGmailCompanyCandidateAutoApply(genericDerivedCandidateWithStrongFields);
+  assert.equal(
+    genericDerivedDecision.autoApplyEligible,
+    false,
+    "generic-domain-derived candidates stay advisory-only even if other fields look strong"
+  );
+  assert.ok(genericDerivedDecision.reasonCodes.includes("GENERIC_DOMAIN_ADVISORY_ONLY"));
+  assert.ok(genericDerivedDecision.reasonCodes.includes("NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY"));
 
   const fallbackCases = [
     inferGmailCompanyCandidate({ fromName: "Taro Yamada / FromName Systems Inc.", fromEmail: "taro@gmail.com" }),
@@ -305,8 +352,9 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   assert(evalSource.includes("assertNoSensitiveOutput(serialized)"), "quality-eval must run serialized output through the leak guard");
 
   assert(reportSource.includes("anonymizedCompanyCandidate(params.companyCandidate)"), "quality report rows must anonymize company candidates");
-  assert(companyCandidateSource.includes('Omit<GmailCompanyCandidate, "candidateName">'), "quality report rows must omit raw company candidate names");
+  assert(companyCandidateSource.includes('Omit<GmailCompanyCandidate, "candidateName" | "existingCompanyId">'), "quality report rows must omit raw company candidate names and ids");
   assert(companyCandidateSource.includes("candidatePresent: Boolean(candidateValue.candidateName)"), "quality report rows may expose only company candidate presence");
+  assert(companyCandidateSource.includes("existingCompanyLinkPresent: Boolean(candidateValue.existingCompanyId)"), "quality report rows may expose only existing link presence");
   assert(!/lib\/prisma|@prisma\/client|\bprisma\.|\bdb\.|\btx\.|\$transaction/.test(companyCandidateSource), "company candidate policy must stay DB-free");
   assert(!/create_new_company|new_company|company\.create|company\.createMany/.test(companyCandidateSource), "company candidate policy must not grow new Company creation semantics");
 
