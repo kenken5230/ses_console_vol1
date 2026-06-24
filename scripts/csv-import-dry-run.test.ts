@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
@@ -24,7 +24,7 @@ assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv
   file: "synthetic.csv",
   type: "project",
   limit: 5000,
-  dbDuplicates: "auto",
+  dbDuplicates: "off",
   sourcePreview: false,
 });
 
@@ -48,7 +48,7 @@ assert.deepEqual(parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv
   file: "synthetic.csv",
   type: "auto",
   limit: 5000,
-  dbDuplicates: "auto",
+  dbDuplicates: "off",
   sourcePreview: true,
 });
 
@@ -60,6 +60,22 @@ assert.throws(
 assert.throws(
   () => parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv", "--type=project", "--apply"]),
   /does not accept --apply/,
+);
+
+assert.throws(
+  () => parseCsvDryRunArgs([
+    "node",
+    "csv-import",
+    "--file=synthetic.csv",
+    "--type=project",
+    "--confirm=APPLY_CSV_SOURCE_RECORDS",
+  ]),
+  /does not accept --confirm/,
+);
+
+assert.throws(
+  () => parseCsvDryRunArgs(["node", "csv-import", "--file=synthetic.csv", "--type=project", "--write"]),
+  /does not accept --write/,
 );
 
 assert.throws(
@@ -108,10 +124,10 @@ assert.throws(
   /requires --source-preview/,
 );
 
-function runCsvDryRunCli(args: string[]) {
+function runCsvDryRunCli(args: string[], envOverrides: Partial<NodeJS.ProcessEnv> = {}) {
   const output = execFileSync(process.execPath, [tsxCli, "scripts/csv-import-dry-run.ts", ...args], {
     encoding: "utf8",
-    env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic" },
+    env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic", ...envOverrides },
   });
   const jsonStart = output.indexOf("{");
   const jsonEnd = output.lastIndexOf("}");
@@ -119,10 +135,10 @@ function runCsvDryRunCli(args: string[]) {
   return JSON.parse(output.slice(jsonStart, jsonEnd + 1));
 }
 
-function runCsvDryRunCliOutput(args: string[]) {
+function runCsvDryRunCliOutput(args: string[], envOverrides: Partial<NodeJS.ProcessEnv> = {}) {
   return execFileSync(process.execPath, [tsxCli, "scripts/csv-import-dry-run.ts", ...args], {
     encoding: "utf8",
-    env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic" },
+    env: { ...process.env, CSV_DRY_RUN_DUPLICATE_FIXTURE: "synthetic", ...envOverrides },
   });
 }
 
@@ -198,6 +214,27 @@ function createMockApplyDb(options: { failSourceRecordCreate?: boolean } = {}) {
   const report = runCsvDryRunCli([
     "--file=tests/fixtures/csv-import/synthetic-projects.csv",
     "--type=project",
+  ], { DATABASE_URL: "postgresql://user:pass@db.example.invalid:5432/sensitive" });
+  assert.equal(report.duplicateMatching.dbReadOnlyEnabled, false);
+  assert.equal(report.duplicateMatching.dbReadOnlyScannedProjects, 0);
+  assertNoSensitiveCsvOutput(JSON.stringify(report));
+}
+
+{
+  const report = runCsvDryRunCli([
+    "--file=tests/fixtures/csv-import/synthetic-projects.csv",
+    "--type=project",
+    "--db-duplicates=auto",
+  ], { DATABASE_URL: "postgresql://user:pass@db.example.invalid:5432/sensitive" });
+  assert.equal(report.duplicateMatching.dbReadOnlyEnabled, false);
+  assert.equal(report.duplicateMatching.dbReadOnlyScannedProjects, 0);
+  assertNoSensitiveCsvOutput(JSON.stringify(report));
+}
+
+{
+  const report = runCsvDryRunCli([
+    "--file=tests/fixtures/csv-import/synthetic-projects.csv",
+    "--type=project",
     "--db-duplicates=on",
   ]);
   assert.equal(report.duplicateMatching.dbReadOnlyEnabled, true);
@@ -205,6 +242,20 @@ function createMockApplyDb(options: { failSourceRecordCreate?: boolean } = {}) {
   assert.equal(report.duplicateMatching.duplicateReasonCounts.CSV_DUPLICATE_BY_PROJECT_TITLE_COMPANY, 1);
   assert.equal(report.outcomes.wouldCreate, 0);
   assertNoSensitiveCsvOutput(JSON.stringify(report));
+}
+
+{
+  const confirmRejection = spawnSync(process.execPath, [
+    tsxCli,
+    "scripts/csv-import-dry-run.ts",
+    "--file=tests/fixtures/csv-import/synthetic-projects.csv",
+    "--type=project",
+    "--confirm=APPLY_CSV_SOURCE_RECORDS",
+  ], { encoding: "utf8" });
+  assert.notEqual(confirmRejection.status, 0);
+  assert.match(confirmRejection.stderr, /does not accept --confirm/);
+  assertNoSensitiveCsvOutput(confirmRejection.stderr);
+  assert.equal(confirmRejection.stderr.includes("APPLY_CSV_SOURCE_RECORDS"), false);
 }
 
 {
@@ -231,6 +282,27 @@ function createMockApplyDb(options: { failSourceRecordCreate?: boolean } = {}) {
   assert.equal(report.sourcePreview.previewImportSource.type, "CSV");
   assert.equal(report.sourcePreview.previewImportSource.nameRedacted, "synthetic-projects.csv");
   assert.equal(report.sourcePreview.sourceRecordPreviewCount, 5);
+}
+
+{
+  const csvText = [
+    "title,companyName,workContent,requiredSkills,mailSubject,mailBody,connectionString,apiSecret",
+    "Synthetic Sensitive Project,Synthetic Sensitive Client,Build safe preview,TypeScript,Subject must stay hidden,\"Body with sample@example.test and DATABASE_URL=postgres://user:pass@example.invalid/db\",postgres://user:pass@example.invalid/db,SECRET=fake-secret-value",
+  ].join("\n");
+  const output = JSON.stringify(buildCsvDryRunReport({
+    csvText,
+    type: "project",
+    fileIdentity: "synthetic-sensitive-csv.csv",
+    sourcePreview: true,
+  }));
+  assertNoSensitiveCsvOutput(output);
+  assert.equal(output.includes("Subject must stay hidden"), false);
+  assert.equal(output.includes("Body with"), false);
+  assert.equal(output.includes("sample@example.test"), false);
+  assert.equal(output.includes("postgres://"), false);
+  assert.equal(output.includes("fake-secret-value"), false);
+  assert.equal(output.includes("Synthetic Sensitive Project"), false);
+  assert.equal(output.includes("Synthetic Sensitive Client"), false);
 }
 
 {
@@ -761,6 +833,16 @@ assert.throws(
 
 assert.throws(
   () => assertNoSensitiveCsvOutput(JSON.stringify({ url: "postgres" + "ql://user:pass@example/db" })),
+  /Sensitive CSV dry-run output/,
+);
+
+assert.throws(
+  () => assertNoSensitiveCsvOutput(JSON.stringify({ token: "sk_live_1234567890abcdef" })),
+  /Sensitive CSV dry-run output/,
+);
+
+assert.throws(
+  () => assertNoSensitiveCsvOutput(JSON.stringify({ secret: "SECRET=fake-secret-value" })),
   /Sensitive CSV dry-run output/,
 );
 
