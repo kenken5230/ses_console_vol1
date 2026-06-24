@@ -42,6 +42,11 @@ const entrypointContracts: EntrypointContract[] = [
     mutationMarker: "async function main",
   },
   {
+    filePath: "scripts/csv-import-dry-run.ts",
+    operationName: "csv:import:apply",
+    mutationMarker: 'const { prisma } = await import("../lib/prisma")',
+  },
+  {
     filePath: "scripts/set-local-demo-password.ts",
     operationName: "set-local-demo-password",
     mutationMarker: "async function main",
@@ -49,7 +54,6 @@ const entrypointContracts: EntrypointContract[] = [
 ];
 
 const excludedEntrypointFiles = new Set([
-  "scripts/csv-import-dry-run.ts",
   "scripts/csv-import-dry-run.test.ts",
   "scripts/notion-import-dry-run.ts",
   "scripts/notion-import-dry-run.test.ts",
