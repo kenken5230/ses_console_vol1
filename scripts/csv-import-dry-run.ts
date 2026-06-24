@@ -17,6 +17,16 @@ const MAX_SAMPLE_ROWS = 20;
 const MAX_DB_DUPLICATE_SCAN = 1000;
 const SKILL_REVIEW_THRESHOLD = 15;
 const CSV_SOURCE_APPLY_CONFIRM = "APPLY_CSV_SOURCE_RECORDS";
+const CSV_DRY_RUN_FORBIDDEN_APPLY_OPTIONS = new Set([
+  "apply",
+  "commit",
+  "confirm",
+  "db-write",
+  "execute",
+  "no-dry-run",
+  "run-apply",
+  "write",
+]);
 
 const WARNING_CODES = {
   missingRequiredField: "CSV_MISSING_REQUIRED_FIELD",
@@ -433,9 +443,17 @@ function parseBooleanFlag(argv: string[], name: string): boolean {
   throw new Error(`--${name} must be a boolean flag when provided.`);
 }
 
+function parseOptionName(arg: string): string | null {
+  if (!arg.startsWith("--")) return null;
+  return arg.slice(2).split("=")[0];
+}
+
 export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
-  if (argv.some((arg) => arg === "--apply" || arg.startsWith("--apply="))) {
-    throw new Error("csv:import:dry-run is read-only and does not accept --apply.");
+  const forbiddenApplyOption = argv.slice(2)
+    .map(parseOptionName)
+    .find((name): name is string => Boolean(name) && CSV_DRY_RUN_FORBIDDEN_APPLY_OPTIONS.has(name));
+  if (forbiddenApplyOption) {
+    throw new Error(`csv:import:dry-run is read-only and does not accept --${forbiddenApplyOption}.`);
   }
 
   const file = parseArgValue(argv, "file");
@@ -453,7 +471,7 @@ export function parseCsvDryRunArgs(argv = process.argv): CsvDryRunArgs {
   }
   if (limit > MAX_LIMIT) throw new Error(`--limit must be <= ${MAX_LIMIT}.`);
 
-  const duplicateMode = parseArgValue(argv, "db-duplicates") ?? "auto";
+  const duplicateMode = parseArgValue(argv, "db-duplicates") ?? "off";
   if (duplicateMode !== "auto" && duplicateMode !== "off" && duplicateMode !== "on") {
     throw new Error("--db-duplicates must be auto, off, or on.");
   }
@@ -1322,8 +1340,11 @@ export function assertNoSensitiveCsvOutput(text: string): void {
   const forbiddenPatterns = [
     /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
     /\b(?:postgres(?:ql)?|mysql|sqlserver):\/\//i,
-    /\b(?:DATABASE_URL|DIRECT_URL|SMTP_PASSWORD|GMAIL_REFRESH_TOKEN|API[_-]?KEY|TOKEN|PASSWORD)\s*[:=]\s*["']?[^"',\s}]+/i,
+    /\b(?:DATABASE_URL|DIRECT_URL|SMTP_PASSWORD|GMAIL_REFRESH_TOKEN|API[_-]?KEY|CLIENT[_-]?SECRET|TOKEN|PASSWORD|SECRET)\s*[:=]\s*["']?[^"',\s}]+/i,
     /\bBearer\s+[A-Za-z0-9._-]+/i,
+    /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]{8,}\b/i,
+    /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/i,
+    /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/i,
     /-----BEGIN [A-Z ]+KEY-----/,
     /"rawRow"\s*:/i,
     /"rawValue"\s*:/i,
@@ -1742,7 +1763,7 @@ export async function runCsvSourceApply(argv = process.argv): Promise<CsvSourceA
 }
 
 async function loadDbDuplicateInputs(args: CsvDryRunArgs): Promise<DuplicateInputs> {
-  if (args.dbDuplicates === "off") return { dbReadOnlyEnabled: false };
+  if (args.dbDuplicates !== "on") return { dbReadOnlyEnabled: false };
   if (process.env.CSV_DRY_RUN_DUPLICATE_FIXTURE === "synthetic") {
     return syntheticDuplicateInputs(args);
   }
