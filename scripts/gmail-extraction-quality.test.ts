@@ -237,6 +237,8 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
     fromEmail: "sender@gmail.com",
     knownCompanies: [{ id: "company-alias-existing", name: "Known Alias Company", aliases: ["Alias Labs"] }],
   });
+  assert.equal(existingAliasCandidate.source, "known_alias");
+  assert.equal(existingAliasCandidate.isGenericDomain, false, "known_alias is existing-company evidence, not generic-domain-derived evidence");
   assert.deepEqual(decideGmailCompanyCandidateAutoApply(existingAliasCandidate), {
     autoApplyEligible: true,
     applyMode: "existing_company_link",
@@ -274,6 +276,24 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   assert.equal(knownAliasWithoutIdCandidate.existingCompanyId, null);
   assert.equal(knownAliasWithoutIdDecision.autoApplyEligible, false, "known alias matches without an existing company id are advisory-only");
   assert.ok(knownAliasWithoutIdDecision.reasonCodes.includes("MISSING_EXISTING_COMPANY_ID_ADVISORY_ONLY"));
+
+  const genericDerivedCandidateWithStrongFields = {
+    existingCompanyId: "company-generic-derived",
+    candidateName: "Generic Derived Company",
+    source: "generic_domain" as const,
+    confidence: "HIGH" as const,
+    confidenceScore: 0.99,
+    reasonCodes: ["GENERIC_EMAIL_DOMAIN_WEAK"],
+    isGenericDomain: true,
+  };
+  const genericDerivedDecision = decideGmailCompanyCandidateAutoApply(genericDerivedCandidateWithStrongFields);
+  assert.equal(
+    genericDerivedDecision.autoApplyEligible,
+    false,
+    "generic-domain-derived candidates stay advisory-only even if other fields look strong"
+  );
+  assert.ok(genericDerivedDecision.reasonCodes.includes("GENERIC_DOMAIN_ADVISORY_ONLY"));
+  assert.ok(genericDerivedDecision.reasonCodes.includes("NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY"));
 
   const fallbackCases = [
     inferGmailCompanyCandidate({ fromName: "Taro Yamada / FromName Systems Inc.", fromEmail: "taro@gmail.com" }),

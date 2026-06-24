@@ -11,17 +11,20 @@ Only candidates that satisfy all of the following may be considered apply-eligib
 - source is `known_main_email_domain` or `known_alias`
 - confidence is `HIGH`
 - `existingCompanyId` is present
-- domain is not generic
+- candidate source is not `generic_domain`
 - candidate name is present
 
 All other sources remain advisory-only, including:
 
 - `LOW` confidence candidates
-- generic sender domains
+- generic-domain-derived candidates, meaning candidates whose `source` is `generic_domain`
 - signature fallback
 - `from_name` fallback
 - body-label-only candidates
 - known-domain or known-alias matches that do not carry an existing company id
+
+This policy does not reject every candidate merely because the sender email uses a generic domain such as Gmail.
+For example, `known_alias` means the candidate matched an existing company alias, so `known_alias` + `HIGH` confidence + `existingCompanyId` remains apply-eligible even if the sender address is on a generic email domain.
 
 ## Safety Boundary
 
