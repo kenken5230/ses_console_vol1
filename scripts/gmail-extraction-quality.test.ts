@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { inferGmailCompanyCandidate } from "./gmail-company-candidate";
+import { decideGmailCompanyCandidateAutoApply, inferGmailCompanyCandidate } from "./gmail-company-candidate";
 import { classifyMailExtractionQuality, extractFromMail, extractPersonFromMail, extractProjectFromMail, type MailExtractionSource } from "./gmail-extraction";
 import { assertNoSensitiveOutput, buildAnonymizedIssueRow } from "./gmail-extraction-quality-report";
 
@@ -218,6 +218,70 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
 }
 
 {
+  const existingDomainCandidate = inferGmailCompanyCandidate({
+    fromEmail: "sender@engineering.domain-match.example.invalid",
+    knownCompanies: [{ name: "Known Domain Company", mainEmailDomain: "domain-match.example.invalid" }],
+  });
+  assert.deepEqual(decideGmailCompanyCandidateAutoApply(existingDomainCandidate), {
+    autoApplyEligible: true,
+    applyMode: "existing_company_link",
+    reasonCodes: ["EXISTING_COMPANY_LINK_CANDIDATE"],
+  });
+
+  const existingAliasCandidate = inferGmailCompanyCandidate({
+    fromName: "Alias Labs recruiting",
+    fromEmail: "sender@gmail.com",
+    knownCompanies: [{ name: "Known Alias Company", aliases: ["Alias Labs"] }],
+  });
+  assert.deepEqual(decideGmailCompanyCandidateAutoApply(existingAliasCandidate), {
+    autoApplyEligible: true,
+    applyMode: "existing_company_link",
+    reasonCodes: ["EXISTING_COMPANY_LINK_CANDIDATE"],
+  });
+
+  const bodyLabelCandidate = inferGmailCompanyCandidate({
+    bodyLabelCompany: "New Body Label Systems Inc.",
+    fromEmail: "sender@relay.example.invalid",
+  });
+  const bodyLabelDecision = decideGmailCompanyCandidateAutoApply(bodyLabelCandidate);
+  assert.equal(bodyLabelDecision.autoApplyEligible, false, "body label candidates must not create new Companies automatically");
+  assert.equal(bodyLabelDecision.applyMode, "advisory_only");
+  assert.ok(bodyLabelDecision.reasonCodes.includes("NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY"));
+
+  const fallbackCases = [
+    inferGmailCompanyCandidate({ fromName: "Taro Yamada / FromName Systems Inc.", fromEmail: "taro@gmail.com" }),
+    inferGmailCompanyCandidate({
+      fromEmail: "sales@relay.example.invalid",
+      bodyText: "Regards,\nSignature Systems LLC\nSales Team\n",
+    }),
+    inferGmailCompanyCandidate({ fromName: "Taro Yamada", fromEmail: "taro@gmail.com" }),
+    inferGmailCompanyCandidate({ fromEmail: "sender@unmatched-systems.example.invalid" }),
+  ];
+
+  for (const fallbackCandidate of fallbackCases) {
+    const decision = decideGmailCompanyCandidateAutoApply(fallbackCandidate);
+    assert.equal(decision.autoApplyEligible, false, `${fallbackCandidate.source} must not be auto-apply eligible`);
+    assert.equal(decision.applyMode, "advisory_only");
+  }
+
+  const fromNameDecision = decideGmailCompanyCandidateAutoApply(fallbackCases[0]);
+  assert.ok(fromNameDecision.reasonCodes.includes("NON_HIGH_CONFIDENCE_ADVISORY_ONLY"));
+  assert.ok(fromNameDecision.reasonCodes.includes("NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY"));
+
+  const signatureDecision = decideGmailCompanyCandidateAutoApply(fallbackCases[1]);
+  assert.ok(signatureDecision.reasonCodes.includes("NON_HIGH_CONFIDENCE_ADVISORY_ONLY"));
+  assert.ok(signatureDecision.reasonCodes.includes("NON_EXISTING_COMPANY_SOURCE_ADVISORY_ONLY"));
+
+  const genericDecision = decideGmailCompanyCandidateAutoApply(fallbackCases[2]);
+  assert.ok(genericDecision.reasonCodes.includes("NO_COMPANY_CANDIDATE_NAME"));
+  assert.ok(genericDecision.reasonCodes.includes("GENERIC_DOMAIN_ADVISORY_ONLY"));
+  assert.ok(genericDecision.reasonCodes.includes("NON_HIGH_CONFIDENCE_ADVISORY_ONLY"));
+
+  const lowConfidenceDecision = decideGmailCompanyCandidateAutoApply(fallbackCases[3]);
+  assert.ok(lowConfidenceDecision.reasonCodes.includes("NON_HIGH_CONFIDENCE_ADVISORY_ONLY"));
+}
+
+{
   const auditSource = readProjectFile("scripts/gmail-extraction-quality-audit.ts");
   const evalSource = readProjectFile("scripts/gmail-extraction-quality-eval.ts");
   const reportSource = readProjectFile("scripts/gmail-extraction-quality-report.ts");
@@ -243,6 +307,8 @@ function mail(input: { subject: string; bodyText?: string | null; bodyHtml?: str
   assert(reportSource.includes("anonymizedCompanyCandidate(params.companyCandidate)"), "quality report rows must anonymize company candidates");
   assert(companyCandidateSource.includes('Omit<GmailCompanyCandidate, "candidateName">'), "quality report rows must omit raw company candidate names");
   assert(companyCandidateSource.includes("candidatePresent: Boolean(candidateValue.candidateName)"), "quality report rows may expose only company candidate presence");
+  assert(!/lib\/prisma|@prisma\/client|\bprisma\.|\bdb\.|\btx\.|\$transaction/.test(companyCandidateSource), "company candidate policy must stay DB-free");
+  assert(!/create_new_company|new_company|company\.create|company\.createMany/.test(companyCandidateSource), "company candidate policy must not grow new Company creation semantics");
 
   assert(!/gmail-company-candidate|GmailCompanyCandidate|inferGmailCompanyCandidate/.test(extractEntitiesSource), "entity apply helpers must not consume advisory company candidates");
   assert(!/companyCandidate|inferGmailCompanyCandidate/.test(dashboardDataSource), "dashboard data API must not inline advisory company candidates by default");
