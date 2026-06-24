@@ -1,7 +1,7 @@
 # Approval Waiting Packet (2026-06-24)
 
-This packet lists the remaining owner-gated work after the #137 root docs
-navigation merge.
+This packet lists the remaining owner-gated work after the #139 docs-only
+status/navigation cleanup merge.
 
 It is intentionally not an execution script. Use it to decide what can be
 approved next.
@@ -10,9 +10,10 @@ approved next.
 
 - Open PRs: none at the time of this packet refresh.
 - Open issues: none at the time of this packet refresh.
-- Snapshot source commit: `e6d1d6b9033833d8faab277cc7deb5110e270573`
-  (`Add root docs navigation README (#137)`).
-- Main Vercel status for #137: success.
+- Snapshot source commit: `ce0c29459ff72fbf99fff1e3f591686b5bee39e7`
+  (`Mark root README draft plan superseded (#139)`).
+- Main Vercel status for #139: success.
+- Recent docs-only sync PRs: #138 and #139 are closed/merged.
 
 ## Approval Items
 
