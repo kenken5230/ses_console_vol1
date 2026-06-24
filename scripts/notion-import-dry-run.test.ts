@@ -32,6 +32,22 @@ assert.throws(
 );
 
 assert.throws(
+  () => parseNotionImportDryRunArgs([
+    "node",
+    "notion-import",
+    "--file=synthetic.csv",
+    "--type=project",
+    "--confirm=APPLY_NOTION_IMPORT",
+  ]),
+  /rejects --confirm/,
+);
+
+assert.throws(
+  () => parseNotionImportDryRunArgs(["node", "notion-import", "--file=synthetic.csv", "--type=project", "--write"]),
+  /rejects --write/,
+);
+
+assert.throws(
   () => parseNotionImportDryRunArgs(["node", "notion-import", "--file=synthetic.csv", "--type=project", "--limit=0"]),
   /--limit must be an integer from 1 to 1000/,
 );
@@ -154,6 +170,21 @@ assert.equal(applyJson.summary.readOnly, true);
 assert.equal(applyJson.summary.dbAccess, false);
 assert.match(applyJson.error.message, /rejects --apply/);
 
+const confirmRejection = spawnSync(process.execPath, [
+  tsxCli,
+  "scripts/notion-import-dry-run.ts",
+  "--file=tests/fixtures/notion-import/synthetic-projects.csv",
+  "--type=project",
+  "--confirm=APPLY_NOTION_IMPORT",
+], { encoding: "utf8" });
+assert.notEqual(confirmRejection.status, 0);
+const confirmJson = JSON.parse(confirmRejection.stdout);
+assert.equal(confirmJson.summary.readOnly, true);
+assert.equal(confirmJson.summary.dbAccess, false);
+assert.match(confirmJson.error.message, /rejects --confirm/);
+assertNoSensitiveNotionOutput(confirmRejection.stdout);
+assert.equal(confirmRejection.stdout.includes("APPLY_NOTION_IMPORT"), false);
+
 const localPathHeader = "C:" + "\\Users\\Owner\\secret.csv";
 const longRawValue = "LONG_RAW_SENTINEL_".repeat(20);
 const sensitiveCsv = [
@@ -172,6 +203,34 @@ assert.equal(sensitiveOutput.includes("example.invalid"), false);
 assert.equal(sensitiveOutput.includes(localPathHeader), false);
 assert.equal(sensitiveOutput.includes(longRawValue), false);
 assert.equal(sensitiveOutput.includes("Synthetic Secret"), false);
+
+const sensitiveBodyCsv = [
+  "title,workDescription,skills,mailBody,connectionString,apiSecret",
+  "Synthetic Body Secret,Build hidden body,TypeScript,\"Body with sample@example.test and sk_live_1234567890abcdef\",postgres://user:pass@example.invalid/db,SECRET=fake-secret-value",
+].join("\n");
+const sensitiveBodyOutput = JSON.stringify(buildNotionImportDryRunReport({
+  csvText: sensitiveBodyCsv,
+  type: "project",
+  fileIdentity: "synthetic-sensitive-body.csv",
+}));
+assertNoSensitiveNotionOutput(sensitiveBodyOutput);
+assert.equal(sensitiveBodyOutput.includes("Synthetic Body Secret"), false);
+assert.equal(sensitiveBodyOutput.includes("Build hidden body"), false);
+assert.equal(sensitiveBodyOutput.includes("Body with"), false);
+assert.equal(sensitiveBodyOutput.includes("sample@example.test"), false);
+assert.equal(sensitiveBodyOutput.includes("sk_live_1234567890abcdef"), false);
+assert.equal(sensitiveBodyOutput.includes("postgres://"), false);
+assert.equal(sensitiveBodyOutput.includes("fake-secret-value"), false);
+
+assert.throws(
+  () => assertNoSensitiveNotionOutput(JSON.stringify({ token: "sk_live_1234567890abcdef" })),
+  /Sensitive Notion dry-run output/,
+);
+
+assert.throws(
+  () => assertNoSensitiveNotionOutput(JSON.stringify({ secret: "SECRET=fake-secret-value" })),
+  /Sensitive Notion dry-run output/,
+);
 
 const scriptSource = readFileSync("scripts/notion-import-dry-run.ts", "utf8");
 assert.doesNotMatch(scriptSource, /\bprisma\.(?:project|person|importSource|importRun|sourceRecord|entitySourceLink)?\s*\.\s*(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/i);
