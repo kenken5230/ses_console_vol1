@@ -6,5 +6,6 @@
 
 | File | Purpose |
 |---|---|
+| `auth-login-readiness-runbook-2026-06-26.md` | Secret-safe login/readiness diagnostic for shared login failure, password reset, and SMTP checks |
 | `chat-progress-coordination-v0.1.md` | 複数チャットで作業する際の進捗確認、衝突回避、引き継ぎルール |
 | `codex-windows-sandbox-preflight-v0.1.md` | Windows / PowerShell / npm / Prisma / proxy / workspace permission の作業前確認 |
