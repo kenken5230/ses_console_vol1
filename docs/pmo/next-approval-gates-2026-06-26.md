@@ -1,6 +1,6 @@
 # Next Approval Gates (2026-06-26)
 
-Observed at: 2026-06-26 16:55 JST.
+Observed at: 2026-06-26 17:55 JST.
 
 This packet turns the current remaining gates into clear approval choices. It
 does not execute any DB write, migration, schema change, production env/config
@@ -8,16 +8,16 @@ change, cleanup, deletion, or branch operation.
 
 ## Current Baseline
 
-- Latest observed `origin/main`: `0ec3778bf3be9bb1145bb70d10eeea4c23733b27`
-  (`Merge pull request #148 from kenken5230/codex/login-recovery-20260626`).
-- Open PRs: #149 is Draft/open, mergeable, clean, and Vercel success; it changes only `package.json` to wire the existing DB-free SearchHistory UI context test. #147 is this packet refresh.
+- Latest observed `origin/main`: `17c632b22bc438140fbf012c7305602f077baebf`
+  (`Merge pull request #150 from kenken5230/codex/next-approval-gates-refresh-20260626`).
+- Open PRs: #147 is the only open PR observed; it is an old Draft PR, conflicting, and superseded by #150.
 - Open issues: none observed before this branch.
-- Vercel for #148 merge commit: production deploy success.
+- Vercel for #150 merge commit: production deploy success.
 - DB-free tests are green as recorded in
   `docs/status/dbfree-verification-refresh-2026-06-26.md`.
 - Worktree cleanup permission evidence is recorded in
   `docs/pmo/worktree-cleanup-permission-report-2026-06-26.md`.
-- Auth/login readiness diagnostics are merged in #148. Production login/password reset still needs a production env/config recovery decision; this packet does not prove or modify production secrets.
+- Auth/login readiness diagnostics are merged in #148. #149 wired the DB-free SearchHistory UI context test into package scripts. Production login/password reset still needs a production env/config recovery decision; this packet does not prove or modify production secrets.
 
 ## Approval Choice 0: Production Login / Password Reset Env Recovery
 
@@ -76,30 +76,23 @@ Recommended outcome:
 - Run only after Approval Choice 0 makes normal login available.
 - If unavailable, keep this gate waiting and continue other local/test work.
 
-## Approval Choice A2: #149 SearchHistory UI Context Test Wiring
+## Completed Choice: #149 SearchHistory UI Context Test Wiring
 
-**Goal:** Decide whether the DB-free SearchHistory UI context test should be
-wired into the package scripts and aggregate `npm test`.
+**Goal:** Keep the DB-free SearchHistory UI context test wired into the package
+scripts and aggregate `npm test`.
 
 Current evidence:
 
-- #149 is Draft/open, mergeable, clean, and Vercel success.
+- #149 is merged at `256a443`.
 - Changed files: `package.json` only.
 - No deletion diff, schema, migration, env, lockfile, DB, or dependency impact.
 - It preserves #148 `test:auth-login-readiness` and adds
   `test:search-history-ui-context`.
 
-Allowed only if approved:
+Remaining action:
 
-- Ready/merge #149 through the normal PR state-change gate.
-- Treat merge as a production deploy trigger even though runtime code is not
-  changed.
-
-Recommended outcome:
-
-- Low-risk approval if keeping DB-free tests wired is useful now.
-- If #149 merges, refresh this packet again so SearchHistory wording says the
-  UI context test is wired.
+- None for #149. Future SearchHistory local/test DB smoke remains a separate
+  optional gate below.
 
 ## Approval Choice B: Person Owner Link Local/Test DB-Connected Preflight
 
@@ -244,7 +237,7 @@ Recommended outcome:
 ## Recommended Order
 
 1. Production login/password reset env recovery.
-2. #149 SearchHistory UI context test wiring, if test-suite coverage is a near-term priority.
+2. Optional #147 close decision, because #150 superseded it.
 3. Person owner link local/test read-only preflight.
 4. Gmail company apply implementation-only approval, if product progress is the
    priority.
