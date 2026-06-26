@@ -18,6 +18,8 @@ change, cleanup, deletion, or branch operation.
 - Worktree cleanup permission evidence is recorded in
   `docs/pmo/worktree-cleanup-permission-report-2026-06-26.md`.
 - Auth/login readiness diagnostics are merged in #148. #149 wired the DB-free SearchHistory UI context test into package scripts. Production login/password reset still needs a production env/config recovery decision; this packet does not prove or modify production secrets.
+- The secret-safe owner runbook for production login recovery is
+  `docs/pmo/vercel-production-login-recovery-runbook-2026-06-26.md`.
 
 ## Approval Choice 0: Production Login / Password Reset Env Recovery
 
@@ -57,6 +59,8 @@ Recommended outcome:
   the blocker.
 - Prefer the Vercel owner entering values directly in the dashboard and sharing
   only redacted status evidence.
+- Use `docs/pmo/vercel-production-login-recovery-runbook-2026-06-26.md` for
+  the exact evidence template and stop conditions.
 
 ## Approval Choice A: Production Read-Only QA
 
