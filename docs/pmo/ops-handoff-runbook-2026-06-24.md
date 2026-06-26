@@ -163,10 +163,25 @@ Never include secret values in rollback notes. If a secret value must be restore
 
 ## Operator Notes for Next AI
 
-1. Keep this PR draft until the user explicitly requests Ready for review.
-2. Do not merge, close, deploy, delete worktrees, run DB writes, run migrations, or connect to shared/staging/production services from this PR.
-3. Stage only `docs/pmo/ops-handoff-runbook-2026-06-24.md`; do not use `git add .`.
-4. If asked to verify dashboard settings, report only names, locations, statuses, and existence. Never report secret values.
+1. Start from latest `origin/main` in a clean worktree; do not use the dirty original active workspace as a base.
+2. Do not deploy manually, close unrelated PRs, delete worktrees, delete branches, run DB writes, run migrations, or connect to shared/staging/production services without a separate gate.
+3. If asked to verify dashboard settings, report only names, locations, statuses, and existence. Never report secret values.
+4. For production read-only QA, the user must log in with an authorized VIEWER-role account. AI must not use auth bypass, cookie injection, token injection, screenshots containing sensitive data, or network dumps/cookie values as artifacts.
+5. For worktree cleanup, keep stale metadata prune, registered worktree removal, OneDrive/reparse-point cleanup, and branch deletion as separate gates.
+6. For local/test DB work, collect target classification, exact rows/tables/routes, rollback/cleanup, stop conditions, and separate executor/auditor roles before any write.
+
+## 2026-06-26 Operational Update
+
+- Batch A stale worktree metadata prune was approved and attempted after a
+  dry-run confirmed only `gitdir file does not exist` entries. The plain prune
+  failed with `Permission denied` for every stale metadata path. No raw
+  deletion, force, worktree remove, or branch deletion was performed.
+- Person owner link static contract testing passed through both
+  `npm.cmd run test:person-owner-link-api` and
+  `npx.cmd tsx scripts/person-owner-link-api.test.ts` after
+  `npm.cmd ci --ignore-scripts`.
+- Gmail company apply implementation and DB write remain on HOLD; only design
+  convergence documentation was approved.
 
 ## Related Local Docs
 

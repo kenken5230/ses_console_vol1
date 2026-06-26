@@ -123,3 +123,20 @@ cleanup action because it targets stale Git metadata that already has missing
 
 Keep registered worktree removal and OneDrive/reparse-point filesystem cleanup
 as separate future gates.
+
+## 2026-06-26 Batch A Attempt Result
+
+Batch A was later approved by the seven-role approval result and attempted.
+
+Fresh `git worktree prune --dry-run --verbose` again showed only stale metadata
+entries with `gitdir file does not exist`; no live worktree entries were mixed
+in.
+
+Plain `git worktree prune --verbose` then failed with `Permission denied` for
+every stale metadata directory under `.git/worktrees/...`.
+
+No `git worktree remove`, `--force`, raw filesystem deletion, branch deletion,
+reset, clean, stash, or DB operation was performed.
+
+Next cleanup work should be a new permission-focused plan. Do not retry by
+switching to raw deletion or force flags from this packet.
