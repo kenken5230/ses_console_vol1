@@ -99,3 +99,21 @@ Stop and return to owner/PM if any future PR tries to:
 This packet is READY as a policy baseline for the next implementation package.
 The implementation itself remains a separate task and must still pass the DB
 write gate before any local/test apply smoke.
+
+## 2026-06-26 Design Convergence Note
+
+The seven-role approval result accepted this document as the design convergence
+baseline, but explicitly kept apply implementation and DB write on HOLD.
+
+Implementation must not start from this packet alone. A later approval must
+name the implementation target and confirm:
+
+- existing-company link only;
+- `HIGH` confidence only;
+- allowed evidence limited to known main email domain or known alias;
+- no writes for generic, `LOW`, signature, `from_name`, body-label-only,
+  unresolved, or ambiguous candidates;
+- no new `Company`, `CompanyAlias`, or contact creation;
+- dashboard list/detail API unchanged unless separately approved;
+- preview/apply split preserved;
+- local/test DB write smoke as a separate gate.

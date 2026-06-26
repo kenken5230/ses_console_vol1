@@ -17,6 +17,24 @@ The 2026-06-23 preflight attempt stopped safely because:
   identified;
 - no DB connection, fixture query, or write was performed.
 
+## 2026-06-26 Static Contract Check
+
+The seven-role approval result allowed the static contract test and npm wiring
+verification, but not the real DB write smoke.
+
+Observed result:
+
+- `test:person-owner-link-api` is already wired in `package.json`.
+- `npm.cmd ci --ignore-scripts` passed in the clean worktree.
+- `npm.cmd run test:person-owner-link-api` passed.
+- `npx.cmd tsx scripts/person-owner-link-api.test.ts` passed.
+
+No DB connection, fixture query, HTTP write smoke, migration, guarded PATCH,
+auth bypass, or secret output was performed.
+
+The next DB-connected preflight still requires local/test target
+classification and an approved synthetic/disposable fixture set.
+
 ## Goal Of The Next Attempt
 
 Run **only** a read-only preflight for one synthetic or disposable fixture set,
