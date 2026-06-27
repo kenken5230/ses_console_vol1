@@ -1,5 +1,7 @@
 # SearchHistory Current Status 2026-06-23
 
+DB-free follow-up checklist: `docs/status/dbfree-followup-runbooks-2026-06-27.md`.
+
 ## Summary
 
 SearchHistory is already DB-backed on current `origin/main`.

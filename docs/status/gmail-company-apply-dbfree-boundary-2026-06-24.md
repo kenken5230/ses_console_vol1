@@ -1,5 +1,7 @@
 # Gmail Company Apply DB-free Boundary - 2026-06-24
 
+DB-free follow-up checklist: `docs/status/dbfree-followup-runbooks-2026-06-27.md`.
+
 ## Scope
 
 This change keeps Gmail company candidate apply policy DB-free. It does not add an apply endpoint, persistence path, migration, Prisma write, Gmail API call, package change, or environment/config change.

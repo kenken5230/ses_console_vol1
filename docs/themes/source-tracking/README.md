@@ -1,5 +1,7 @@
 # Source Tracking Theme
 
+DB-free follow-up checklist: `docs/status/dbfree-followup-runbooks-2026-06-27.md`.
+
 This folder keeps design notes for importing SES sales data from multiple source systems into the normalized console database.
 
 The theme covers:
