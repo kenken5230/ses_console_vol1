@@ -30,7 +30,8 @@
 
 ### 次回継続
 
-- LLLタスク: T-20260627-003 最新mainの実アプリ入口確認。
+- DONE: T-20260627-003 最新mainの実アプリ入口特定。`docs/status/app-entrypoint-baseline-2026-06-27.md` を参照。
+- BLOCKED: T-20260627-007 実ブラウザ入口確認。本番ログイン復旧またはlocal/testログイン準備後に実施。
 - READY: T-20260627-005 standing authorization token 運用方針案。
 - READY: T-20260627-006 PowerShell 実行ポリシー標準化案。
 - H1-H4: 人間確認待ち。
