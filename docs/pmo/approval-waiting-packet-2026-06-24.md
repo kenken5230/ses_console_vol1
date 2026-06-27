@@ -19,6 +19,7 @@ approved next.
 - Worktree cleanup read-only permission report on 2026-06-26 found 22 stale metadata directories, all with `ReadOnly, Directory, Archive, ReparsePoint`.
 - `docs/pmo/next-approval-gates-2026-06-26.md` consolidates the remaining owner choices and recommended order.
 - `docs/pmo/vercel-production-login-recovery-runbook-2026-06-26.md` provides a secret-safe owner runbook for restoring production login/password reset.
+- `docs/pmo/production-log-observation-2026-06-27.md` records a read-only observation of repeated production `POST /api/admin/gmail/sync-run` 500 logs.
 - Production password reset/login remains blocked until production env/config is confirmed and, if needed, fixed. Vercel production env/config changes and redeploy are owner-gated production operations.
 
 ## Approval Items
@@ -33,6 +34,7 @@ approved next.
 | 6 | SearchHistory additional DB smoke / user isolation | DB-backed flow is merged and local normal-login QA passed. #135 added an optional local/test DB smoke packet. `test:search-history` passed on 2026-06-26; #149 wired the existing UI-context test into `npm test`. | Local/test-only smoke with exact users, rows, cleanup, and audit separation. | Lower priority unless SearchHistory behavior becomes suspect. |
 | 7 | Worktree stale metadata cleanup | Batch A was approved and attempted on 2026-06-26 after dry-run confirmed stale metadata only. Plain `git worktree prune --verbose` failed with `Permission denied` on every stale metadata entry. A read-only report found the 22 stale metadata directories all have `ReadOnly, Directory, Archive, ReparsePoint`. | A future approval could target only these 22 metadata directories, with fresh dry-run confirmation, backup, attribute/reparse-point handling, and Git prune retry. Actual raw deletion, registered worktree removal, and branch deletion remain separate future approvals. | Do not retry with raw deletion or force. Use `docs/pmo/worktree-cleanup-permission-report-2026-06-26.md` as the next approval basis. |
 | 8 | CSV apply | HOLD/BLOCKED for real schema/migration/apply. The repository now contains source tracking schema/migration/tests, and DB-free CSV/source tracking tests passed on 2026-06-26, but a specific local/test DB target has not been proven to have the schema applied. | Read-only source tracking and CSV dry-run validation only. Real schema/migration/apply remains blocked until target DB and schema landing plan are approved. | Use `docs/pmo/csv-source-tracking-integration-decision-2026-06-26.md`; do not run apply or schema/migration changes yet. |
+| 9 | Production Gmail sync-run 500 logs | Read-only Vercel logs on 2026-06-27 showed repeated `POST /api/admin/gmail/sync-run` 500 entries at roughly 15-minute intervals. | DB-free code triage and secret-safe diagnostics only. | Do not invoke production sync or inspect secrets; queue as separate production operations investigation. |
 
 ## Non-Approvals That Remain Forbidden
 
