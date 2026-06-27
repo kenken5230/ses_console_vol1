@@ -470,7 +470,8 @@ if (require.main === module) {
       console.log(JSON.stringify(report, null, 2));
     })
     .catch((error) => {
-      console.error(error instanceof Error ? error.message : String(error));
+      const errorName = error instanceof Error ? error.name : "UnknownError";
+      console.error(`source inventory failed safely: ${errorName}; diagnostic stopped before completion. Check runtime logs in an approved secret-safe environment.`);
       process.exitCode = 1;
     });
 }

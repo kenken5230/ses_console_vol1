@@ -354,8 +354,8 @@ function evaluateFixture(caseName: SmokeCase, rows: FixtureRows) {
 }
 
 function safeExitError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`Preflight stopped safely: ${message}`);
+  const errorName = error instanceof Error ? error.name : "UnknownError";
+  console.error(`Preflight stopped safely: ${errorName}; diagnostic stopped before completion. Check runtime logs in an approved secret-safe environment.`);
   console.error("No DB write or HTTP smoke request was attempted.");
   process.exitCode = 1;
 }
