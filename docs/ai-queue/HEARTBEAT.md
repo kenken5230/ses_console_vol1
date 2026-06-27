@@ -31,6 +31,8 @@
 ### 次回継続
 
 - LLLタスク: T-20260627-003 最新mainの実アプリ入口確認。
+- READY: T-20260627-005 standing authorization token 運用方針案。
+- READY: T-20260627-006 PowerShell 実行ポリシー標準化案。
 - H1-H4: 人間確認待ち。
 - B1/B2/T4: H1/H2/H3完了待ち。
 

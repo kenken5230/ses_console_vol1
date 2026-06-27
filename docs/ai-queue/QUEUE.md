@@ -64,3 +64,31 @@
 - 承認要否: H1完了まで提案も保留。
 - 承認参照: A-20260627-001
 - 更新時刻: 2026-06-27T19:25:00+09:00
+
+### T-20260627-005 standing authorization token 運用方針案
+
+- 状態: READY
+- 種別: docs
+- リスク区分: low
+- 起票者: user
+- 起票時刻: 2026-06-27T20:00:00+09:00
+- 詳細: H3の実行準備として、standing authorization token の生成方法、桁数/エントロピー、repo平文保存禁止、1トークン=1タスク=1HEAD、使用後token-consumed、検証手順をdocsにドラフトする。
+- 検証: docsのみ、secret値なし、token生成なし、保管なし、削除差分なし。
+- rollback: Draft PR/commitをrevertする。
+- 承認要否: 実際のtoken発行・保管はNEEDS_HUMAN。docs提案のみTier 1。
+- 承認参照: A-20260627-003
+- 更新時刻: 2026-06-27T20:00:00+09:00
+
+### T-20260627-006 PowerShell 実行ポリシー標準化案
+
+- 状態: READY
+- 種別: docs
+- リスク区分: low
+- 起票者: user
+- 起票時刻: 2026-06-27T20:00:00+09:00
+- 詳細: H4の実行準備として、署名運用または `powershell -ExecutionPolicy Bypass -File` 標準化の手順案をdocsにドラフトする。
+- 検証: docsのみ、マシン設定変更なし、削除差分なし。
+- rollback: Draft PR/commitをrevertする。
+- 承認要否: マシンの実行ポリシー変更はNEEDS_HUMAN。docs提案のみTier 1。
+- 承認参照: A-20260627-004
+- 更新時刻: 2026-06-27T20:00:00+09:00
