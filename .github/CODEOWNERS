@@ -1,0 +1,11 @@
+# H2 enforcement owners.
+# GitHub branch protection must enable "Require review from Code Owners"
+# for these rules to become server-side enforcement.
+
+/scripts/ @kenken5230
+/.github/ @kenken5230
+/docs/ai-queue/DECISIONS.md @kenken5230
+/AI_WORK_RULES.md @kenken5230
+/AI_WORK_RULES_SHORT.md @kenken5230
+/AGENTS.md @kenken5230
+/AI_PROJECT_PROFILE.md @kenken5230

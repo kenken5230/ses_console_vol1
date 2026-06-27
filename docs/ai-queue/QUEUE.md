@@ -160,3 +160,16 @@
 - 承認要否: `scripts/` を触る場合はH2完了後の例外承認または別ゲートが必要。
 - ブロック理由: #159以降、`scripts/` は読み取り検証のみ。旧 #157 はこのルールに合わないためclosed済み。
 - 更新時刻: 2026-06-27T23:55:00+09:00
+
+### T-20260627-013 H2 CODEOWNERS draft
+
+- 状態: DONE
+- 種別: repo-policy
+- リスク区分: low
+- 起票者: Codex
+- 起票時刻: 2026-06-28T00:20:00+09:00
+- 詳細: H2保護対象の `scripts/`、`.github/`、`docs/ai-queue/DECISIONS.md`、主要AIルールファイルを `@kenken5230` ownerにする `.github/CODEOWNERS` をDraft PRで提案する。
+- 検証: CODEOWNERS構文の対象パス確認、削除差分0、secret値なし。GitHub branch protectionでCode Owners reviewを必須化するまで強制力はない。
+- rollback: このDraft PR/commitを破棄またはrevertする。
+- 承認要否: CODEOWNERS review必須化はNEEDS_HUMAN。Draft PR作成のみTier 1。
+- 更新時刻: 2026-06-28T00:20:00+09:00

@@ -88,3 +88,16 @@
 - migration/schema変更なし。
 - worktree削除/branch削除なし。
 - 主workspaceのdirty差分操作なし。
+
+## 2026-06-28T00:20:00+09:00 H2 CODEOWNERS draft
+
+### 完了
+
+- T-20260627-013 を起票。
+- `.github/CODEOWNERS` をDraft PR材料として追加。
+- `scripts/`、`.github/`、`docs/ai-queue/DECISIONS.md`、主要AIルールファイルを `@kenken5230` ownerに指定。
+- GitHub branch protectionやrepository settingsは変更していない。
+
+### 次回継続
+
+- 人間がGitHub branch protectionでCode Owners review必須を有効化するまでは強制力なし。
