@@ -88,3 +88,17 @@
 - migration/schema変更なし。
 - worktree削除/branch削除なし。
 - 主workspaceのdirty差分操作なし。
+
+## 2026-06-28T00:15:00+09:00 H2 CI gate draft
+
+### 完了
+
+- T-20260627-012 を起票。
+- `.github/workflows/ai-safety-gate.yml` をDraft PR材料として追加。
+- check名を `ai-safety-gate` / `typecheck` / `test` / `build` に固定。
+- branch protectionやrepository settingsは変更していない。
+
+### 次回継続
+
+- 人間がGitHub branch protectionで必須checkに設定するまでは強制力なし。
+- このPRは `.github/workflows` 追加を含むため、local safety-gateはdeploy-chain hintでBLOCK想定。

@@ -160,3 +160,16 @@
 - 承認要否: `scripts/` を触る場合はH2完了後の例外承認または別ゲートが必要。
 - ブロック理由: #159以降、`scripts/` は読み取り検証のみ。旧 #157 はこのルールに合わないためclosed済み。
 - 更新時刻: 2026-06-27T23:55:00+09:00
+
+### T-20260627-012 H2 CI gate workflow draft
+
+- 状態: DONE
+- 種別: ci
+- リスク区分: mid
+- 起票者: Codex
+- 起票時刻: 2026-06-28T00:15:00+09:00
+- 詳細: H2をGitHub側で強制する材料として、pull_request(base=main)で `ai-safety-gate` / `typecheck` / `test` / `build` の安定check名を持つ `.github/workflows/ai-safety-gate.yml` をDraft PRで提案する。
+- 検証: workflow構文、削除差分0、secret値なし、`scripts/safety-gate.ps1` 未変更。`.github/workflows` 追加はdeploy-chain hintのため、local safety-gateはBLOCK想定。
+- rollback: このDraft PR/commitを破棄またはrevertする。
+- 承認要否: merge/branch protection必須化はNEEDS_HUMAN。Draft PR作成のみTier 1。
+- 更新時刻: 2026-06-28T00:15:00+09:00
