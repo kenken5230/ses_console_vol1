@@ -143,6 +143,7 @@ export function sanitizeOperationalError(error: unknown): { message: string; sta
     }
 
     return next
+      .replace(/\b(?:postgres(?:ql)?|mysql|sqlserver):\/\/[^\s"'`<>]+/gi, "[redacted-db-url]")
       .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
       .replace(/(client_secret|refresh_token|access_token|reset_token|resetToken|password)=([^&\s]+)/gi, "$1=[redacted]")
       .replace(/ya29\.[A-Za-z0-9._-]+/g, "ya29.[redacted]")
