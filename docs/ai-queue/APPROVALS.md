@@ -44,11 +44,10 @@
 
 ## A-20260627-005 rule foundation PR の Ready / merge
 
-- 状態: WAITING_APPROVAL
+- 状態: DONE
 - 対応タスク: T-20260627-001 / T-20260627-002
-- 要約: ルール基盤PRを main へ反映するか。
-- 理由: main merge は Vercel production deploy 直結として扱う。H2/H3完了まで auto merge / Ready化 / 本番deploy自動は無効。
-- AI推奨: safety-gate PASS、削除差分なし、Vercel green、内部監査OK、rollback事前確認を満たした後に、人間承認またはH2/H3完了後の委任ルールで進める。
-- 注意: safety-gateはPASSだが624行追加のためLARGE CHANGEフラグあり。mergeする場合は事前にrevert/rollback方針を再確認し、merge後に通知とLARGE記録が必要。
-- 禁止: この段階でCodex単独のReady化 / merge / 本番deployはしない。
-- 更新時刻: 2026-06-27T19:25:00+09:00
+- 要約: ルール基盤PR #159 は main へ反映済み。
+- 理由: safety-gate PASS、削除差分なし、Vercel green、rollback事前確認、内部監査OKを満たしたため。LARGE CHANGE記録は `DECISIONS.md` を書き換えずPRコメントに残した。
+- 結果: #159 merged。main merge commit `24dc7160834ee0360709214f1e8ba52e92ae5384`。
+- 注意: H2/H3は未完了のため、委任オートマージ / 本番deploy自動は引き続き無効。
+- 更新時刻: 2026-06-27T23:55:00+09:00
