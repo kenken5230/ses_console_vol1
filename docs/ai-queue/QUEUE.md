@@ -169,7 +169,7 @@
 - 起票者: Codex
 - 起票時刻: 2026-06-28T00:15:00+09:00
 - 詳細: H2をGitHub側で強制する材料として、pull_request(base=main)で `ai-safety-gate` / `typecheck` / `test` / `build` の安定check名を持つ `.github/workflows/ai-safety-gate.yml` をDraft PRで提案する。
-- 検証: workflow構文、削除差分0、secret値なし、`scripts/safety-gate.ps1` 未変更。`.github/workflows` 追加はdeploy-chain hintのため、local safety-gateはBLOCK想定。
+- 検証: workflow構文、削除差分0、secret値なし、`scripts/safety-gate.ps1` 未変更。`.github/workflows` 追加はdeploy-chain hintのため、local safety-gateはBLOCK想定。承認参照: A-20260627-006。
 - rollback: このDraft PR/commitを破棄またはrevertする。
 - 承認要否: merge/branch protection必須化はNEEDS_HUMAN。Draft PR作成のみTier 1。
 - 更新時刻: 2026-06-28T00:15:00+09:00

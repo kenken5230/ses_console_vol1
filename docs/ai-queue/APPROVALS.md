@@ -51,3 +51,13 @@
 - 結果: #159 merged。main merge commit `24dc7160834ee0360709214f1e8ba52e92ae5384`。
 - 注意: H2/H3は未完了のため、委任オートマージ / 本番deploy自動は引き続き無効。
 - 更新時刻: 2026-06-27T23:55:00+09:00
+
+## A-20260627-006 H2 CI gate workflow deploy-chain human gate
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: T-20260627-012
+- 要約: `.github/workflows/ai-safety-gate.yml` をmainへ入れるか。
+- 理由: workflow追加はdeploy/CI-chain変更であり、`scripts/safety-gate.ps1` がdeploy-chain configとしてBLOCKしたため。
+- AI推奨: Draft PR #166 を人間がreviewし、`ai-safety-gate` がworkflow追加をBLOCKしていること、`typecheck` / `test` / `build` がgreenであること、branch protection有効化前の初回導入であることを確認してから判断する。
+- 禁止: Codex単独でReady化、merge、branch protection変更、repo settings変更、auto-merge有効化をしない。
+- 更新時刻: 2026-06-28T00:45:00+09:00

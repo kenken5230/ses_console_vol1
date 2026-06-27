@@ -97,8 +97,10 @@
 - `.github/workflows/ai-safety-gate.yml` をDraft PR材料として追加。
 - check名を `ai-safety-gate` / `typecheck` / `test` / `build` に固定。
 - branch protectionやrepository settingsは変更していない。
+- safety-gate BLOCKを受け、A-20260627-006 を起票。
 
 ### 次回継続
 
 - 人間がGitHub branch protectionで必須checkに設定するまでは強制力なし。
 - このPRは `.github/workflows` 追加を含むため、local safety-gateはdeploy-chain hintでBLOCK想定。
+- Draft PR #166 のReady化/mergeは人間判断。
