@@ -38,9 +38,9 @@
 - 対応タスク: H4
 - 要約: `powershell -ExecutionPolicy Bypass -File` を標準にするか、署名運用にするかを確定する。
 - 理由: 現状は `-ExecutionPolicy Bypass -File` が指定されているが、長期運用では人間が方針を確定した方がよい。
-- AI推奨: まずは `-ExecutionPolicy Bypass -File` を標準化し、後で署名運用を検討する。
+- AI推奨: `docs/pmo/powershell-execution-policy-standard-2026-06-27.md` の方針案に沿い、短期は `powershell -NoProfile -ExecutionPolicy Bypass -File` を標準化し、H2完了後に署名運用を検討する。
 - 禁止: Codex単独でマシン全体の実行ポリシーを変更しない。
-- 更新時刻: 2026-06-27T19:25:00+09:00
+- 更新時刻: 2026-06-27T22:50:00+09:00
 
 ## A-20260627-005 rule foundation PR の Ready / merge
 
