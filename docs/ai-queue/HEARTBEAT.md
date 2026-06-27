@@ -34,6 +34,7 @@
 - BLOCKED: T-20260627-007 実ブラウザ入口確認。本番ログイン復旧またはlocal/testログイン準備後に実施。
 - DONE: T-20260627-005 standing authorization token 運用方針案。`docs/pmo/standing-authorization-token-policy-2026-06-27.md` を参照。
 - DONE: T-20260627-006 PowerShell 実行ポリシー標準化案。`docs/pmo/powershell-execution-policy-standard-2026-06-27.md` を参照。
+- DONE: T-20260627-008 Gmail sync-run sanitizer refresh。`docs/status/gmail-sync-run-dbfree-diagnostics-2026-06-27.md` を参照。
 - H1-H4: 人間確認待ち。
 - B1/B2/T4: H1/H2/H3完了待ち。
 

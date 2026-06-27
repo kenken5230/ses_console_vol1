@@ -106,3 +106,16 @@
 - 承認要否: 本番環境ではread-only通常ログインのみ。local/testで行う場合はDB接続先分類とログインユーザー準備が必要。
 - ブロック理由: 本番ログイン復旧またはlocal/testログイン準備が先。
 - 更新時刻: 2026-06-27T22:10:00+09:00
+
+### T-20260627-008 Gmail sync-run sanitizer refresh
+
+- 状態: DONE
+- 種別: code+docs+test
+- リスク区分: low
+- 起票者: Codex
+- 起票時刻: 2026-06-27T23:20:00+09:00
+- 詳細: stale PR #156 の有用部分を最新mainへ救出し、`sanitizeOperationalError` にDB URL redactionを追加する。`scripts/` freezeに合わせ、追加テストは `tests/` 配下へ置く。production sync実行やGmail API呼び出しは行わない。
+- 検証: `npx.cmd tsx tests/gmail-sync-run-safety.test.ts`、`scripts/safety-gate.ps1`、削除差分0、rollback pre-check。
+- rollback: このPR/commitをrevertする。
+- 承認要否: 不要。DB-free、secret-free、production操作なし。
+- 更新時刻: 2026-06-27T23:20:00+09:00
