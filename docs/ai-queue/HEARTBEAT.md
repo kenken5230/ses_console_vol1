@@ -88,3 +88,16 @@
 - migration/schema変更なし。
 - worktree削除/branch削除なし。
 - 主workspaceのdirty差分操作なし。
+
+## 2026-06-28T00:35:00+09:00 H2 handoff checklist draft
+
+### 完了
+
+- T-20260627-016 を起票。
+- `docs/pmo/h2-handoff-2026-06-27.md` をDraft PR材料として追加。
+- Kenが一度だけやることを5項目に整理。
+
+### 次回継続
+
+- 実際のGitHub設定操作、token権限変更、auto-merge有効化は人間が行う。
+- H3完了までは委任オートマージON化なし。
