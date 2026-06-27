@@ -67,17 +67,17 @@
 
 ### T-20260627-005 standing authorization token 運用方針案
 
-- 状態: READY
+- 状態: DONE
 - 種別: docs
 - リスク区分: low
 - 起票者: user
 - 起票時刻: 2026-06-27T20:00:00+09:00
 - 詳細: H3の実行準備として、standing authorization token の生成方法、桁数/エントロピー、repo平文保存禁止、1トークン=1タスク=1HEAD、使用後token-consumed、検証手順をdocsにドラフトする。
-- 検証: docsのみ、secret値なし、token生成なし、保管なし、削除差分なし。
+- 検証: `docs/pmo/standing-authorization-token-policy-2026-06-27.md` を追加。docsのみ、secret値なし、token生成なし、保管なし、削除差分なし。
 - rollback: Draft PR/commitをrevertする。
 - 承認要否: 実際のtoken発行・保管はNEEDS_HUMAN。docs提案のみTier 1。
 - 承認参照: A-20260627-003
-- 更新時刻: 2026-06-27T20:00:00+09:00
+- 更新時刻: 2026-06-27T22:30:00+09:00
 
 ### T-20260627-006 PowerShell 実行ポリシー標準化案
 

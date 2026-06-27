@@ -28,9 +28,9 @@
 - 対応タスク: H3 / B1 / B2
 - 要約: 委任オートマージ用 standing authorization token の発行・保管方法を決める。
 - 理由: 秘密=4例外。repo平文保存は禁止。Codexは値を読まない、保存しない、出力しない。
-- AI推奨: OS資格情報/安全なsecret manager/ユーザー操作のいずれかで保管する。repoには識別子だけを書く。
+- AI推奨: `docs/pmo/standing-authorization-token-policy-2026-06-27.md` の方針案に沿い、OS資格情報/安全なsecret manager/ユーザー操作のいずれかで保管する。repoには識別子だけを書く。
 - 禁止: token値をAIに貼らない、repoに保存しない。
-- 更新時刻: 2026-06-27T19:25:00+09:00
+- 更新時刻: 2026-06-27T22:30:00+09:00
 
 ## A-20260627-004 PowerShell実行ポリシー標準化
 
