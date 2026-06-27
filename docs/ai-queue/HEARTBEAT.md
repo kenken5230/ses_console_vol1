@@ -88,3 +88,16 @@
 - migration/schema変更なし。
 - worktree削除/branch削除なし。
 - 主workspaceのdirty差分操作なし。
+
+## 2026-06-28T00:25:00+09:00 H2 enforcement runbook draft
+
+### 完了
+
+- T-20260627-014 を起票。
+- `docs/pmo/h2-enforcement-runbook.md` をDraft PR材料として追加。
+- GitHub branch protection、required checks、CODEOWNERS review、fine-grained token制限、optional auto-merge、LARGE handlingの手順を記録。
+
+### 次回継続
+
+- 実際のGitHub設定変更は人間が行う。
+- Codex tokenにadmin/settings/branch protection権限を与えない方針を維持する。
