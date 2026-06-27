@@ -81,17 +81,17 @@
 
 ### T-20260627-006 PowerShell 実行ポリシー標準化案
 
-- 状態: READY
+- 状態: DONE
 - 種別: docs
 - リスク区分: low
 - 起票者: user
 - 起票時刻: 2026-06-27T20:00:00+09:00
 - 詳細: H4の実行準備として、署名運用または `powershell -ExecutionPolicy Bypass -File` 標準化の手順案をdocsにドラフトする。
-- 検証: docsのみ、マシン設定変更なし、削除差分なし。
+- 検証: `docs/pmo/powershell-execution-policy-standard-2026-06-27.md` を追加。docsのみ、マシン設定変更なし、削除差分なし。
 - rollback: Draft PR/commitをrevertする。
 - 承認要否: マシンの実行ポリシー変更はNEEDS_HUMAN。docs提案のみTier 1。
 - 承認参照: A-20260627-004
-- 更新時刻: 2026-06-27T20:00:00+09:00
+- 更新時刻: 2026-06-27T22:50:00+09:00
 
 ### T-20260627-007 実ブラウザ入口確認
 
