@@ -2,6 +2,8 @@
 
 Date: 2026-06-20
 
+DB-free follow-up checklist: `docs/status/dbfree-followup-runbooks-2026-06-27.md`.
+
 ## Current State
 
 - #82 merged the Person owner link UI path into `origin/main` at `b0d4cc1e547a6f37f3e2571e71a2d4df3ab5c2ad`.
