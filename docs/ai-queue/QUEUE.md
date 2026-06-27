@@ -119,3 +119,44 @@
 - rollback: このPR/commitをrevertする。
 - 承認要否: 不要。DB-free、secret-free、production操作なし。
 - 更新時刻: 2026-06-27T23:20:00+09:00
+
+### T-20260627-009 post-#163 queue/status sync
+
+- 状態: DONE
+- 種別: docs
+- リスク区分: low
+- 起票者: Codex
+- 起票時刻: 2026-06-27T23:55:00+09:00
+- 詳細: #159〜#163 と stale PR close 後の状態を `PROGRESS.md`、`docs/ai-queue/`、`docs/status/` に同期する。古い #159 承認待ちを完了扱いへ更新し、残タスクを `WAITING_APPROVAL` / `BLOCKED` として整理する。
+- 検証: `docs/status/post163-current-state-2026-06-27.md` を追加し、`PROGRESS.md` を最新mainへ同期し、open PR/open issueが0であることを `gh pr list` / `gh issue list` で確認。
+- rollback: このPR/commitをrevertする。
+- 承認要否: 不要。docs-only、DB/schema/env/package/lockfile変更なし。
+- 更新時刻: 2026-06-27T23:55:00+09:00
+
+### T-20260627-010 script hardening follow-up
+
+- 状態: BLOCKED
+- 種別: test/chore
+- リスク区分: mid
+- 起票者: Codex
+- 起票時刻: 2026-06-27T23:55:00+09:00
+- 詳細: stale #154 相当の safe-output / diagnostic hardening を、現行の `scripts/` freeze ルールに抵触しない形へ再設計する。
+- 検証: 未定。再設計後にDB-free test、safety-gate、削除差分0を確認する。
+- rollback: 未着手。
+- 承認要否: `scripts/` を触る場合はH2完了後の例外承認または別ゲートが必要。
+- ブロック理由: #159以降、`scripts/` は読み取り検証のみ。旧 #154 はこのルールに合わないためclosed済み。
+- 更新時刻: 2026-06-27T23:55:00+09:00
+
+### T-20260627-011 Gmail admin env readiness follow-up
+
+- 状態: BLOCKED
+- 種別: docs/test/chore
+- リスク区分: mid
+- 起票者: Codex
+- 起票時刻: 2026-06-27T23:55:00+09:00
+- 詳細: stale #157 相当の Gmail admin env readiness helper を、secret値を出さず、`scripts/` freeze にも抵触しない形へ再設計する。
+- 検証: 未定。docs-only redesign または明示承認済みhelperとして再起票する。
+- rollback: 未着手。
+- 承認要否: `scripts/` を触る場合はH2完了後の例外承認または別ゲートが必要。
+- ブロック理由: #159以降、`scripts/` は読み取り検証のみ。旧 #157 はこのルールに合わないためclosed済み。
+- 更新時刻: 2026-06-27T23:55:00+09:00
