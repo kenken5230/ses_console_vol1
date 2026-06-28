@@ -68,11 +68,20 @@ function forceProjectReview(extraction: ProjectExtraction, mail: any): ProjectEx
 }
 
 function forcePersonReview(extraction: PersonExtraction, mail: any): PersonExtraction {
+  const missingFields = extraction.name || extraction.initials
+    ? extraction.missingFields
+    : Array.from(new Set([...extraction.missingFields, "要員名"]));
+
   return {
     ...extraction,
-    name: extraction.name || mail.subject || "Gmail imported person",
+    name: extraction.name,
     needsReview: true,
-    missingFields: Array.from(new Set([...extraction.missingFields, "manual_classification"])),
+    missingFields: Array.from(new Set([...missingFields, "manual_classification"])),
+    reviewReasons: Array.from(new Set([...extraction.reviewReasons, "PERSON_EXTRACTION_AMBIGUOUS"])),
+    raw: {
+      ...extraction.raw,
+      manualClassificationSubject: mail.subject,
+    },
   };
 }
 

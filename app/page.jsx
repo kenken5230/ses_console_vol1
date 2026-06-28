@@ -12,7 +12,6 @@ import PersonTable from "../components/PersonTable";
 import ProjectCreateDrawer from "../components/ProjectCreateDrawer";
 import ProjectDetailPane from "../components/ProjectDetailPane";
 import ProjectTable from "../components/ProjectTable";
-import SearchHistoryModal from "../components/SearchHistoryModal";
 import SearchToolbar from "../components/SearchToolbar";
 import UnclassifiedMailDetailPane from "../components/UnclassifiedMailDetailPane";
 import UnclassifiedMailTable from "../components/UnclassifiedMailTable";
@@ -619,6 +618,11 @@ export default function Home() {
       result = result.filter((mail) => collectMailText(mail).includes(normalized));
     }
 
+    if (filterValues.exclude.trim()) {
+      const excluded = filterValues.exclude.trim().toLowerCase();
+      result = result.filter((mail) => !collectMailText(mail).includes(excluded));
+    }
+
     if (checkedFilters.hasResult) result = result.filter((mail) => mail.hasResult);
     if (checkedFilters.hideTradeNg) result = result.filter((mail) => !mail.hasTradeNg);
 
@@ -630,7 +634,7 @@ export default function Home() {
     }
 
     return result;
-  }, [checkedFilters, search, selectedSort, unclassifiedMails]);
+  }, [checkedFilters, filterValues.exclude, search, selectedSort, unclassifiedMails]);
 
   const isProjectTab = activeTab === "案件";
   const isPersonTab = activeTab === "要員";
@@ -648,7 +652,6 @@ export default function Home() {
   const focusCount = isProjectTab
     ? projects.filter((project) => focusOptions.some((option) => matchesProjectFocus(project, option.id))).length
     : 0;
-  const proposalIds = [];
 
   useEffect(() => {
     setCurrentPage(1);
@@ -709,24 +712,13 @@ export default function Home() {
     });
   };
 
-  const handleAddProposal = (project) => {
-    if (!canEditEntities) {
-      setNotice("この操作を実行する権限がありません");
-      return;
-    }
-    console.log("project proposal draft", project?.id || project?.dbId || "");
-    setNotice(`「${project.title}」の提案開始を仮実行しました（DB登録なし）`);
-    setMenuProjectId(null);
-  };
-
   const handleCopyUrl = async (project) => {
-    console.log("project copy draft", project?.id || project?.dbId || "");
-    const projectUrl = `${window.location.origin}/projects/${project.id}`;
+    const projectText = [`案件ID: ${project.id}`, `案件名: ${project.title}`].join("\n");
     try {
-      await navigator.clipboard?.writeText(projectUrl);
-      setNotice(`案件URLをコピーしました: ${projectUrl}`);
+      await navigator.clipboard?.writeText(projectText);
+      setNotice("案件情報をコピーしました");
     } catch {
-      setNotice(`コピー対象URL: ${projectUrl}`);
+      setNotice(`コピー対象: ${project.id} / ${project.title}`);
     }
     setMenuProjectId(null);
   };
@@ -841,8 +833,16 @@ export default function Home() {
     }
   };
 
+  const applyFilters = () => {
+    setActiveModal(null);
+  };
+
   const applyKeyword = () => {
-    setSearch(keywordDraft.include);
+    const nextSearch = keywordDraft.include.trim();
+    const nextFilterValues = { ...filterValues, exclude: keywordDraft.exclude.trim() };
+    setSearch(nextSearch);
+    setFilterValues(nextFilterValues);
+    setCurrentPage(1);
     setActiveModal(null);
   };
 
@@ -899,13 +899,9 @@ export default function Home() {
           closeMenus();
           setActiveModal("filter");
         }}
-        onOpenHistory={() => {
-          closeMenus();
-          setActiveModal("history");
-        }}
         onOpenKeyword={() => {
           closeMenus();
-          setKeywordDraft({ include: search, exclude: "" });
+          setKeywordDraft({ include: search, exclude: filterValues.exclude || "" });
           setActiveModal("keyword");
         }}
         onQuickFilterChange={handleQuickFilterChange}
@@ -965,7 +961,6 @@ export default function Home() {
                 canEdit={canEditEntities}
                 compact={false}
                 menuProjectId={menuProjectId}
-                onAddProposal={handleAddProposal}
                 onCopyUrl={handleCopyUrl}
                 onDetailAction={handleDetailAction}
                 onMenuToggle={(id) => setMenuProjectId(menuProjectId === id ? null : id)}
@@ -974,7 +969,6 @@ export default function Home() {
                   setMenuProjectId(null);
                 }}
                 projects={displayProjects}
-                proposalIds={proposalIds}
                 selectedProjectId={selectedProject?.id}
               />
               {!displayProjects.length && !isLoadingDbData ? <div className="empty-state">表示できる案件データがありません</div> : null}
@@ -1010,7 +1004,6 @@ export default function Home() {
         {isProjectTab ? (
           <ProjectDetailPane
             canEdit={canEditEntities}
-            onAddProposal={handleAddProposal}
             onClose={() => setSelectedProject(null)}
             onCopyUrl={handleCopyUrl}
             onDetailAction={handleDetailAction}
@@ -1039,7 +1032,7 @@ export default function Home() {
 
       {activeModal === "filter" ? (
         <FilterModal
-          onApply={() => setActiveModal(null)}
+          onApply={applyFilters}
           onChange={handleFilterChange}
           onClear={handleFilterClear}
           onClose={() => setActiveModal(null)}
@@ -1050,15 +1043,6 @@ export default function Home() {
       ) : null}
       {activeModal === "keyword" ? (
         <KeywordModal keywordDraft={keywordDraft} onApply={applyKeyword} onChange={setKeywordDraft} onClose={() => setActiveModal(null)} />
-      ) : null}
-      {activeModal === "history" ? (
-        <SearchHistoryModal
-          onApply={(history) => {
-            setSearch(history.keyword);
-            setActiveModal(null);
-          }}
-          onClose={() => setActiveModal(null)}
-        />
       ) : null}
       {activeModal === "create" ? <ProjectCreateDrawer mode="create" onClose={() => setActiveModal(null)} onSaved={handleProjectCreated} /> : null}
       {activeModal === "editProject" && selectedProject ? (

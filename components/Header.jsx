@@ -1,5 +1,3 @@
-const navItems = ["人材マスタ", "案件(フリーランス・派遣)", "求人(転職)", "一斉配信", "単価相場 ↗", "レポート ↗"];
-
 export default function Header({ currentUser, onLogout }) {
   return (
     <header className="global-header">
@@ -8,16 +6,11 @@ export default function Header({ currentUser, onLogout }) {
         <span className="brand-badge">管理コンソール</span>
       </div>
       <nav className="main-nav" aria-label="主要メニュー">
-        {navItems.map((item) => (
-          <button className={`nav-item ${item.startsWith("案件") ? "active" : ""}`} key={item} type="button">
-            {item}
-          </button>
-        ))}
+        <span className="nav-item active" aria-current="page">
+          案件(フリーランス・派遣)
+        </span>
       </nav>
       <div className="header-actions">
-        <button className="icon-button" type="button" aria-label="設定">
-          ⚙
-        </button>
         <button className="user-menu" onClick={onLogout} type="button" title="ログアウト">
           {currentUser?.name || "ログイン中"} <span>{currentUser?.role || ""}</span>
         </button>

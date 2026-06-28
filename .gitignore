@@ -13,3 +13,14 @@ pnpm-debug.log*
 secrets/
 gmail-oauth-client.json
 *.secret.json
+
+.vercel
+.env*
+
+# Local archive for retired worktrees, logs, and one-off files.
+/old/
+
+# Local PR worktrees and copied review sandboxes.
+__pr_*/
+__restore_*/
+tsconfig.tsbuildinfo

@@ -45,7 +45,7 @@ function DetailItemValue({ item }) {
   return <strong className={`${item.emphasis ? "important-value" : ""} ${isEmpty(item.value) ? "muted-value" : ""}`}>{item.value || "-"}</strong>;
 }
 
-export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClose, onCopyUrl, onDetailAction, project }) {
+export default function ProjectDetailPane({ canEdit = true, onClose, onCopyUrl, onDetailAction, project }) {
   useEffect(() => {
     if (!project) return undefined;
 
@@ -68,10 +68,6 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
     console.log(`project detail action: ${action}`, project?.id || project?.dbId || "");
     if (action === "copy") {
       onCopyUrl(project);
-      return;
-    }
-    if (action === "proposal") {
-      onAddProposal(project);
       return;
     }
     onDetailAction(action, project);
@@ -129,9 +125,6 @@ export default function ProjectDetailPane({ canEdit = true, onAddProposal, onClo
                 <>
                   <button className="outline-button" onClick={() => handleAction("archive")} type="button">
                     アーカイブ
-                  </button>
-                  <button className="primary-button detail-primary" onClick={() => handleAction("proposal")} type="button">
-                    提案開始
                   </button>
                   <button className="outline-primary" onClick={() => handleAction("unclassify")} type="button">
                     未分類へ移行
