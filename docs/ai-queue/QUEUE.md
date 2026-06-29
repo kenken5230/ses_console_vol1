@@ -172,7 +172,8 @@
 - 検証: `docs/pmo/h2-enforcement-runbook.md` を追加。設定変更なし、secret値なし、DB/schema/env/package/lockfile変更なし、削除差分0。
 - rollback: このDraft PR/commitを破棄またはrevertする。
 - 承認要否: GitHub branch protection、token権限変更、auto-merge設定はNEEDS_HUMAN。手順書作成のみTier 1。
-- 更新時刻: 2026-06-28T00:25:00+09:00
+- 結果: #165 Ready化後にsquash merge済み。merge commit `ed5f0c4e83dbe6d5f3f5afe50759f10d144d81bd`。
+- 更新時刻: 2026-06-29T10:20:00+09:00
 
 ### T-20260627-015 H2 profile update draft
 
@@ -185,7 +186,8 @@
 - 検証: Profile更新のみ。委任オートマージON化なし、GitHub設定変更なし、secret値なし、削除差分0。
 - rollback: このDraft PR/commitを破棄またはrevertする。
 - 承認要否: H2有効化と委任ON化はNEEDS_HUMAN。Profile提案のみTier 1。
-- 更新時刻: 2026-06-28T00:30:00+09:00
+- 結果: #167 を最新mainへ通常mergeで追従し、Ready化後にsquash merge済み。merge commit `4eda58233ba6cf92171c367ed5689020209d4ca9`。
+- 更新時刻: 2026-06-29T10:20:00+09:00
 
 ### T-20260627-016 H2 handoff checklist draft
 
@@ -198,4 +200,18 @@
 - 検証: docsのみ、設定変更なし、secret値なし、DB/schema/env/package/lockfile変更なし、削除差分0。
 - rollback: このDraft PR/commitを破棄またはrevertする。
 - 承認要否: 実際のGitHub設定操作とtoken権限変更はNEEDS_HUMAN。handoff作成のみTier 1。
-- 更新時刻: 2026-06-28T00:35:00+09:00
+- 結果: #168 を最新mainへ通常mergeで追従し、Ready化後にsquash merge済み。merge commit `76d6a433c64d6a4d494d6f3a284eb25d262bb3c2`。
+- 更新時刻: 2026-06-29T10:20:00+09:00
+
+### T-20260629-017 post-H2 docs merge sync
+
+- 状態: DONE
+- 種別: docs
+- リスク区分: low
+- 起票者: Codex
+- 起票時刻: 2026-06-29T10:20:00+09:00
+- 詳細: 承認済みH2 docs-only PR #165/#167/#168 のmerge結果と、H2手動PR #166/#169 の残承認待ちを `PROGRESS.md` / `docs/ai-queue/` / `docs/status/` へ同期する。
+- 検証: open PR、checks、merge commits、削除差分0、safety-gateを確認する。
+- rollback: この同期PR/commitをrevertする。
+- 承認要否: 不要。docs-only、DB/schema/env/package/lockfile変更なし。
+- 更新時刻: 2026-06-29T10:20:00+09:00
