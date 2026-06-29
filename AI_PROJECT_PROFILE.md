@@ -56,6 +56,9 @@
 | 状態 | **PENDING / disabled for now** |
 | 理由 | ユーザー指示により、H2（`scripts/` と `docs/ai-queue/DECISIONS.md` の書込隔離）と H3（standing authorization tokenの安全な保管）が完了するまで、自動Ready化 / merge / 本番deployは有効化しない |
 | 現在の扱い | merge / Ready化 / 本番deploy が必要になったら `WAITING_APPROVAL` に積む |
+| H2実現方式案 | GitHub branch protection + required CI checks + CODEOWNERS |
+| H2強制対象案 | `scripts/`、`.github/`、`docs/ai-queue/DECISIONS.md`、`AI_WORK_RULES.md`、`AI_WORK_RULES_SHORT.md`、`AGENTS.md`、`AI_PROJECT_PROFILE.md` |
+| H2有効化条件 | KenがGitHubのmain branch protection、required checks、Code Owners review、Codex token権限制限を有効化し、Codexが保護を外せないことを確認する |
 
 ## 5. DB / 永続データ
 

@@ -51,3 +51,23 @@
 - 結果: #159 merged。main merge commit `24dc7160834ee0360709214f1e8ba52e92ae5384`。
 - 注意: H2/H3は未完了のため、委任オートマージ / 本番deploy自動は引き続き無効。
 - 更新時刻: 2026-06-27T23:55:00+09:00
+
+## A-20260629-006 H2 docs-only PR の Ready / merge
+
+- 状態: DONE
+- 対応タスク: T-20260627-014 / T-20260627-015 / T-20260627-016
+- 要約: H2材料PRのうち docs-only 3本（#165 / #167 / #168）を、ユーザー承認に基づきReady化してsquash mergeした。
+- 理由: 3本ともdocs-only、削除差分0、DB/schema/env/package/lockfile変更なし。#167/#168は#165 merge後の記録文書競合を、両方の内容を残す形で通常merge追従してから実行した。
+- 結果: #165 merged at `ed5f0c4e83dbe6d5f3f5afe50759f10d144d81bd`; #167 merged at `4eda58233ba6cf92171c367ed5689020209d4ca9`; #168 merged at `76d6a433c64d6a4d494d6f3a284eb25d262bb3c2`。
+- 注意: #166 AI safety gate workflow と #169 CODEOWNERS はDraftのまま残し、CodexはReady化/mergeしていない。
+- 更新時刻: 2026-06-29T10:20:00+09:00
+
+## A-20260629-007 H2 safety gate / CODEOWNERS manual merge
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: H2 / B1 / B2
+- 要約: #166 `ai-safety-gate` workflow と #169 `CODEOWNERS` は、保護機構そのもののため、けんさんが手動で確認・Ready化・mergeする。
+- 理由: #166は安全ゲート本体で、現在の `ai-safety-gate` check が意図どおり赤。#169は人間レビュー必須化の制御装置。どちらもCodexによる自動Ready/merge対象外。
+- AI推奨: #166のworkflowがsafety-gateを骨抜きにしていないこと、#169のCODEOWNERS対象が想定どおりであることを確認してから、人間権限で進める。
+- 禁止: Codexは #166/#169 をReady化/mergeしない。GitHub branch protection、PAT権限変更、auto-merge有効化も実行しない。
+- 更新時刻: 2026-06-29T10:20:00+09:00
