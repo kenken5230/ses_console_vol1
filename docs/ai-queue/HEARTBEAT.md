@@ -89,18 +89,73 @@
 - worktree削除/branch削除なし。
 - 主workspaceのdirty差分操作なし。
 
-## 2026-06-28T00:15:00+09:00 H2 CI gate draft
+## 2026-06-28T00:25:00+09:00 H2 enforcement runbook draft
 
 ### 完了
 
-- T-20260627-012 を起票。
-- `.github/workflows/ai-safety-gate.yml` をDraft PR材料として追加。
-- check名を `ai-safety-gate` / `typecheck` / `test` / `build` に固定。
-- branch protectionやrepository settingsは変更していない。
-- safety-gate BLOCKを受け、A-20260627-006 を起票。
+- T-20260627-014 を起票。
+- `docs/pmo/h2-enforcement-runbook.md` をDraft PR材料として追加。
+- GitHub branch protection、required checks、CODEOWNERS review、fine-grained token制限、optional auto-merge、LARGE handlingの手順を記録。
 
 ### 次回継続
 
-- 人間がGitHub branch protectionで必須checkに設定するまでは強制力なし。
-- このPRは `.github/workflows` 追加を含むため、local safety-gateはdeploy-chain hintでBLOCK想定。
-- Draft PR #166 のReady化/mergeは人間判断。
+- 実際のGitHub設定変更は人間が行う。
+- Codex tokenにadmin/settings/branch protection権限を与えない方針を維持する。
+
+## 2026-06-28T00:30:00+09:00 H2 profile update draft
+
+### 完了
+
+- T-20260627-015 を起票。
+- `AI_PROJECT_PROFILE.md` §4へH2実現方式案を追記。
+- 委任オートマージ状態は `PENDING / disabled for now` のまま。
+
+### 次回継続
+
+- H2有効化は人間がGitHub設定とtoken権限を確認した後。
+- H3 standing authorization tokenも未完了のため、委任ON化はまだしない。
+
+## 2026-06-28T00:35:00+09:00 H2 handoff checklist draft
+
+### 完了
+
+- T-20260627-016 を起票。
+- `docs/pmo/h2-handoff-2026-06-27.md` をDraft PR材料として追加。
+- Kenが一度だけやることを5項目に整理。
+
+### 次回継続
+
+- 実際のGitHub設定操作、token権限変更、auto-merge有効化は人間が行う。
+- H3完了までは委任オートマージON化なし。
+
+## 2026-06-29T10:20:00+09:00 H2 docs-only merge sync
+
+### セッション情報
+
+- 対象repo: `kenken5230/ses_console_vol1`
+- 作業worktree: `C:\Users\ke919\OneDrive\ドキュメント\1234project\__post_h2_docs_merge_sync_20260629`
+- branch: `codex/post-h2-docs-merge-sync-20260629`
+- base: `origin/main` at `76d6a433c64d6a4d494d6f3a284eb25d262bb3c2`
+- 主workspace: dirty/old branchのため保全。reset/clean/checkout/stashなし。
+
+### 完了
+
+- ユーザー承認に基づき、#165 / #167 / #168 をReady化してsquash merge。
+- #167 / #168 は #165 / #167 merge後に `QUEUE.md` / `HEARTBEAT.md` が競合したため、通常mergeで最新mainへ追従し、両方の記録を残して解消。
+- #166 AI safety gate workflow と #169 CODEOWNERS はDraftのまま維持し、Ready化/mergeしていない。
+- `APPROVALS.md` に A-20260629-006 / A-20260629-007 を追加。
+
+### 次回継続
+
+- #166 と #169 は、けんさんが手動で確認・Ready化・mergeする。
+- GitHub branch protection、required checks、CODEOWNERS review必須化、Codex token権限制限は、けんさん作業。
+- H2/H3完了までは委任オートマージ / 本番deploy自動は無効のまま。
+
+### 禁止事項遵守
+
+- secret値の読み取り/出力なし。
+- DB writeなし。
+- migration/schema変更なし。
+- GitHub branch protection / PAT権限 / auto-merge設定変更なし。
+- #166/#169のReady化/mergeなし。
+- worktree削除/branch削除なし。
