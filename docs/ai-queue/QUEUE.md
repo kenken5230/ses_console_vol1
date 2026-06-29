@@ -161,6 +161,32 @@
 - ブロック理由: #159以降、`scripts/` は読み取り検証のみ。旧 #157 はこのルールに合わないためclosed済み。
 - 更新時刻: 2026-06-27T23:55:00+09:00
 
+### T-20260627-014 H2 enforcement runbook draft
+
+- 状態: DONE
+- 種別: docs
+- リスク区分: low
+- 起票者: Codex
+- 起票時刻: 2026-06-28T00:25:00+09:00
+- 詳細: H2をGitHubブランチ保護、必須CI、CODEOWNERS、fine-grained token制限で有効化するための人間向け手順書をDraft PRで提案する。
+- 検証: `docs/pmo/h2-enforcement-runbook.md` を追加。設定変更なし、secret値なし、DB/schema/env/package/lockfile変更なし、削除差分0。
+- rollback: このDraft PR/commitを破棄またはrevertする。
+- 承認要否: GitHub branch protection、token権限変更、auto-merge設定はNEEDS_HUMAN。手順書作成のみTier 1。
+- 更新時刻: 2026-06-28T00:25:00+09:00
+
+### T-20260627-015 H2 profile update draft
+
+- 状態: DONE
+- 種別: docs
+- リスク区分: low
+- 起票者: Codex
+- 起票時刻: 2026-06-28T00:30:00+09:00
+- 詳細: `AI_PROJECT_PROFILE.md` §4へ、H2実現方式案としてGitHub branch protection、required CI checks、CODEOWNERS、Codex token権限制限を追記する。状態は `PENDING / disabled for now` のまま維持する。
+- 検証: Profile更新のみ。委任オートマージON化なし、GitHub設定変更なし、secret値なし、削除差分0。
+- rollback: このDraft PR/commitを破棄またはrevertする。
+- 承認要否: H2有効化と委任ON化はNEEDS_HUMAN。Profile提案のみTier 1。
+- 更新時刻: 2026-06-28T00:30:00+09:00
+
 ### T-20260627-016 H2 handoff checklist draft
 
 - 状態: DONE
