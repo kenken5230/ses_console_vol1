@@ -14,13 +14,14 @@
 
 ## A-20260627-002 scripts と DECISIONS の書込隔離
 
-- 状態: NEEDS_HUMAN
+- 状態: DONE
 - 対応タスク: H2 / B1 / B2
 - 要約: `scripts/` と `docs/ai-queue/DECISIONS.md` を Codex 書込不可にACL/別アカで隔離する。
 - 理由: 全自動運用の真正性を担保するため。Codex自身が自分をロックする操作は信頼境界にならない。
-- AI推奨: 人間または別権限主体が隔離を設定する。
-- 禁止: Codex単独でACL変更しない。
-- 更新時刻: 2026-06-27T19:25:00+09:00
+- 結果: H2の実現方式は、ローカルACLではなくGitHub branch protection + required checks + CODEOWNERS + Codex token権限制限へ置き換え。#166/#169はmain反映済み。
+- 次の承認: #6 branch protection有効化は A-20260629-009、#7 Codex token権限制限は A-20260629-010 で追跡する。
+- 禁止: Codex単独でACL変更、branch protection変更、token権限変更をしない。
+- 更新時刻: 2026-06-29T15:20:00+09:00
 
 ## A-20260627-003 standing authorization token
 
@@ -64,10 +65,40 @@
 
 ## A-20260629-007 H2 safety gate / CODEOWNERS manual merge
 
-- 状態: NEEDS_HUMAN
+- 状態: DONE
 - 対応タスク: H2 / B1 / B2
-- 要約: #166 `ai-safety-gate` workflow と #169 `CODEOWNERS` は、保護機構そのもののため、けんさんが手動で確認・Ready化・mergeする。
-- 理由: #166は安全ゲート本体で、現在の `ai-safety-gate` check が意図どおり赤。#169は人間レビュー必須化の制御装置。どちらもCodexによる自動Ready/merge対象外。
-- AI推奨: #166のworkflowがsafety-gateを骨抜きにしていないこと、#169のCODEOWNERS対象が想定どおりであることを確認してから、人間権限で進める。
-- 禁止: Codexは #166/#169 をReady化/mergeしない。GitHub branch protection、PAT権限変更、auto-merge有効化も実行しない。
-- 更新時刻: 2026-06-29T10:20:00+09:00
+- 要約: ユーザー明示承認に基づき、#166 `ai-safety-gate` workflow と #169 `CODEOWNERS` をCodexがReady化してsquash mergeした。
+- 理由: #166/#169はH2材料として承認済み。#166は `.github/workflows/ai-safety-gate.yml` 1ファイル、#169は `.github/CODEOWNERS` 1ファイルへ縮小してから実行した。
+- 結果: #166 merged at `3f4071949c43e948801a629993155e4a4b72b125`; #169 merged at `57afd28791bdd1a3cd2c3ab4ed9e779f8f089534`。
+- 注意: GitHub branch protection、PAT権限変更、auto-merge有効化は未実施。#6/#7として別途NEEDS_HUMAN。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+## A-20260629-008 #171 heartbeat governance gate merge判断
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: T-20260629-019
+- 要約: #171 `Add heartbeat governance resume gate` のレビュー、Ready化、merge判断。
+- 理由: `AI_WORK_RULES.md` / `AI_WORK_RULES_SHORT.md` はCODEOWNERS対象のルール文書。heartbeat resume制限の重要ルール追加であり、人間レビュー必須。
+- AI推奨: #6/#7の実施前に、#171の内容が意図通りか確認し、問題なければ人間判断でReady化/mergeする。
+- 禁止: Codexは #171 を自動Ready化/mergeしない。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+## A-20260629-009 #6 GitHub branch protection 有効化
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: H2 / B1 / B2 / T-20260629-020
+- 要約: GitHubの `main` branch protection を有効化する。required checks、CODEOWNERS review必須、直push禁止、force push禁止、bypass禁止を設定する。
+- 理由: Codexが保護なしmainへ直接影響できる状態を防ぐため。GitHub設定変更はCodex自身が行わない。
+- AI推奨: `docs/pmo/h2-enforcement-runbook.md` と `docs/pmo/h2-handoff-2026-06-27.md` に沿って、けんさんがGitHub画面で一度だけ設定する。
+- 禁止: Codexはbranch protection設定を変更しない。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+## A-20260629-010 #7 Codex実行トークン権限制限
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: H2 / H3 / B1 / B2 / T-20260629-020
+- 要約: Codex実行用トークンを、repo admin / settings / branch protection 変更権限なしに制限する。
+- 理由: Codexがbranch protectionや安全ゲートを自分で外せないようにするため。token値は秘密=4例外。
+- AI推奨: fine-grained PATを使い、Contents / Pull requests など必要最小限の権限に絞る。token値はAIやrepoに貼らない。
+- 禁止: Codexはtoken値を読まない、表示しない、保存しない。権限設定も変更しない。
+- 更新時刻: 2026-06-29T15:20:00+09:00

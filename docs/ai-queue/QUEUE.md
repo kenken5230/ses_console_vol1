@@ -215,3 +215,42 @@
 - rollback: この同期PR/commitをrevertする。
 - 承認要否: 不要。docs-only、DB/schema/env/package/lockfile変更なし。
 - 更新時刻: 2026-06-29T10:20:00+09:00
+
+### T-20260629-018 H2 safety gate / CODEOWNERS main反映
+
+- 状態: DONE
+- 種別: workflow/config
+- リスク区分: mid
+- 起票者: user
+- 起票時刻: 2026-06-29T12:20:00+09:00
+- 詳細: ユーザー明示承認に基づき、#166 `ai-safety-gate` workflow と #169 `CODEOWNERS` を順にReady化してsquash mergeした。#166は #170 merge後のmainへ追従し、PR差分を `.github/workflows/ai-safety-gate.yml` 1ファイルへ縮小。#169は #166 merge後のmainへ追従し、PR差分を `.github/CODEOWNERS` 1ファイルへ縮小。
+- 検証: #166/#169とも削除差分0、DB/schema/env/package/lockfile変更なし。#169 merge後の `origin/main` は `57afd28791bdd1a3cd2c3ab4ed9e779f8f089534`。本番URLはHTTP 200、Vercel status success。
+- rollback: 対象merge commitのrevert PRで戻す。GitHub branch protection / PAT権限 / heartbeat設定は変更していない。
+- 承認要否: 実mergeはユーザー承認済み。以後のbranch protection有効化とtoken権限制限は別のNEEDS_HUMAN。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+### T-20260629-019 heartbeat governance gate rule proposal
+
+- 状態: WAITING_APPROVAL
+- 種別: docs/rule
+- リスク区分: mid
+- 起票者: user
+- 起票時刻: 2026-06-29T15:20:00+09:00
+- 詳細: heartbeat自律進行ループのresume/status有効化は、main branch protectionとCodex実行トークン権限制限が両方有効になるまでAI判断で行わない、というガバナンスゲートを `AI_WORK_RULES.md` / `AI_WORK_RULES_SHORT.md` へ追記するDraft PRを作成。
+- 結果: #171 `Add heartbeat governance resume gate` はDraft/open。mergeable CLEAN、Vercel / ai-safety-gate / typecheck / test / build はsuccess。CODEOWNERS対象のためReady化/mergeは人間レビュー待ち。
+- rollback: #171をcloseするか、merge後ならrevert PRで戻す。
+- 承認要否: #171のレビュー、Ready化、merge判断はNEEDS_HUMAN。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+### T-20260629-020 LLLタスク停止状態
+
+- 状態: WAITING_APPROVAL
+- 種別: governance
+- リスク区分: low
+- 起票者: user
+- 起票時刻: 2026-06-29T15:20:00+09:00
+- 詳細: ruleタスク完了後、残バックログを「LLLタスク」として停止扱いにする。ユーザーが「LLLタスク」または対象タスク名で再開指示するまで、AI判断で残タスクを進めない。
+- 現在の残り: #171 merge判断、#6 GitHub branch protection、#7 Codex実行トークン権限制限、H1 rule repo git管理化、H3 standing authorization token、H4 PowerShell運用判断。
+- ブロック理由: heartbeat再開ゲート未達。#6/#7と#171の人間判断が必要。
+- 承認要否: LLL再開指示、または個別タスク名での再開指示が必要。
+- 更新時刻: 2026-06-29T15:20:00+09:00
