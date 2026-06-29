@@ -101,3 +101,16 @@
 
 - 実際のGitHub設定変更は人間が行う。
 - Codex tokenにadmin/settings/branch protection権限を与えない方針を維持する。
+
+## 2026-06-28T00:30:00+09:00 H2 profile update draft
+
+### 完了
+
+- T-20260627-015 を起票。
+- `AI_PROJECT_PROFILE.md` §4へH2実現方式案を追記。
+- 委任オートマージ状態は `PENDING / disabled for now` のまま。
+
+### 次回継続
+
+- H2有効化は人間がGitHub設定とtoken権限を確認した後。
+- H3 standing authorization tokenも未完了のため、委任ON化はまだしない。
