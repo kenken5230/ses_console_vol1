@@ -186,3 +186,16 @@
 - rollback: このDraft PR/commitを破棄またはrevertする。
 - 承認要否: H2有効化と委任ON化はNEEDS_HUMAN。Profile提案のみTier 1。
 - 更新時刻: 2026-06-28T00:30:00+09:00
+
+### T-20260627-016 H2 handoff checklist draft
+
+- 状態: DONE
+- 種別: docs
+- リスク区分: low
+- 起票者: Codex
+- 起票時刻: 2026-06-28T00:35:00+09:00
+- 詳細: Kenが一度だけ実行するGitHub設定操作を5項目以内でまとめた `docs/pmo/h2-handoff-2026-06-27.md` をDraft PRで提案する。
+- 検証: docsのみ、設定変更なし、secret値なし、DB/schema/env/package/lockfile変更なし、削除差分0。
+- rollback: このDraft PR/commitを破棄またはrevertする。
+- 承認要否: 実際のGitHub設定操作とtoken権限変更はNEEDS_HUMAN。handoff作成のみTier 1。
+- 更新時刻: 2026-06-28T00:35:00+09:00
