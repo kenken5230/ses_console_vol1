@@ -1270,6 +1270,17 @@ heartbeat automation、定期起動、定期フォローアップは、単なる
 
 「永続的に回す」とは、1回の起動内で終わりなく回し続けるという意味ではなく、各heartbeatで有限の自律作業セッションを行い、引き継ぎを残し、次のheartbeatでまた全テーマを巡回するという意味です。
 
+#### heartbeat再開ガバナンスゲート
+
+フルアクセス権限で動く heartbeat 自律進行ループ（定期自動起動）は、以下がすべて有効になるまで、resume / status有効化 をしてはいけません。
+
+- main ブランチ保護（required checks、CODEOWNERS review必須、直push禁止、force push禁止）
+- Codex実行トークンの権限制限（repo admin / settings / branch protection 変更権限を持たせない）
+
+これらの保護が無い状態で毎時自律起動を有効化すると、保護なし main と admin 相当トークンで自動実行が走り、安全ゲートを実質的に無効化します。
+
+heartbeat automation が PAUSED で止められている場合、その解除はユーザーの明示判断事項として扱ってください。AIは自分の判断で heartbeat を resume / 有効化してはいけません。上記ガバナンスが揃っていることをユーザーが確認したうえで、ユーザーの指示により再開してください。
+
 #### heartbeat開始時に必ず確認すること
 
 heartbeatが来たら、親PMは最初に全テーマ / 全カテゴリを横断して以下を確認してください。
