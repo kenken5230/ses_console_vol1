@@ -104,3 +104,14 @@
 - push確認: GCM資格情報を消去し、`gh auth setup-git` 後、handoffではない機能ブランチ `codex/guarded-match-suggestion-review-controls` で事前に `git log origin/codex/guarded-match-suggestion-review-controls..HEAD` を確認してpush検証。結果は403ではなくnon-fast-forward拒否。
 - 注意: #7完了宣言はけんさん確認待ち。token期限切れ時は同じ方針で再発行/差し替えが必要。token値はAIやrepoに貼らない。
 - 更新時刻: 2026-07-01T10:45:00+09:00
+
+## A-20260701-011 #173 Claude作業後のworktree metadata cleanup
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: T-20260701-021
+- 要約: Claudeが誤って #173 作業時に残した `.git/worktrees/ses_console_vol1_docs_status_sync_wt` のメタデータ残置を、既存のworktree cleanup承認ゲートへ追加する。
+- 理由: 現時点では削除対象が `.git/worktrees` 配下の残置メタデータに見えるが、raw削除やforce削除は危険。既存のworktree cleanup permission問題と同じ扱いで、fresh dry-run、属性確認、バックアップ方針、単一対象確認を通してから処理する必要がある。
+- 確認済み: 対象パスは存在。中身は `logs`、`refs`、`ORIG_HEAD`。`logs` と `refs` は `ReadOnly, Directory, Archive, ReparsePoint` 属性を含む。#173自体はDraft/open維持で、差分はPMO docs 2ファイルのみ、CI/Vercel success。
+- AI推奨: 今は削除しない。次のworktree cleanup承認パケットに、対象パス、fresh `git worktree prune --dry-run`、属性確認、バックアップ/復元方針、削除対象がこの1項目だけであることを明記してから判断する。
+- 禁止: raw削除、`--force`、branch削除、登録済みworktree削除、主workspace操作、秘密値出力、#173のReady化/mergeをしない。
+- 更新時刻: 2026-07-01T13:10:00+09:00

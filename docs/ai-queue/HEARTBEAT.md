@@ -244,3 +244,33 @@
 - heartbeat resume / status有効化なし。
 - Ready化 / merge / close / deployなし。
 - DB write / migration / schema変更なし。
+
+## 2026-07-01T13:10:00+09:00 #173 review / metadata cleanup gate追加
+
+### セッション情報
+
+- 対象repo: `kenken5230/ses_console_vol1`
+- 作業worktree: `C:\Users\ke919\OneDrive\ドキュメント\1234project\__lll_stop_handoff_20260629`
+- branch: `codex/lll-stop-handoff-20260629`
+- 主workspace: dirtyのため不使用。reset/clean/checkout/stashなし。
+
+### 完了
+
+- #173 `docs: sync approval packets to #149/#150 merged state` をread-onlyレビュー。
+- 判断: #173は目的どおりの #149/#150 docs status sync として活かす。Draft/open維持。Codex側ではReady化/merge/closeしない。
+- #173差分: `docs/pmo/approval-waiting-packet-2026-06-24.md`、`docs/pmo/next-approval-gates-2026-06-26.md` の2ファイルのみ。
+- 照合: #149 `256a443` / #150 `17c632b` は `origin/main` の祖先。`test:search-history-ui-context` は `package.json` の個別scriptと集約 `npm test` に配線済み。
+- 残置metadata: `.git/worktrees/ses_console_vol1_docs_status_sync_wt` をworktree cleanup承認ゲートへ追加。今は削除しない。
+
+### 次回継続
+
+- #173: Draft維持、人手merge判断待ち。
+- A-20260701-011: 対象metadata cleanupは fresh dry-run、属性確認、バックアップ方針、単一対象確認を揃えた別承認待ち。
+
+### 禁止事項遵守
+
+- #173 Ready化 / merge / closeなし。
+- metadata削除なし。
+- raw削除 / `--force` / branch削除 / worktree削除なし。
+- DB write / migration / schema変更なし。
+- secret/token値の読み取り/表示/保存なし。

@@ -257,3 +257,19 @@
 - ブロック理由: #6/#7の技術ゲートは概ね達成。ただし #7完了宣言はけんさん確認待ち。heartbeat resume / status有効化はユーザーの明示再開指示があるまで実行しない。#171 rule PRの人間レビュー/merge判断も未完了。
 - 承認要否: LLL再開指示、または個別タスク名での再開指示が必要。
 - 更新時刻: 2026-07-01T10:45:00+09:00
+
+### T-20260701-021 #173 status sync review / worktree metadata cleanup gate
+
+- 状態: WAITING_APPROVAL
+- 種別: docs/governance
+- リスク区分: low
+- 起票者: user / Codex
+- 起票時刻: 2026-07-01T13:10:00+09:00
+- 詳細: Claudeが誤って実作業した #173 `docs: sync approval packets to #149/#150 merged state` をCodexがread-onlyレビューした。#173はDraft/openのまま活かし、Ready化/merge/closeはしない。残置した `.git/worktrees/ses_console_vol1_docs_status_sync_wt` は既存のworktree cleanup承認ゲートへ1項目として積む。
+- #173確認: 変更は `docs/pmo/approval-waiting-packet-2026-06-24.md` と `docs/pmo/next-approval-gates-2026-06-26.md` の2ファイルのみ。#149 `256a443` / #150 `17c632b` は `origin/main` の祖先で、`test:search-history-ui-context` は `package.json` の個別scriptと集約 `npm test` に配線済み。CI/Vercelはsuccess。
+- cleanup対象候補: `.git/worktrees/ses_console_vol1_docs_status_sync_wt`。確認時点では `logs` / `refs` / `ORIG_HEAD` が残り、`ReadOnly, Directory, Archive, ReparsePoint` 属性を含む。今は削除しない。
+- 検証: `gh pr view 173`、`gh pr diff 173`、`git merge-base --is-ancestor 256a443 origin/main`、`git merge-base --is-ancestor 17c632b origin/main`、`git show origin/main:package.json`、metadata `Test-Path` / 属性確認。
+- rollback: docs記録のみ。誤記があればこのPR/commitをrevertまたは修正する。
+- 承認要否: #173のReady化/mergeは人間判断。metadata cleanupは fresh dry-run、属性確認、バックアップ方針、削除対象の単一性確認を揃えた別承認が必要。
+- 承認参照: A-20260701-011
+- 更新時刻: 2026-07-01T13:10:00+09:00
