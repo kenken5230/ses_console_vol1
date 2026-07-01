@@ -2,6 +2,12 @@
 
 Observed at: 2026-06-26 16:55 JST.
 
+> Update 2026-07-01: #149 (`256a443`) and #150 (`17c632b`) are merged into `main`
+> (`#148 -> #149 -> #150`). `test:search-history-ui-context` is wired in
+> `package.json`, including the aggregate `npm test` chain. Items below that read
+> as #149 being Draft/open or awaiting Ready/merge are historical and resolved.
+> Current live snapshot: `PROGRESS.md`.
+
 This packet turns the current remaining gates into clear approval choices. It
 does not execute any DB write, migration, schema change, production env/config
 change, cleanup, deletion, or branch operation.
@@ -10,7 +16,7 @@ change, cleanup, deletion, or branch operation.
 
 - Latest observed `origin/main`: `0ec3778bf3be9bb1145bb70d10eeea4c23733b27`
   (`Merge pull request #148 from kenken5230/codex/login-recovery-20260626`).
-- Open PRs: #149 is Draft/open, mergeable, clean, and Vercel success; it changes only `package.json` to wire the existing DB-free SearchHistory UI context test. #147 is this packet refresh.
+- Open PRs: none blocking this packet. #149 (SearchHistory UI context test wiring) merged at `256a443` and #150 (this next-gates refresh) merged at `17c632b`; `test:search-history-ui-context` is now wired in `package.json`. #147 was this packet's earlier refresh branch.
 - Open issues: none observed before this branch.
 - Vercel for #148 merge commit: production deploy success.
 - DB-free tests are green as recorded in
@@ -76,30 +82,14 @@ Recommended outcome:
 - Run only after Approval Choice 0 makes normal login available.
 - If unavailable, keep this gate waiting and continue other local/test work.
 
-## Approval Choice A2: #149 SearchHistory UI Context Test Wiring
+## Approval Choice A2: #149 SearchHistory UI Context Test Wiring — COMPLETED
 
-**Goal:** Decide whether the DB-free SearchHistory UI context test should be
-wired into the package scripts and aggregate `npm test`.
-
-Current evidence:
-
-- #149 is Draft/open, mergeable, clean, and Vercel success.
-- Changed files: `package.json` only.
-- No deletion diff, schema, migration, env, lockfile, DB, or dependency impact.
-- It preserves #148 `test:auth-login-readiness` and adds
-  `test:search-history-ui-context`.
-
-Allowed only if approved:
-
-- Ready/merge #149 through the normal PR state-change gate.
-- Treat merge as a production deploy trigger even though runtime code is not
-  changed.
-
-Recommended outcome:
-
-- Low-risk approval if keeping DB-free tests wired is useful now.
-- If #149 merges, refresh this packet again so SearchHistory wording says the
-  UI context test is wired.
+**Status:** Done. #149 merged at `256a443` (merge history `#148 -> #149 -> #150`).
+`test:search-history-ui-context` is wired into `package.json`, including the
+aggregate `npm test` chain, and preserves #148 `test:auth-login-readiness`.
+Vercel checks passed and the change touched `package.json` only (no deletion,
+schema, migration, env, lockfile, DB, or dependency impact). No further approval
+is needed for this item; it is retained for history.
 
 ## Approval Choice B: Person Owner Link Local/Test DB-Connected Preflight
 
@@ -244,14 +234,16 @@ Recommended outcome:
 ## Recommended Order
 
 1. Production login/password reset env recovery.
-2. #149 SearchHistory UI context test wiring, if test-suite coverage is a near-term priority.
+2. Production read-only QA once a normal VIEWER login is available.
 3. Person owner link local/test read-only preflight.
 4. Gmail company apply implementation-only approval, if product progress is the
    priority.
 5. CSV/source tracking target decision.
-6. Production read-only QA when a normal VIEWER login is available.
-7. Worktree cleanup permission handling when cleanup is the priority.
-8. SearchHistory own-user isolation smoke only if SearchHistory becomes suspect.
+6. Worktree cleanup permission handling when cleanup is the priority.
+7. SearchHistory own-user isolation smoke only if SearchHistory becomes suspect.
+
+(#149 SearchHistory UI context test wiring is merged at `256a443` and removed
+from this order as completed.)
 
 ## Universal Stop Conditions
 
