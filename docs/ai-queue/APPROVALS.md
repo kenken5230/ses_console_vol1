@@ -85,13 +85,13 @@
 
 ## A-20260629-009 #6 GitHub branch protection 有効化
 
-- 状態: NEEDS_HUMAN
+- 状態: DONE
 - 対応タスク: H2 / B1 / B2 / T-20260629-020
 - 要約: GitHubの `main` branch protection を有効化する。required checks、CODEOWNERS review必須、直push禁止、force push禁止、bypass禁止を設定する。
 - 理由: Codexが保護なしmainへ直接影響できる状態を防ぐため。GitHub設定変更はCodex自身が行わない。
-- AI推奨: `docs/pmo/h2-enforcement-runbook.md` と `docs/pmo/h2-handoff-2026-06-27.md` に沿って、けんさんがGitHub画面で一度だけ設定する。
-- 禁止: Codexはbranch protection設定を変更しない。
-- 更新時刻: 2026-06-29T15:20:00+09:00
+- 結果: ユーザー明示承認に基づきCodexが設定。`main` はprotected=true。required checksは `ai-safety-gate,typecheck,test,build,Vercel`。CODEOWNERS review必須、approval 1、dismiss stale reviews有効、admin enforcement true、force push/deletion禁止。
+- 注意: token権限制限は未完了。#7完了までheartbeat resumeは不可。
+- 更新時刻: 2026-07-01T00:00:00+09:00
 
 ## A-20260629-010 #7 Codex実行トークン権限制限
 
@@ -99,6 +99,7 @@
 - 対応タスク: H2 / H3 / B1 / B2 / T-20260629-020
 - 要約: Codex実行用トークンを、repo admin / settings / branch protection 変更権限なしに制限する。
 - 理由: Codexがbranch protectionや安全ゲートを自分で外せないようにするため。token値は秘密=4例外。
-- AI推奨: fine-grained PATを使い、Contents / Pull requests など必要最小限の権限に絞る。token値はAIやrepoに貼らない。
-- 禁止: Codexはtoken値を読まない、表示しない、保存しない。権限設定も変更しない。
-- 更新時刻: 2026-06-29T15:20:00+09:00
+- 現状: `gh auth status` ではmasked tokenのみ確認。既存GitHub CLI tokenは `repo` scopeを保持しており、GitHub CLIの最小scopeとして `repo` を外せないため、Codex単独ではadmin/settings/branch protection変更能力を十分に除去できない。
+- AI推奨: けんさん側でfine-grained PATまたはGitHub App tokenへ差し替え、repo限定で `Contents` / `Pull requests` 中心、`Administration` なし、必要なければ `Workflows` なしにする。token値はAIやrepoに貼らない。
+- 禁止: Codexはtoken値を読まない、表示しない、保存しない。既存tokenの破壊的logoutや資格情報削除も実施しない。
+- 更新時刻: 2026-07-01T00:00:00+09:00

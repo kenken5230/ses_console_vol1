@@ -206,3 +206,39 @@
 - migration/schema変更なし。
 - deployなし。
 - worktree削除/branch削除なし。
+
+## 2026-07-01T00:00:00+09:00 #6 branch protection完了 / #7 token制限未達
+
+### セッション情報
+
+- 対象repo: `kenken5230/ses_console_vol1`
+- 作業worktree: `C:\Users\ke919\OneDrive\ドキュメント\1234project\__lll_stop_handoff_20260629`
+- branch: `codex/lll-stop-handoff-20260629`
+- 体制: 親PM + 監査サブ + PMO/テックリード。サブ監査で#6設定項目と#7実行可否を確認。
+
+### 完了
+
+- #6 GitHub branch protectionをユーザー承認に基づき設定。
+- 設定後確認: `main` はprotected=true。
+- required checks: `ai-safety-gate`, `typecheck`, `test`, `build`, `Vercel`。
+- CODEOWNERS review必須、approval 1、dismiss stale reviews有効、admin enforcement true、force push/deletion禁止。
+
+### 未完了
+
+- #7 Codex実行トークン権限制限は未完了。
+- 理由: 既存GitHub CLI OAuth tokenはmasked表示のみ確認。scopeは `repo`, `workflow`, `read:org`, `gist`。GitHub CLIの最小scopeとして `repo` を外せず、Codex単独ではfine-grained PATへの差し替えやadmin/settings/branch protection変更権限の除去を完了できない。
+- 推奨: けんさん側でfine-grained PATまたはGitHub App tokenに差し替え、`Administration` なし、必要最小限権限にする。token値はAI/repo/chatに出さない。
+
+### 次回継続
+
+- #7完了までheartbeat resume / status有効化は禁止。
+- #171のReady化 / mergeも人間レビュー待ち。
+- LLLタスクは停止維持。
+
+### 禁止事項遵守
+
+- token値の読み取り/表示/保存なし。
+- 既存tokenのlogout、削除、資格情報破壊なし。
+- heartbeat resume / status有効化なし。
+- Ready化 / merge / close / deployなし。
+- DB write / migration / schema変更なし。

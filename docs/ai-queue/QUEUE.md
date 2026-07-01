@@ -250,7 +250,8 @@
 - 起票者: user
 - 起票時刻: 2026-06-29T15:20:00+09:00
 - 詳細: ruleタスク完了後、残バックログを「LLLタスク」として停止扱いにする。ユーザーが「LLLタスク」または対象タスク名で再開指示するまで、AI判断で残タスクを進めない。
-- 現在の残り: #171 merge判断、#6 GitHub branch protection、#7 Codex実行トークン権限制限、H1 rule repo git管理化、H3 standing authorization token、H4 PowerShell運用判断。
-- ブロック理由: heartbeat再開ゲート未達。#6/#7と#171の人間判断が必要。
+- 現在の残り: #171 merge判断、#7 Codex実行トークン権限制限、H1 rule repo git管理化、H3 standing authorization token、H4 PowerShell運用判断。
+- 完了: #6 GitHub branch protection はユーザー承認に基づきCodexが設定済み。`main` はprotected=true、required checksは `ai-safety-gate,typecheck,test,build,Vercel`、CODEOWNERS review必須、approval 1、admin enforcement true、force push/deletion禁止。
+- ブロック理由: heartbeat再開ゲート未達。#7 Codex実行トークン権限制限が未完了で、既存GitHub CLI OAuth tokenは `repo` scopeを保持しており、Codex単独ではfine-grained PATへの差し替えやadmin/settings/branch protection権限の除去を完了できない。
 - 承認要否: LLL再開指示、または個別タスク名での再開指示が必要。
-- 更新時刻: 2026-06-29T15:20:00+09:00
+- 更新時刻: 2026-07-01T00:00:00+09:00
