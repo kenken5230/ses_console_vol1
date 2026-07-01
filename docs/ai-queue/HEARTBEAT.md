@@ -223,15 +223,17 @@
 - required checks: `ai-safety-gate`, `typecheck`, `test`, `build`, `Vercel`。
 - CODEOWNERS review必須、approval 1、dismiss stale reviews有効、admin enforcement true、force push/deletion禁止。
 
-### 未完了
+### 追加完了
 
-- #7 Codex実行トークン権限制限は未完了。
-- 理由: 既存GitHub CLI OAuth tokenはmasked表示のみ確認。scopeは `repo`, `workflow`, `read:org`, `gist`。GitHub CLIの最小scopeとして `repo` を外せず、Codex単独ではfine-grained PATへの差し替えやadmin/settings/branch protection変更権限の除去を完了できない。
-- 推奨: けんさん側でfine-grained PATまたはGitHub App tokenに差し替え、`Administration` なし、必要最小限権限にする。token値はAI/repo/chatに出さない。
+- #7 Codex実行トークン権限制限はけんさん操作でfine-grained PATへ差し替え済み。
+- Codex側確認: token値は読まず、masked表示と権限挙動のみ確認。repo参照は可能だが、branch protection詳細APIは `Resource not accessible by personal access token` となり、branch protection/settings系権限が外れていることを確認。
+- push確認: GCM資格情報を消去し、`gh auth setup-git` 後、handoffではない機能ブランチでpush到達性を検証。事前差分は `bec395b Add guarded match suggestion review controls`。結果は403ではなくnon-fast-forward拒否。
+- 注意: token期限切れ時は同じ方針で再発行/差し替えが必要。token値はAI/repo/chatに出さない。
 
 ### 次回継続
 
-- #7完了までheartbeat resume / status有効化は禁止。
+- #6/#7の技術ゲートは概ね達成。ただし #7完了宣言はけんさん確認待ち。
+- ただし heartbeat resume / status有効化は、ユーザーの明示再開指示があるまで実行しない。
 - #171のReady化 / mergeも人間レビュー待ち。
 - LLLタスクは停止維持。
 

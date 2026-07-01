@@ -250,8 +250,10 @@
 - 起票者: user
 - 起票時刻: 2026-06-29T15:20:00+09:00
 - 詳細: ruleタスク完了後、残バックログを「LLLタスク」として停止扱いにする。ユーザーが「LLLタスク」または対象タスク名で再開指示するまで、AI判断で残タスクを進めない。
-- 現在の残り: #171 merge判断、#7 Codex実行トークン権限制限、H1 rule repo git管理化、H3 standing authorization token、H4 PowerShell運用判断。
+- 現在の残り: #171 merge判断、#7完了確認、H1 rule repo git管理化、H3 standing authorization token、H4 PowerShell運用判断。
 - 完了: #6 GitHub branch protection はユーザー承認に基づきCodexが設定済み。`main` はprotected=true、required checksは `ai-safety-gate,typecheck,test,build,Vercel`、CODEOWNERS review必須、approval 1、admin enforcement true、force push/deletion禁止。
-- ブロック理由: heartbeat再開ゲート未達。#7 Codex実行トークン権限制限が未完了で、既存GitHub CLI OAuth tokenは `repo` scopeを保持しており、Codex単独ではfine-grained PATへの差し替えやadmin/settings/branch protection権限の除去を完了できない。
+- 確認済み: #7 Codex実行トークン権限制限はけんさん操作でfine-grained PATへ差し替え済み。Codex側のread-only確認ではrepo参照は可能だが、branch protection詳細APIは `Resource not accessible by personal access token` となり、branch protection/settings系の権限が外れていることを確認。
+- 追加確認: GCM資格情報を消去し、`gh auth setup-git` 後、handoffではない機能ブランチでpush到達性を検証。結果は403ではなくnon-fast-forward拒否で、古い資格情報による403は解消。
+- ブロック理由: #6/#7の技術ゲートは概ね達成。ただし #7完了宣言はけんさん確認待ち。heartbeat resume / status有効化はユーザーの明示再開指示があるまで実行しない。#171 rule PRの人間レビュー/merge判断も未完了。
 - 承認要否: LLL再開指示、または個別タスク名での再開指示が必要。
-- 更新時刻: 2026-07-01T00:00:00+09:00
+- 更新時刻: 2026-07-01T10:45:00+09:00
