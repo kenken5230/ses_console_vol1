@@ -18,9 +18,10 @@
 - 対応タスク: H2 / B1 / B2
 - 要約: `scripts/` と `docs/ai-queue/DECISIONS.md` を Codex 書込不可にACL/別アカで隔離する。
 - 理由: 全自動運用の真正性を担保するため。Codex自身が自分をロックする操作は信頼境界にならない。
-- AI推奨: 人間または別権限主体が隔離を設定する。
-- 禁止: Codex単独でACL変更しない。
-- 更新時刻: 2026-06-27T19:25:00+09:00
+- 結果: H2の実現方式は、ローカルACLではなくGitHub branch protection + required checks + CODEOWNERS + Codex token権限制限へ置き換え。#166/#169はmain反映済み。
+- 次の承認: #6 branch protection有効化は A-20260629-009、#7 Codex token権限制限は A-20260629-010 で追跡する。
+- 禁止: Codex単独でACL変更、branch protection変更、token権限変更をしない。
+- 更新時刻: 2026-06-29T15:20:00+09:00
 
 ## A-20260627-003 standing authorization token
 
@@ -64,10 +65,53 @@
 
 ## A-20260629-007 H2 safety gate / CODEOWNERS manual merge
 
-- 状態: NEEDS_HUMAN
+- 状態: DONE
 - 対応タスク: H2 / B1 / B2
-- 要約: #166 `ai-safety-gate` workflow と #169 `CODEOWNERS` は、保護機構そのもののため、けんさんが手動で確認・Ready化・mergeする。
-- 理由: #166は安全ゲート本体で、現在の `ai-safety-gate` check が意図どおり赤。#169は人間レビュー必須化の制御装置。どちらもCodexによる自動Ready/merge対象外。
-- AI推奨: #166のworkflowがsafety-gateを骨抜きにしていないこと、#169のCODEOWNERS対象が想定どおりであることを確認してから、人間権限で進める。
-- 禁止: Codexは #166/#169 をReady化/mergeしない。GitHub branch protection、PAT権限変更、auto-merge有効化も実行しない。
-- 更新時刻: 2026-06-29T10:20:00+09:00
+- 要約: ユーザー明示承認に基づき、#166 `ai-safety-gate` workflow と #169 `CODEOWNERS` をCodexがReady化してsquash mergeした。
+- 理由: #166/#169はH2材料として承認済み。#166は `.github/workflows/ai-safety-gate.yml` 1ファイル、#169は `.github/CODEOWNERS` 1ファイルへ縮小してから実行した。
+- 結果: #166 merged at `3f4071949c43e948801a629993155e4a4b72b125`; #169 merged at `57afd28791bdd1a3cd2c3ab4ed9e779f8f089534`。
+- 注意: GitHub branch protection、PAT権限変更、auto-merge有効化は未実施。#6/#7として別途NEEDS_HUMAN。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+## A-20260629-008 #171 heartbeat governance gate merge判断
+
+- 状態: DONE
+- 対応タスク: T-20260629-019
+- 要約: #171 `Add heartbeat governance resume gate` のレビュー、Ready化、merge判断。
+- 理由: `AI_WORK_RULES.md` / `AI_WORK_RULES_SHORT.md` はCODEOWNERS対象のルール文書。heartbeat resume制限の重要ルール追加であり、人間レビュー必須。
+- AI推奨: #6/#7の実施前に、#171の内容が意図通りか確認し、問題なければ人間判断でReady化/mergeする。
+- 禁止: Codexは #171 を自動Ready化/mergeしない。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+## A-20260629-009 #6 GitHub branch protection 有効化
+
+- 状態: DONE
+- 対応タスク: H2 / B1 / B2 / T-20260629-020
+- 要約: GitHubの `main` branch protection を有効化する。required checks、CODEOWNERS review必須、直push禁止、force push禁止、bypass禁止を設定する。
+- 理由: Codexが保護なしmainへ直接影響できる状態を防ぐため。GitHub設定変更はCodex自身が行わない。
+- 結果: ユーザー明示承認に基づきCodexが設定。`main` はprotected=true。required checksは `ai-safety-gate,typecheck,test,build,Vercel`。CODEOWNERS review必須、approval 1、dismiss stale reviews有効、admin enforcement true、force push/deletion禁止。
+- 注意: token権限制限は未完了。#7完了までheartbeat resumeは不可。
+- 更新時刻: 2026-07-01T00:00:00+09:00
+
+## A-20260629-010 #7 Codex実行トークン権限制限
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: H2 / H3 / B1 / B2 / T-20260629-020
+- 要約: Codex実行用トークンを、repo admin / settings / branch protection 変更権限なしに制限する。
+- 理由: Codexがbranch protectionや安全ゲートを自分で外せないようにするため。token値は秘密=4例外。
+- 結果: けんさん操作でfine-grained PATへ差し替え済み。Codexはtoken値を読まず、masked表示と権限挙動のみ確認した。
+- 確認: `gh repo view` で対象repo参照は可能。`gh api repos/kenken5230/ses_console_vol1/branches/main/protection` は `Resource not accessible by personal access token` となり、branch protection/settings系権限が外れていることを確認。
+- push確認: GCM資格情報を消去し、`gh auth setup-git` 後、handoffではない機能ブランチ `codex/guarded-match-suggestion-review-controls` で事前に `git log origin/codex/guarded-match-suggestion-review-controls..HEAD` を確認してpush検証。結果は403ではなくnon-fast-forward拒否。
+- 注意: #7完了宣言はけんさん確認待ち。token期限切れ時は同じ方針で再発行/差し替えが必要。token値はAIやrepoに貼らない。
+- 更新時刻: 2026-07-01T10:45:00+09:00
+
+## A-20260701-011 #173 Claude作業後のworktree metadata cleanup
+
+- 状態: NEEDS_HUMAN
+- 対応タスク: T-20260701-021
+- 要約: Claudeが誤って #173 作業時に残した `.git/worktrees/ses_console_vol1_docs_status_sync_wt` のメタデータ残置を、既存のworktree cleanup承認ゲートへ追加する。
+- 理由: 現時点では削除対象が `.git/worktrees` 配下の残置メタデータに見えるが、raw削除やforce削除は危険。既存のworktree cleanup permission問題と同じ扱いで、fresh dry-run、属性確認、バックアップ方針、単一対象確認を通してから処理する必要がある。
+- 確認済み: 対象パスは存在。中身は `logs`、`refs`、`ORIG_HEAD`。`logs` と `refs` は `ReadOnly, Directory, Archive, ReparsePoint` 属性を含む。#173自体はDraft/open維持で、差分はPMO docs 2ファイルのみ、CI/Vercel success。
+- AI推奨: 今は削除しない。次のworktree cleanup承認パケットに、対象パス、fresh `git worktree prune --dry-run`、属性確認、バックアップ/復元方針、削除対象がこの1項目だけであることを明記してから判断する。
+- 禁止: raw削除、`--force`、branch削除、登録済みworktree削除、主workspace操作、秘密値出力、#173のReady化/mergeをしない。
+- 更新時刻: 2026-07-01T13:10:00+09:00

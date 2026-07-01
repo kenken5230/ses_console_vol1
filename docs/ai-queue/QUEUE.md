@@ -215,3 +215,61 @@
 - rollback: この同期PR/commitをrevertする。
 - 承認要否: 不要。docs-only、DB/schema/env/package/lockfile変更なし。
 - 更新時刻: 2026-06-29T10:20:00+09:00
+
+### T-20260629-018 H2 safety gate / CODEOWNERS main反映
+
+- 状態: DONE
+- 種別: workflow/config
+- リスク区分: mid
+- 起票者: user
+- 起票時刻: 2026-06-29T12:20:00+09:00
+- 詳細: ユーザー明示承認に基づき、#166 `ai-safety-gate` workflow と #169 `CODEOWNERS` を順にReady化してsquash mergeした。#166は #170 merge後のmainへ追従し、PR差分を `.github/workflows/ai-safety-gate.yml` 1ファイルへ縮小。#169は #166 merge後のmainへ追従し、PR差分を `.github/CODEOWNERS` 1ファイルへ縮小。
+- 検証: #166/#169とも削除差分0、DB/schema/env/package/lockfile変更なし。#169 merge後の `origin/main` は `57afd28791bdd1a3cd2c3ab4ed9e779f8f089534`。本番URLはHTTP 200、Vercel status success。
+- rollback: 対象merge commitのrevert PRで戻す。GitHub branch protection / PAT権限 / heartbeat設定は変更していない。
+- 承認要否: 実mergeはユーザー承認済み。以後のbranch protection有効化とtoken権限制限は別のNEEDS_HUMAN。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+### T-20260629-019 heartbeat governance gate rule proposal
+
+- 状態: WAITING_APPROVAL
+- 種別: docs/rule
+- リスク区分: mid
+- 起票者: user
+- 起票時刻: 2026-06-29T15:20:00+09:00
+- 詳細: heartbeat自律進行ループのresume/status有効化は、main branch protectionとCodex実行トークン権限制限が両方有効になるまでAI判断で行わない、というガバナンスゲートを `AI_WORK_RULES.md` / `AI_WORK_RULES_SHORT.md` へ追記するDraft PRを作成。
+- 結果: #171 `Add heartbeat governance resume gate` はDraft/open。mergeable CLEAN、Vercel / ai-safety-gate / typecheck / test / build はsuccess。CODEOWNERS対象のためReady化/mergeは人間レビュー待ち。
+- rollback: #171をcloseするか、merge後ならrevert PRで戻す。
+- 承認要否: #171のレビュー、Ready化、merge判断はNEEDS_HUMAN。
+- 更新時刻: 2026-06-29T15:20:00+09:00
+
+### T-20260629-020 LLLタスク停止状態
+
+- 状態: WAITING_APPROVAL
+- 種別: governance
+- リスク区分: low
+- 起票者: user
+- 起票時刻: 2026-06-29T15:20:00+09:00
+- 詳細: ruleタスク完了後、残バックログを「LLLタスク」として停止扱いにする。ユーザーが「LLLタスク」または対象タスク名で再開指示するまで、AI判断で残タスクを進めない。
+- 現在の残り: #171 merge判断、#7完了確認、H1 rule repo git管理化、H3 standing authorization token、H4 PowerShell運用判断。
+- 完了: #6 GitHub branch protection はユーザー承認に基づきCodexが設定済み。`main` はprotected=true、required checksは `ai-safety-gate,typecheck,test,build,Vercel`、CODEOWNERS review必須、approval 1、admin enforcement true、force push/deletion禁止。
+- 確認済み: #7 Codex実行トークン権限制限はけんさん操作でfine-grained PATへ差し替え済み。Codex側のread-only確認ではrepo参照は可能だが、branch protection詳細APIは `Resource not accessible by personal access token` となり、branch protection/settings系の権限が外れていることを確認。
+- 追加確認: GCM資格情報を消去し、`gh auth setup-git` 後、handoffではない機能ブランチでpush到達性を検証。結果は403ではなくnon-fast-forward拒否で、古い資格情報による403は解消。
+- ブロック理由: #6/#7の技術ゲートは概ね達成。ただし #7完了宣言はけんさん確認待ち。heartbeat resume / status有効化はユーザーの明示再開指示があるまで実行しない。#171 rule PRの人間レビュー/merge判断も未完了。
+- 承認要否: LLL再開指示、または個別タスク名での再開指示が必要。
+- 更新時刻: 2026-07-01T10:45:00+09:00
+
+### T-20260701-021 #173 status sync review / worktree metadata cleanup gate
+
+- 状態: WAITING_APPROVAL
+- 種別: docs/governance
+- リスク区分: low
+- 起票者: user / Codex
+- 起票時刻: 2026-07-01T13:10:00+09:00
+- 詳細: Claudeが誤って実作業した #173 `docs: sync approval packets to #149/#150 merged state` をCodexがread-onlyレビューした。#173はDraft/openのまま活かし、Ready化/merge/closeはしない。残置した `.git/worktrees/ses_console_vol1_docs_status_sync_wt` は既存のworktree cleanup承認ゲートへ1項目として積む。
+- #173確認: 変更は `docs/pmo/approval-waiting-packet-2026-06-24.md` と `docs/pmo/next-approval-gates-2026-06-26.md` の2ファイルのみ。#149 `256a443` / #150 `17c632b` は `origin/main` の祖先で、`test:search-history-ui-context` は `package.json` の個別scriptと集約 `npm test` に配線済み。CI/Vercelはsuccess。
+- cleanup対象候補: `.git/worktrees/ses_console_vol1_docs_status_sync_wt`。確認時点では `logs` / `refs` / `ORIG_HEAD` が残り、`ReadOnly, Directory, Archive, ReparsePoint` 属性を含む。今は削除しない。
+- 検証: `gh pr view 173`、`gh pr diff 173`、`git merge-base --is-ancestor 256a443 origin/main`、`git merge-base --is-ancestor 17c632b origin/main`、`git show origin/main:package.json`、metadata `Test-Path` / 属性確認。
+- rollback: docs記録のみ。誤記があればこのPR/commitをrevertまたは修正する。
+- 承認要否: #173のReady化/mergeは人間判断。metadata cleanupは fresh dry-run、属性確認、バックアップ方針、削除対象の単一性確認を揃えた別承認が必要。
+- 承認参照: A-20260701-011
+- 更新時刻: 2026-07-01T13:10:00+09:00
